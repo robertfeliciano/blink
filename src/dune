@@ -1,0 +1,22 @@
+(library
+ (name blink)
+ (modules lexer parser ast)
+ (libraries util))
+ 
+(ocamllex lexer)
+
+(menhir (modules parser))
+
+; the next line avoids warnings from stopping the build
+(env
+  (dev
+   (flags (:standard -warn-error -A))))
+
+(executable
+ (name    blink)      ; name of the opam library
+ (public_name blink)  ; required for generating documentation
+ (modules blink)
+ (libraries util)
+ (promote (until-clean))
+ ;; (wrapped      false) ; true by default
+)

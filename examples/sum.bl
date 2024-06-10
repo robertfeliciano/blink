@@ -1,0 +1,17 @@
+fun summation(start: int, end: int) => int {
+    let s = 0;
+    for n in start..end+1 {
+        s += n;
+    }
+    return s;
+}
+
+fun main(argv: String[]) => {
+    let sum = summation(0, argv[1]);
+    if sum < 100 {
+        print("hi");
+    } else {
+        print("bye");
+    }
+
+}
