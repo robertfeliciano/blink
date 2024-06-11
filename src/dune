@@ -1,10 +1,9 @@
-(library
- (name blink)
- (modules lexer parser ast)
- (libraries util))
+; (library
+;  (name blink)
+;  (modules lexer parser ast)
+;  (libraries util))
  
 (ocamllex lexer)
-
 (menhir (modules parser))
 
 ; the next line avoids warnings from stopping the build
@@ -15,7 +14,7 @@
 (executable
  (name    blink)      ; name of the opam library
  (public_name blink)  ; required for generating documentation
- (modules blink)
+ (modules blink lexer parser ast)
  (libraries util)
  (promote (until-clean))
  ;; (wrapped      false) ; true by default

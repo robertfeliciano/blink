@@ -8,15 +8,15 @@ type id = string
 
 (* Oat types *)
 type ty =
-| Bool
-| Int
-| Float
-| Ref of ref_ty
+| TBool
+| TInt
+| TFloat
+| TRef of ref_ty
 and ref_ty =
-| String
-| Array of ty
-| Class of id
-| Fun of ty list * ret_ty
+| RString
+| RArray of ty
+| RClass of id
+| RFun of ty list * ret_ty
 and ret_ty =
 | RetVoid
 | RetVal of ty

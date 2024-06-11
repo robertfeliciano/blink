@@ -1,3 +1,5 @@
+module Range = Util.Range
+
 let read_file (file:string) : string =
   let channel = open_in file in
   let lines = ref [] in
@@ -8,13 +10,29 @@ let read_file (file:string) : string =
     close_in channel;
     String.concat "\n" (List.rev !lines)
 
-let parse_oat_file filename =
-  let lexbuf = read_file filename |> 
-               Lexing.from_string
-  in
+let parse filename =
+  let lexbuf = read_file filename |> Lexing.from_string in
   try
-    Lexer.token lexbuf |> Parser.prog
+    Parser.prog Lexer.read lexbuf
   with
-  | Parser.Error -> failwith @@ Printf.sprintf "Parse error at: %s"
+  | Parser.Error -> 
+    failwith @@ Printf.sprintf "Parse error at: %s"
       (Range.string_of_range (Range.lex_range lexbuf))
 
+let () = 
+  try 
+    let args = Array.to_list Sys.argv in 
+    let filename = 
+    match args with
+      | [] | [_] -> (* This case is impossible because Sys.argv always has at least one element *)
+        failwith "No arguments provided."
+      | _ :: file :: [] -> 
+        file
+      | _ -> 
+        failwith "Multiple files not supported yet!"
+    in 
+    let _ast = parse filename in 
+    Printf.printf("Successful parse\n")
+  with 
+  | Failure msg -> Printf.eprintf "Error: %s\n" msg
+  | e -> Printf.eprintf "Unexpected error: %s\n" (Printexc.to_string e)

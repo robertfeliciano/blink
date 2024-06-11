@@ -6,9 +6,11 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 
 %}
 
+
 /* tokens */
 %token EOF
 %token <int64>  INT
+%token <float> FLOAT
 %token NULL
 %token <string> STRING
 %token <string> IDENT
@@ -119,28 +121,29 @@ decl:
   //   { Gvdecl (loc $startpos $endpos { name; init }) }
   | FUN fname=IDENT LPAREN args=arglist RPAREN ARROW frtyp=ret_ty body=block
     { Gfdecl (loc $startpos $endpos { frtyp; fname; args; body }) }
-// | frtyp=ret_ty fname=IDENT LPAREN args=arglist RPAREN body=block
-//   { Gfdecl (loc $startpos $endpos { frtyp; fname; args; body }) }
 //   | STRUCT name=UIDENT LBRACE fs=separated_list(SEMI, decl_field) RBRACE 
 //     { Gtdecl (loc $startpos $endpos (name, fs)) }
 
+arg:
+  | i=IDENT COLON t=ty { (t, i) }
+
 arglist:
-  | l=separated_list(COMMA, pair(ty,IDENT)) { l }
+  | l=separated_list(COMMA, arg) { l }
 
 ty:
-  | TINT    { Int }
-  | r=ref_ty { Ref r } %prec LOW
-  | TFLOAT  { Float }
-  | TBOOL   { Bool }
+  | TINT    { TInt }
+  | r=ref_ty { TRef r } %prec LOW
+  | TFLOAT  { TFloat }
+  | TBOOL   { TBool }
   | LPAREN t=ty RPAREN { t }
-  // | LBRACKET t=ty RPAREN {  } array type
 
 %inline ret_ty:
   | TVOID  { RetVoid }
   | t=ty   { RetVal t }
 
 %inline ref_ty:
-  | TSTRING { String }
+  | TSTRING { RString }
+  | LBRACKET t=ty RBRACKET { RArray t }
 
 %inline bop:
   | PLUS  { Add }
@@ -189,6 +192,7 @@ exp:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
   | FALSE                           { loc $startpos $endpos @@ Bool false }
   | i=INT                           { loc $startpos $endpos @@ Int i }
+  | f=FLOAT                         { loc $startpos $endpos @@ Float f }
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
   | e=exp LBRACKET i=exp RBRACKET   { loc $startpos $endpos @@ Index (e, i) }
