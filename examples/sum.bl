@@ -6,7 +6,7 @@ fun summation(start: int, end: int) => int {
     return s;
 }
 
-fun main(argv: String[]) => {
+fun main(argv: int) => int {
     let sum = summation(0, argv[1]);
     if sum < 100 {
         print("hi");
