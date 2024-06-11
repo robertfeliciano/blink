@@ -19,3 +19,7 @@ val norange : t
 val pos_of_lexpos : Lexing.position -> pos
 
 val mk_lex_range : Lexing.position -> Lexing.position -> t
+
+val lex_range : Lexing.lexbuf -> t
+
+val string_of_range : t -> string

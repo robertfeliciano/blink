@@ -16,7 +16,13 @@ let mk_range f s e = (f, s, e)
 
 (* Creates a Range.pos from the Lexing.position data *)
 let pos_of_lexpos (p : position) : pos =
-  mk_pos p.pos_lnum (p.pos_cnum - p.pos_bol)
+  mk_pos p.pos_lnum (p.pos_cnum - p.pos_bol + 1)
 
 let mk_lex_range (p1 : position) (p2 : position) : t =
   mk_range p1.pos_fname (pos_of_lexpos p1) (pos_of_lexpos p2)
+
+let lex_range lexbuf : t =
+  mk_lex_range (lexeme_start_p lexbuf) (lexeme_end_p lexbuf)
+
+let string_of_range (f, (sl, sc), (el, ec)) =
+  Printf.sprintf "%s[%d.%d-%d.%d]" f sl sc el ec
