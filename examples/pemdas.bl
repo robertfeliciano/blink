@@ -1,0 +1,4 @@
+fun main(argv: [string]) => int {
+    const x: int = 5+3*4;
+    return x;
+}

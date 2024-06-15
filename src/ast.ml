@@ -68,7 +68,7 @@ type exp =
 type vdecl = id * ty option * exp node * bool
 
 type stmt = 
-| Assn of exp node * exp node
+| Assn of exp node * aop * exp node
 | Decl of vdecl (* includes whether it was declared as constant or not *)
 | Ret of exp node option
 | SCall of exp node * exp node list

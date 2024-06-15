@@ -208,13 +208,16 @@ vdecl:
 
 stmt:
   | d=vdecl SEMI                    { loc $startpos $endpos @@ Decl(d) }
-  | p=lhs a=aop e=exp SEMI          { loc $startpos $endpos @@ Assn(p,e) }
+  | p=lhs a=aop e=exp SEMI          { loc $startpos $endpos @@ Assn(p,a,e) }
   | e=exp LPAREN es=separated_list(COMMA, exp) RPAREN SEMI 
                                     { loc $startpos $endpos @@ SCall (e, es) }
   | ifs=if_stmt                     { ifs }
   | RETURN e=exp? SEMI              { loc $startpos $endpos @@ Ret(e) }
   | WHILE e=exp b=block             { loc $startpos $endpos @@ While(e, b) } 
-  | FOR iter=iterator IN r=range b=block { loc $startpos $endpos @@ For(iter, r, b)}
+  | FOR iter=iterator IN r=range b=block 
+                                    { loc $startpos $endpos @@ For(iter, r, b)}
+  | CONT                            { loc $startpos $endpos @@ Continue }
+  | BREAK                           { loc $startpos $endpos @@ Break }
 
 %inline iterator:
   | i=IDENT { loc $startpos $endpos @@ i }

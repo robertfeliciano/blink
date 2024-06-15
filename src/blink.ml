@@ -1,3 +1,5 @@
+open Arg
+
 module Range = Util.Range
 
 let read_file (file:string) : string =
@@ -19,9 +21,16 @@ let parse filename =
     failwith @@ Printf.sprintf "Parse error at: %s"
       (Range.string_of_range (Range.lex_range lexbuf))
 
+let print_ast_flag = ref false
+
+let args = 
+  [ ("--print-ast", Set print_ast_flag, "prints the ast of the program")]
+
+let files = ref []
+
 let () = 
   try 
-    let args = Array.to_list Sys.argv in 
+    (* let args = Array.to_list Sys.argv in 
     let filename = 
     match args with
       | [] | [_] -> (* This case is impossible because Sys.argv always has at least one element *)
@@ -30,9 +39,14 @@ let () =
         file
       | _ -> 
         failwith "Multiple files not supported yet!"
-    in 
-    let _ast = parse filename in 
-    Printf.printf("Successful parse\n")
+    in  *)
+    Arg.parse args (fun filename -> files := filename :: !files) "placeholder";
+    let ast = parse @@ List.hd !files in 
+    begin
+    Printf.printf("Successful parse\n");
+    if !print_ast_flag then 
+      Astlib.print_ast ast
+    end
   with 
   | Failure msg -> Printf.eprintf "Error: %s\n" msg
   | e -> Printf.eprintf "Unexpected error: %s\n" (Printexc.to_string e)
