@@ -1,7 +1,5 @@
 {
-open Lexing
 open Parser
-open Str
 
 exception SyntaxError of string
 
