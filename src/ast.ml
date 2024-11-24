@@ -61,6 +61,7 @@ type exp =
 | Bop of binop * exp node * exp node
 | Uop of unop * exp node
 | Index of exp node * exp node
+(* | Array of exp node list *)
 | Range of exp node * exp node * bool (* includes whether right bound is inclusive *)
 
 (* TODO add class decl to exp type*)

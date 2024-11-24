@@ -188,6 +188,14 @@ lhs:
                                     { loc $startpos $endpos @@ Index (e, i) }
   // | e=exp DOT id=IDENT  { loc $startpos $endpos @@ Proj (e, id) }
 
+// %inline array:
+//   | LBRACKET rows=separated_list(SEMI, array_row) RBRACKET
+//     { loc $startpos $endpos @@ Array (List.map (fun row -> Array row) rows) }
+
+// %inline array_row:
+//   | LBRACKET elems=list(exp) RBRACKET
+//     { elems }  (* A single row is a list of expressions *)
+
 exp:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
   | FALSE                           { loc $startpos $endpos @@ Bool false }
@@ -196,11 +204,12 @@ exp:
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
   | e=exp LBRACKET i=exp RBRACKET   { loc $startpos $endpos @@ Index (e, i) }
+  // | arr=array                       { loc $startpos $endpos @@ arr }
   | e=exp LPAREN es=separated_list(COMMA, exp) RPAREN
-                                    { loc $startpos $endpos @@ Call (e,es) }
+                                    { loc $startpos $endpos @@ Call (e, es) }
   | e1=exp b=bop e2=exp             { loc $startpos $endpos @@ Bop (b, e1, e2) }
   | u=uop e=exp                     { loc $startpos $endpos @@ Uop (u, e) }
-  | LPAREN e=exp RPAREN             { e } 
+  | LPAREN e=exp RPAREN             { e }
 
 vdecl:
   | LET id=IDENT t=ty_spec? EQUAL init=exp { (id, t, init, false) }

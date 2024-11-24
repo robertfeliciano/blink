@@ -40,12 +40,12 @@ let () =
       | _ -> 
         failwith "Multiple files not supported yet!"
     in  *)
-    Arg.parse args (fun filename -> files := filename :: !files) "placeholder";
+    Arg.parse args (fun filename -> files := filename :: !files) "Blink compiler";
     let ast = parse @@ List.hd !files in 
     begin
-    Printf.printf("Successful parse\n");
-    if !print_ast_flag then 
-      Astlib.print_ast ast
+      Printf.printf("Successful parse\n");
+      if !print_ast_flag then 
+        Astlib.print_ast ast
     end
   with 
   | Failure msg -> Printf.eprintf "Error: %s\n" msg
