@@ -28,4 +28,4 @@ setup.log
 # Local OPAM switch
 _opam/
 
-*.exe
+src/*.exe
