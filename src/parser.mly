@@ -188,13 +188,12 @@ lhs:
                                     { loc $startpos $endpos @@ Index (e, i) }
   // | e=exp DOT id=IDENT  { loc $startpos $endpos @@ Proj (e, id) }
 
-// %inline array:
-//   | LBRACKET rows=separated_list(SEMI, array_row) RBRACKET
-//     { loc $startpos $endpos @@ Array (List.map (fun row -> Array row) rows) }
+%inline array:
+  | LBRACKET rows=separated_list(COMMA, array_row) RBRACKET
+    { loc $startpos $endpos @@ Array rows }
 
-// %inline array_row:
-//   | LBRACKET elems=list(exp) RBRACKET
-//     { elems }  (* A single row is a list of expressions *)
+%inline array_row:
+  | elems=separated_list(COMMA, exp) { elems }  (* A single row is a list of expressions *)
 
 exp:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
@@ -203,8 +202,10 @@ exp:
   | f=FLOAT                         { loc $startpos $endpos @@ Float f }
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
-  | e=exp LBRACKET i=exp RBRACKET   { loc $startpos $endpos @@ Index (e, i) }
   // | arr=array                       { loc $startpos $endpos @@ arr }
+  | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
+                                    { loc $startpos $endpos @@ Array elems }
+  | e=exp LBRACKET i=exp RBRACKET   { loc $startpos $endpos @@ Index (e, i) }
   | e=exp LPAREN es=separated_list(COMMA, exp) RPAREN
                                     { loc $startpos $endpos @@ Call (e, es) }
   | e1=exp b=bop e2=exp             { loc $startpos $endpos @@ Bop (b, e1, e2) }

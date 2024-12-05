@@ -71,6 +71,7 @@ and string_of_exp_helper (e:exp) : string =
   | Bop (b, lop, rop) -> sprintf "(%s %s %s)" (string_of_exp lop) (string_of_binop b) (string_of_exp rop)
   | Uop (u, op) -> sprintf "(%s %s)" (string_of_unop u) (string_of_exp op)
   | Index (lst, offset) -> sprintf "%s[%s]" (string_of_exp lst) (string_of_exp offset)
+  | Array (elems) -> sprintf "%s" (string_of_list string_of_exp elems)
   | Range (left, right, inc) -> sprintf "%s..%s%s" (string_of_exp left) (if inc then "=" else "") (string_of_exp right)
 
 let rec string_of_id (i: id node) : string = 
