@@ -226,8 +226,8 @@ stmt:
   | WHILE e=exp b=block             { loc $startpos $endpos @@ While(e, b) } 
   | FOR iter=iterator IN r=range b=block 
                                     { loc $startpos $endpos @@ For(iter, r, b)}
-  | CONT                            { loc $startpos $endpos @@ Continue }
-  | BREAK                           { loc $startpos $endpos @@ Break }
+  | CONT SEMI                       { loc $startpos $endpos @@ Continue }
+  | BREAK SEMI                      { loc $startpos $endpos @@ Break }
 
 %inline iterator:
   | i=IDENT { loc $startpos $endpos @@ i }

@@ -1,0 +1,13 @@
+fun main(argv: [string]) => int {
+    for i in 0..10 {
+        for j in i..10 {
+            if i+j > 6 {
+                break;
+            }
+            else {
+                print("hello world");
+            }
+        }
+    }
+    return 1;
+}
