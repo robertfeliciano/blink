@@ -50,6 +50,7 @@ type aop =
 | DivEq
 | AtEq
 | PowEq
+| ModEq
 
 type exp = 
 | Bool of bool

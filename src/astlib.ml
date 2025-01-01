@@ -31,6 +31,7 @@ let string_of_aop = function
   | DivEq -> "/="
   | AtEq -> "@="
   | PowEq -> "**="
+  | ModEq -> "%="
 
 let string_of_binop = function
   | Add -> "+"

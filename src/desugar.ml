@@ -13,7 +13,7 @@ let desugar_func (f: fdecl node) : fdecl node =
           | DivEq -> Div
           | AtEq  -> At
           | PowEq -> Pow
-          (* TODO add modulo here *)
+          | ModEq -> Mod
           | _ -> failwith "should never happen"
         in let new_rhs = node_creator @@ Bop (base_op, lhs, rhs)
       in node_creator @@ Assn(lhs, Eq, new_rhs)
