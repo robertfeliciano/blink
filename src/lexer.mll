@@ -36,7 +36,8 @@ rule read = parse
   | "]" { RBRACKET }
   | "," { COMMA }
   | "." { DOT }
-  | ".." { DOTDOT }
+  | ".." { RANGE }
+  | "..=" { RANGE_INCL }
   | ":" { COLON }
   | ";" { SEMI }
   | "=" { EQUAL }
@@ -76,6 +77,7 @@ rule read = parse
   | "in" { IN }
   | "else" { ELSE }
   | "for" { FOR }
+  | "by" { BY }
   | "while" { WHILE }
   | "break" { BREAK }
   | "continue" { CONT }

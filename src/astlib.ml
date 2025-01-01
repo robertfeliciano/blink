@@ -37,7 +37,7 @@ let string_of_binop = function
   | Sub -> "-"
   | Mul -> "*"
   | Div -> "/"
-  | Dot -> "@"
+  | At -> "@"
   | Mod -> "%"
   | Pow -> "**"
   | Eqeq -> "=="
@@ -82,7 +82,7 @@ and string_of_stmt_helper: stmt -> string = function
   | Ret v -> sprintf "return %s" (if is_some v then get v |> string_of_exp else "")
   | SCall (func, arglist) -> sprintf "%s(%s)" (string_of_exp func) (string_of_list string_of_exp arglist)
   | If (cond, tbr, ebr) -> sprintf "if %s \n\t%s\n\telse %s\n" (string_of_exp cond) (string_of_body tbr) (string_of_body ebr)
-  | For (iter, range, b) -> sprintf "for %s in %s \n\t%s\n" (iter.elt) (string_of_exp range) (string_of_body b)
+  | For (iter, range, step, b) -> sprintf "for %s in %s by %s \n\t%s\n" (iter.elt) (string_of_exp range) (value step ~default:1L |> Int64.to_string) (string_of_body b)
   | While (cond, b) ->  sprintf "while %s \n\t%s\n" (string_of_exp cond) (string_of_body b)
   | Break -> "break"
   | Continue -> "continue"

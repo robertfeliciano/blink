@@ -30,7 +30,7 @@ type binop =
 | Sub
 | Mul
 | Div
-| Dot
+| At
 | Mod
 | Pow
 | Eqeq
@@ -74,7 +74,7 @@ type stmt =
 | Ret of exp node option
 | SCall of exp node * exp node list
 | If of exp node * block * block 
-| For of id node * exp node * block
+| For of id node * exp node * int64 option * block
 | While of exp node * block
 | Break
 | Continue

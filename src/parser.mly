@@ -23,7 +23,8 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token RBRACKET  /* ] */
 %token COMMA     /* , */
 %token DOT       /* . */
-%token DOTDOT    /* .. */
+%token RANGE     /* .. */
+%token RANGE_INCL/* ..= */
 %token COLON     /* : */
 %token SEMI      /* ; */
 %token EQUAL     /* = */
@@ -63,6 +64,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token IN        /* in */
 %token ELSE      /* else */
 %token FOR       /* for */
+%token BY       /* by */
 %token WHILE     /* while */
 %token BREAK     /* break */
 %token CONT      /* continue */
@@ -87,6 +89,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left MULT DIV MOD  
 %left AT
 %left DOT
+%left RANGE RANGE_INCL
 %nonassoc LOW
 %nonassoc QMARK
 %nonassoc NOT
@@ -150,7 +153,7 @@ ty:
   | MINUS { Sub }
   | MULT  { Mul }
   | DIV   { Div }
-  | AT    { Dot }
+  | AT    { At }
   | MOD   { Mod }
   | POW   { Pow }
   | LT    { Lt }
@@ -177,10 +180,6 @@ ty:
 
 %inline ty_spec:
   | COLON t=ty { t }
-
-%inline range:
-  // | l=exp DOTDOT r=exp { (l, r, false) }
-  | l=exp DOTDOT e=EQUAL? r=exp { loc $startpos $endpos @@ Range(l, r, e <> None ) }
 
 lhs:  
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
@@ -210,11 +209,19 @@ exp:
                                     { loc $startpos $endpos @@ Call (e, es) }
   | e1=exp b=bop e2=exp             { loc $startpos $endpos @@ Bop (b, e1, e2) }
   | u=uop e=exp                     { loc $startpos $endpos @@ Uop (u, e) }
+  | e1=exp RANGE e2=exp             { loc $startpos $endpos @@ Range(e1, e2, false) }
+  | e1=exp RANGE_INCL e2=exp        { loc $startpos $endpos @@ Range(e1, e2, true) }
   | LPAREN e=exp RPAREN             { e }
 
 vdecl:
   | LET id=IDENT t=ty_spec? EQUAL init=exp { (id, t, init, false) }
   | CONST id=IDENT t=ty_spec? EQUAL init=exp { (id, t, init, true) }
+
+
+%inline
+by_step:
+  | BY step=INT { Some step }
+  | { None }
 
 stmt:
   | d=vdecl SEMI                    { loc $startpos $endpos @@ Decl(d) }
@@ -224,10 +231,12 @@ stmt:
   | ifs=if_stmt                     { ifs }
   | RETURN e=exp? SEMI              { loc $startpos $endpos @@ Ret(e) }
   | WHILE e=exp b=block             { loc $startpos $endpos @@ While(e, b) } 
-  | FOR iter=iterator IN r=range b=block 
-                                    { loc $startpos $endpos @@ For(iter, r, b)}
+  | FOR iter=iterator IN e=exp step=by_step b=block
+                                    { loc $startpos $endpos @@ For(iter, e, step, b) }
+                                    // { loc $startpos $endpos @@ For(iter, e, step, b)}
   | CONT SEMI                       { loc $startpos $endpos @@ Continue }
   | BREAK SEMI                      { loc $startpos $endpos @@ Break }
+
 
 %inline iterator:
   | i=IDENT { loc $startpos $endpos @@ i }
