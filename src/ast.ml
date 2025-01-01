@@ -82,7 +82,7 @@ and block = stmt node list
 
 type gdecl = { name : id; init : exp node }
 
-type fdecl = { frtyp : ret_ty; fname : id; args : (ty * id) list; body : block }
+type fdecl = { frtyp : ret_ty; fname : id; args : (ty * id) list; mutable body : block }
 
 type cdecl = { cname: id; methods: fdecl list }
 

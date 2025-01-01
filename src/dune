@@ -14,7 +14,7 @@
 (executable
  (name    blink)      ; name of the opam library
  (public_name blink)  ; required for generating documentation
- (modules blink lexer parser ast astlib)
+ (modules blink lexer parser ast astlib desugar)
  (libraries util)
  (promote (until-clean))
  ;; (wrapped      false) ; true by default
