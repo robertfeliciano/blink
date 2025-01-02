@@ -220,7 +220,7 @@ vdecl:
 
 %inline
 by_step:
-  | BY step=INT { Some step }
+  | BY step=exp { Some step }
   | { None }
 
 stmt:
@@ -231,8 +231,8 @@ stmt:
   | ifs=if_stmt                     { ifs }
   | RETURN e=exp? SEMI              { loc $startpos $endpos @@ Ret(e) }
   | WHILE e=exp b=block             { loc $startpos $endpos @@ While(e, b) } 
-  | FOR iter=iterator IN e=exp step=by_step b=block
-                                    { loc $startpos $endpos @@ For(iter, e, step, b) }
+  | FOR iter=iterator IN iterable=exp step=by_step b=block
+                                    { loc $startpos $endpos @@ For(iter, iterable, step, b) }
                                     // { loc $startpos $endpos @@ For(iter, e, step, b)}
   | CONT SEMI                       { loc $startpos $endpos @@ Continue }
   | BREAK SEMI                      { loc $startpos $endpos @@ Break }

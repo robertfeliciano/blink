@@ -75,7 +75,7 @@ type stmt =
 | Ret of exp node option
 | SCall of exp node * exp node list
 | If of exp node * block * block 
-| For of id node * exp node * int64 option * block
+| For of id node * exp node * exp node option * block
 | While of exp node * block
 | Break
 | Continue
