@@ -1,6 +1,11 @@
+fun right_bound(i: int) => int {
+    return 10;
+}
+
+
 fun main(argv: [string]) => int {
     let x: int = 0;
-    for i in 1..10 by 2 {
+    for i in 0..right_bound(x) by 2 {
         x += i;
     }
     print(x);
