@@ -1,14 +1,16 @@
 open Ast
 
 let base_op = function
-  | PluEq -> Add
-  | MinEq -> Sub
-  | TimEq -> Mul
-  | DivEq -> Div
-  | AtEq  -> At
-  | PowEq -> Pow
-  | ModEq -> Mod
-  | _ -> failwith "unsupported assignment operator"
+  | (PluEq, _) -> Add
+  | (MinEq, _) -> Sub
+  | (TimEq, _) -> Mul
+  | (DivEq, _) -> Div
+  | (AtEq, _)  -> At
+  | (PowEq, _) -> Pow
+  | (ModEq, _) -> Mod
+  | (_, loc) -> 
+    let (_, (s, e), _) = loc in 
+    failwith @@ Printf.sprintf "unsupported assignment operator at [%d, %d]" s e
 
 let rec depends_on_iterator right_bound iterator_id = 
   match right_bound.elt with 
@@ -25,7 +27,7 @@ let rec desugar_stmt (statement: stmt node) : stmt node list =
   
   match statement.elt with
   | Assn(lhs, op, rhs) when op <> Eq -> 
-    let base_op = base_op op in
+    let base_op = base_op (op, statement.loc) in
     let new_rhs = no_loc @@ Bop(base_op, lhs, rhs) in
     [node_creator @@ Assn(lhs, Eq, new_rhs)]  
 

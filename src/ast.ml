@@ -85,7 +85,9 @@ type gdecl = { name : id; init : exp node }
 
 type fdecl = { frtyp : ret_ty; fname : id; args : (ty * id) list; mutable body : block }
 
-type cdecl = { cname: id; methods: fdecl list }
+type field = { fieldName : id; ftyp : ty }
+
+type cdecl = id * field list
 
 type decl =
 | Gvdecl of gdecl node

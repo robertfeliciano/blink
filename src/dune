@@ -1,6 +1,6 @@
 ; (library
 ;  (name blink)
-;  (modules lexer parser ast)
+;  (modules lexer parser ast astlib desugar typechecker tctxt)
 ;  (libraries util))
  
 (ocamllex lexer)
@@ -14,7 +14,7 @@
 (executable
  (name    blink)      ; name of the opam library
  (public_name blink)  ; required for generating documentation
- (modules blink lexer parser ast astlib desugar)
+ (modules blink lexer parser ast astlib desugar tctxt typechecker)
  (libraries util)
  (promote (until-clean))
  ;; (wrapped      false) ; true by default
