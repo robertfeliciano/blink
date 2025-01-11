@@ -122,13 +122,13 @@ prog:
 decl:
   // | GLOBAL name=IDENT EQ init=gexp SEMI
   //   { Gvdecl (loc $startpos $endpos { name; init }) }
-  | FUN fname=IDENT LPAREN args=arglist RPAREN ARROW frtyp=ret_ty body=block
+  | FUN fname=IDENT LPAREN args=arglist RPAREN frtyp=ret_ty_spec? body=block
     { Gfdecl (loc $startpos $endpos { frtyp; fname; args; body }) }
 //   | STRUCT name=UIDENT LBRACE fs=separated_list(SEMI, decl_field) RBRACE 
 //     { Gtdecl (loc $startpos $endpos (name, fs)) }
 
 arg:
-  | i=IDENT COLON t=ty { (t, i) }
+  | i=IDENT t=ty_spec? { (t, i) }
 
 arglist:
   | l=separated_list(COMMA, arg) { l }
@@ -143,6 +143,9 @@ ty:
 %inline ret_ty:
   | TVOID  { RetVoid }
   | t=ty   { RetVal t }
+
+%inline ret_ty_spec:
+  | ARROW frtyp=ret_ty { frtyp }
 
 %inline ref_ty:
   | TSTRING { RString }

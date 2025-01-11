@@ -9,6 +9,11 @@ let string_of_node ?(print_loc=false) (f: 'a -> string) (n: 'a node) : string =
 let string_of_list ?(sep=", ") (f: 'a -> string) (lst: 'a list) : string = 
   sprintf "%s" (String.concat sep (List.map f lst))
 
+let opt_app f opt default =
+  match opt with
+  | Some v -> f v
+  | None -> default
+
 let rec string_of_type = function 
   | TBool -> "bool"
   | TInt -> "int" 
@@ -93,9 +98,9 @@ let string_of_fdecl_helper (f: fdecl) : string =
   let name = sprintf "name: %s" f.fname in 
   let args = sprintf "args: %s" @@ 
     string_of_list 
-    (fun (t, i) -> sprintf "%s: %s" i (string_of_type t)) 
+    (fun (t, i) -> sprintf "%s: %s" i (opt_app string_of_type t "inferred")) 
     f.args in 
-  let return_type = string_of_retty f.frtyp |> sprintf "returns: %s" in 
+  let return_type = opt_app string_of_retty f.frtyp "inferred" |> sprintf "returns: %s" in 
   let body = string_of_body f.body |> sprintf "body:\n%s" in 
   sprintf "\n%s\n%s\n%s\n%s\n" name args return_type body
 
