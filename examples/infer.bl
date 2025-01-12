@@ -1,0 +1,8 @@
+fun inferrable(a) {
+    return a + 5;
+}
+
+fun main(argv: [string]) => int {
+    let x = inferrable(10);
+    return x;
+}
