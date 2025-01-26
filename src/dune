@@ -1,21 +1,10 @@
-; (library
-;  (name blink)
-;  (modules lexer parser ast astlib desugar typechecker tctxt)
-;  (libraries util))
- 
-(ocamllex lexer)
-(menhir (modules parser))
-
-; the next line avoids warnings from stopping the build
-(env
-  (dev
-   (flags (:standard -warn-error -A))))
 
 (executable
- (name    blink)      ; name of the opam library
- (public_name blink)  ; required for generating documentation
- (modules blink lexer parser ast astlib desugar tctxt typechecker)
- (libraries util)
- (promote (until-clean))
- ;; (wrapped      false) ; true by default
-)
+ (name blink)
+ (modules blink compiler)
+ (public_name blink)
+ (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt)
+ (preprocess
+  (pps ppx_jane bisect_ppx --conditional))
+ (lint
+  (pps ppx_js_style -annotated-ignores -styler -pretty -dated-deprecation)))
