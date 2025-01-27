@@ -1,0 +1,4 @@
+(library
+ (name util)
+ (public_name blink.util)
+ (libraries str unix))
