@@ -26,7 +26,8 @@ let command =
   and filename = anon (maybe_with_default "-" ("filename" %: blink_file)) in 
   fun () -> 
     In_channel.with_file filename ~f:(fun ic -> 
-      Lexing.from_channel ic |> compile ~print_ast ~print_tast
+      let lexbuf = Lexing.from_channel ic in
+      compile ~print_ast ~print_tast lexbuf
       ))
 
 
