@@ -1,0 +1,9 @@
+(library
+ (name parsing)
+ (public_name blink.parsing)
+ (libraries ast))
+
+(ocamllex lexer)
+
+(menhir 
+ (modules parser))

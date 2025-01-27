@@ -19,14 +19,14 @@ let command =
   Command.basic ~summary:"Don't Blink."
   ~readme:(fun () -> "List of Blink options.")
   Command.Let_syntax.(
-  let%map_open _print_ast = 
+  let%map_open print_ast = 
     flag "-print-init-ast" no_arg ~doc:"Pretty print the initial AST"
-  and _print_tast = 
+  and print_tast = 
     flag "-print-typed-ast" no_arg ~doc:"Pretty print the typed AST"
   and filename = anon (maybe_with_default "-" ("filename" %: blink_file)) in 
   fun () -> 
     In_channel.with_file filename ~f:(fun ic -> 
-      Lexing.from_channel ic |> compile ~_print_ast ~_print_tast
+      Lexing.from_channel ic |> compile ~print_ast ~print_tast
       ))
 
 

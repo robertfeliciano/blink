@@ -1,9 +1,19 @@
 
 (executable
  (name blink)
- (modules blink compiler)
+ (modules blink)
+ (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt compiler)
+ (preprocess
+  (pps ppx_jane bisect_ppx --conditional))
+ (lint
+  (pps ppx_js_style -annotated-ignores -styler -pretty -dated-deprecation)))
+
+
+(library
  (public_name blink)
- (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt)
+ (name compiler)
+ (modules compiler)
+ (libraries core parsing util)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint
