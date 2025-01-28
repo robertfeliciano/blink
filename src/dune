@@ -13,7 +13,7 @@
  (public_name blink)
  (name compiler)
  (modules compiler)
- (libraries core parsing util)
+ (libraries core parsing typing util)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint

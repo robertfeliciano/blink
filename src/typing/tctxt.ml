@@ -1,45 +1,58 @@
 open Ast
 
-type ctxt = (id, ty) Hashtbl.t
-type class_ctxt = (id, field list) Hashtbl.t
+type ctxt = (id * ty) list
+type class_ctxt = (Ast.id * Ast.field list) list
 
-type env = {
+type t = {
   locals: ctxt;
   globals: ctxt;
   classes: class_ctxt;
 }
 
-let empty = { locals = Hashtbl.create 20; globals = Hashtbl.create 10; classes = Hashtbl.create 5 }
 
-let add = Hashtbl.add
+let empty = { locals = []; globals = []; classes = [] }
 
-let add_local env id typ : env = 
-  Hashtbl.add env.locals id typ ; env
+(* locals ------------------------------------------------------------------- *)
+let add_local (c:t) (id:id) (bnd : Ast.ty) : t = {c with locals = (id, bnd)::c.locals}
+let lookup_local (id : Ast.id) (c : t) : Ast.ty = List.assoc id c.locals
+let lookup_local_option id c : Ast.ty option =
+  try Some (List.assoc id c.locals) with Not_found -> None
 
-let lookup_local env id : ty option = 
-  Hashtbl.find_opt env.locals id
+(* globals ------------------------------------------------------------------ *)
+let add_global (c:t) (id:id) (bnd:Ast.ty) : t = {c with globals = (id, bnd)::c.globals}
+let lookup_global (id : Ast.id) (c : t) : Ast.ty = List.assoc id c.globals
+let lookup_global_option id c : Ast.ty option =
+  try Some (List.assoc id c.globals) with Not_found -> None
 
-let add_global env id typ : env = 
-  Hashtbl.add env.globals id typ ; env
+(* general-purpose lookup: for local _or_ global *)
+let lookup id c : Ast.ty =
+  match lookup_local_option id c with
+  | None -> lookup_global id c
+  | Some x -> x
 
-let lookup_global env id : ty option = 
-  Hashtbl.find_opt env.globals id
+let lookup_option id c : Ast.ty option =
+  match lookup_local_option id c with
+  | None -> lookup_global_option id c
+  | Some x -> Some x
 
-let lookup env id : ty option =
-  match lookup_local env id with 
-  | None -> lookup_global env id
-  | real -> real
 
-let exists env id : bool = 
-  Option.is_some @@ lookup env id
+(* classures --------------------------------------------------------------- *)
+let add_class c id bnd = {c with classes=(id, bnd)::c.classes}
+let lookup_class id c = List.assoc id c.classes
 
-let add_class env id fields : env = 
-  Hashtbl.add env.classes id fields ; env
+let lookup_class_option id c =
+  try Some (lookup_class id c) with Not_found -> None
 
-let lookup_class env id : field list option = 
-  Hashtbl.find_opt env.classes id 
-
-let lookup_field env cls f : ty option = 
-  match lookup_class env cls with 
-  | Some c -> Some (List.find (fun field -> field.fieldName = f) c).ftyp
+let lookup_field_option st_name f_name c =
+  let rec lookup_field_aux f_name l =
+    match l with
+    | [] -> None
+    | h :: t -> if h.fieldName = f_name then Some h.ftyp else lookup_field_aux f_name t in
+  match lookup_class_option st_name c with
   | None -> None
+  | Some x -> lookup_field_aux f_name x
+
+let lookup_field st_name f_name c =
+  match lookup_field_option st_name f_name c with
+  | None -> failwith "classCtxt.lookup_field: Not found"
+  | Some x -> x
