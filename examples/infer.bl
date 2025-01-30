@@ -1,4 +1,4 @@
-fun inferrable(a) {
+fun inferrable(a: i32) => i32 {
     return a + 5;
 }
 

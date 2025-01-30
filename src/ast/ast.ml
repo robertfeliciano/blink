@@ -104,7 +104,7 @@ and block = stmt node list
 
 type gdecl = { name : id; init : exp node }
 
-type fdecl = { frtyp : ret_ty option; fname : id; args : (ty option * id) list; mutable body : block }
+type fdecl = { frtyp : ret_ty ; fname : id; args : (ty * id) list; mutable body : block }
 
 type field = { fieldName : id; ftyp : ty }
 
