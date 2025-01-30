@@ -1,4 +1,4 @@
-fun summation(start: int, end: int) => int {
+fun summation(start: i8, end: i8) => i8 {
     let s = 0;
     for n in start..end+1 {
         s += n;
@@ -6,7 +6,7 @@ fun summation(start: int, end: int) => int {
     return s;
 }
 
-fun main(argv: [string]) => int {
+fun main(argv: [string]) => i32 {
     let sum = summation(0, argv[1]);
     if sum < 100 {
         print("hi");

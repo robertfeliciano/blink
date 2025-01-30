@@ -55,8 +55,20 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token NEW       /* new */
 %token CONST     /* const */
 %token TVOID     /* void */
-%token TINT      /* int */
-%token TFLOAT    /* float */
+/* integer tokens */
+%token Ti8
+%token Ti16
+%token Ti32
+%token Ti64
+%token Ti128
+%token Tu8
+%token Tu16
+%token Tu32
+%token Tu64
+%token Tu128
+/* floating point tokens */
+%token Tf32
+%token Tf64
 %token TSTRING   /* string */
 %token TBOOL     /* bool */
 %token FUN       /* fun */
@@ -134,11 +146,28 @@ arglist:
   | l=separated_list(COMMA, arg) { l }
 
 ty:
-  | TINT    { TInt }
+  | ti=int_ty { TInt ti }
   | r=ref_ty { TRef r } %prec LOW
-  | TFLOAT  { TFloat }
+  | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
   | LPAREN t=ty RPAREN { t }
+
+%inline int_ty: 
+  | Ti8 { TSigned Ti8 }
+  | Ti16 { TSigned Ti16 }
+  | Ti32 { TSigned Ti32 }
+  | Ti64 { TSigned Ti64 }
+  | Ti128 { TSigned Ti128 }
+  | Tu8 { TUnsigned Tu8 }
+  | Tu16 { TUnsigned Tu16 }
+  | Tu32 { TUnsigned Tu32 }
+  | Tu64 { TUnsigned Tu64 }
+  | Tu128 { TUnsigned Tu128 }
+
+%inline float_ty: 
+  | Tf32 { Tf32 }
+  | Tf64 { Tf64 }
+
 
 %inline ret_ty:
   | TVOID  { RetVoid }

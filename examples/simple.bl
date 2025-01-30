@@ -1,10 +1,10 @@
-fun right_bound(i: int) => int {
+fun right_bound(i: u8) => u8 {
     return 10;
 }
 
 
-fun main(argv: [string]) => int {
-    let x: int = 0;
+fun main(argv: [string]) => i32 {
+    let x: u32 = 0;
     for i in 0..right_bound(x) by 2 {
         x += i;
     }

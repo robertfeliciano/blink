@@ -6,11 +6,32 @@ let no_loc x = { elt = x; loc = Range.norange }
 
 type id = string
 
-(* Oat types *)
+type sint = 
+| Ti8
+| Ti16
+| Ti32
+| Ti64
+| Ti128
+
+type uint = 
+| Tu8
+| Tu16
+| Tu32
+| Tu64
+| Tu128
+
+type float_ty =
+| Tf32
+| Tf64
+
+type int_ty = 
+| TSigned of sint
+| TUnsigned of uint
+
 type ty =
 | TBool
-| TInt
-| TFloat
+| TInt of int_ty
+| TFloat of float_ty
 | TRef of ref_ty
 and ref_ty =
 | RString

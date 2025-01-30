@@ -24,6 +24,8 @@ let generic_type_param = ['A'-'Z']
 
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
+let sint = 'i' ("8"|"16"|"32"|"64"|"128")
+let uint = 'u' ("8"|"16"|"32"|"64"|"128")
 
 rule read = parse 
   | whitespace { read lexbuf }
@@ -68,8 +70,18 @@ rule read = parse
   | "new" { NEW }
   | "const" { CONST }
   | "void" { TVOID }
-  | "int" { TINT }
-  | "float" { TFLOAT }
+  | "i8"   { Ti8 }
+  | "i16"  { Ti16 }
+  | "i32"  { Ti32 }
+  | "i64"  { Ti64 }
+  | "i128" { Ti128 }
+  | "u8"   { Tu8 }
+  | "u16"  { Tu16 }
+  | "u32"  { Tu32 }
+  | "u64"  { Tu64 }
+  | "u128" { Tu128 }
+  | "f32" { Tf32 }
+  | "f64" { Tf64 }
   | "string" { TSTRING }
   | "bool" { TBOOL }
   | "fun" { FUN }
@@ -101,6 +113,22 @@ rule read = parse
   | eof { EOF }
   | _ as c { raise (SyntaxError ("Unexpected character: " ^ (String.make 1 c))) }
 
+(* and extract_sint = parse
+  | "i8"   { Ti8 }
+  | "i16"  { Ti16 }
+  | "i32"  { Ti32 }
+  | "i64"  { Ti64 }
+  | "i128" { Ti128 }
+  | _ { raise (SyntaxError ("Invalid signed integer type: " ^ Lexing.lexeme lexbuf)) }
+
+and extract_uint = parse
+  | "u8"   { Tu8 }
+  | "u16"  { Tu16 }
+  | "u32"  { Tu32 }
+  | "u64"  { Tu64 }
+  | "u128" { Tu128 }
+  | _ { raise (SyntaxError ("Invalid unsigned integer type: " ^ Lexing.lexeme lexbuf)) } *)
+
 and read_single_line_comment = parse 
   | newline { Lexing.new_line lexbuf ; read lexbuf }
   | eof { EOF }
@@ -125,4 +153,4 @@ and read_escaped_char = parse
   | '\\' { '\\' }
   | '"' { '"' }
   | '\'' { '\'' }
-  | _ { raise (SyntaxError (Printf.sprintf "Lexing error: Unexpected escape used on char %s" (Lexing.lexeme lexbuf))) }
+  | _ { raise (SyntaxError ("Lexing error: Unexpected escape used on char " ^ (Lexing.lexeme lexbuf))) }
