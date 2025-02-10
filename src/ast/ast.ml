@@ -108,7 +108,7 @@ type fdecl = { frtyp : ret_ty ; fname : id; args : (ty * id) list; mutable body 
 
 type field = { fieldName : id; ftyp : ty }
 
-type cdecl = id * field list
+type cdecl = id * (field list * fdecl list)
 
 type decl =
 | Gvdecl of gdecl node

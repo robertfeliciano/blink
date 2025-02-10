@@ -50,9 +50,21 @@ let lookup_field_option st_name f_name c =
     | h :: t -> if h.fieldName = f_name then Some h.ftyp else lookup_field_aux f_name t in
   match lookup_class_option st_name c with
   | None -> None
-  | Some x -> lookup_field_aux f_name x
+  | Some (fields, _methods) -> lookup_field_aux f_name fields
 
 let lookup_field st_name f_name c =
   match lookup_field_option st_name f_name c with
   | None -> failwith "classCtxt.lookup_field: Not found"
   | Some x -> x
+
+
+
+let lookup_method_option c_name m_name c =
+  let rec lookup_method_aux m_name l = 
+    match l with 
+    | [] -> None
+    | h :: t -> if h.fname = m_name then Some h else lookup_method_aux m_name t in 
+  match lookup_class_option c_name c with 
+  | None -> None
+  | Some (_fields, methods) -> lookup_method_aux m_name methods
+  
