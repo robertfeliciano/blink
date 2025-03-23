@@ -36,7 +36,7 @@ type ty =
 and ref_ty =
 | RString
 | RArray of ty
-| RClass of id
+(* | RClass of id *)
 | RFun of ty list * ret_ty
 and ret_ty =
 | RetVoid
@@ -108,11 +108,11 @@ type fdecl = { frtyp : ret_ty ; fname : id; args : (ty * id) list; mutable body 
 
 type field = { fieldName : id; ftyp : ty }
 
-type cdecl = id * (field list * fdecl list)
+(* type cdecl = id * (field list * fdecl list) *)
 
 type decl =
 | Gvdecl of gdecl node
 | Gfdecl of fdecl node
-| Gcdecl of cdecl node
+(* | Gcdecl of cdecl node *)
 
 type prog = decl list

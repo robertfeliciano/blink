@@ -64,10 +64,10 @@ and typecheck_rty  (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
   | RArray t -> typecheck_ty l tc t 
-  | RClass i -> (
+  (* | RClass i -> (
     match Tctxt.lookup_class_option i tc with
     | Some _ -> ()
-    | None -> type_error l ("stuct " ^ i ^ " is not defined"))
+    | None -> type_error l ("stuct " ^ i ^ " is not defined")) *)
   | RFun (tl, rt) -> (List.iter (typecheck_ty l tc) tl; typecheck_ret_ty l tc rt)
 
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
@@ -87,7 +87,7 @@ and subtype_ref (tc : Tctxt.t) (t1 : Ast.ref_ty) (t2 : Ast.ref_ty) : bool =
   match t1, t2 with 
   | RString, RString -> true
   | RArray t1', RArray t2' -> subtype tc t1' t2'
-  | RClass c1, RClass c2 -> subtype_class tc c1 c2
+  (* | RClass c1, RClass c2 -> subtype_class tc c1 c2 *)
   | RFun(ptyps1, rtyps1), RFun(ptyps2, rtyps2) -> let subtype_arg = fun (ty1) (ty2) -> subtype tc ty2 ty1 in
   (List.for_all2 subtype_arg ptyps1 ptyps2) && (subtype_ret_ty tc rtyps1 rtyps2)
   | _ -> false
@@ -96,10 +96,10 @@ and subtype_list tc l1 l2 : bool =
   if List.length l1 != List.length l2 then false 
   else List.fold_left2 (fun a x y -> a && subtype tc x y ) true l1 l2
 
-and subtype_class (tc: Tctxt.t) (s1: id) (s2: id) : bool = 
-  s1 = s2 || subtype_fields tc s1 s2
+(* and subtype_class (tc: Tctxt.t) (s1: id) (s2: id) : bool = 
+  s1 = s2 || subtype_fields tc s1 s2 *)
 
-and subtype_fields c n1 n2 : bool =
+(* and subtype_fields c n1 n2 : bool =
   let fields1 = Tctxt.lookup_class n1 c in
   let fields2 = Tctxt.lookup_class n2 c in
   let rec helper l1 l2 =
@@ -108,7 +108,7 @@ and subtype_fields c n1 n2 : bool =
     | [], _ -> false
     | f1::t1, f2::t2 -> f1.fieldName = f2.fieldName && f1.ftyp = f2.ftyp
                                                     && helper t1 t2 in
-  helper fields1 fields2
+  helper fields1 fields2 *)
 
 
 and subtype_ret_ty (tc: Tctxt.t) (t1: Ast.ret_ty) (t2: Ast.ret_ty) : bool =
@@ -116,11 +116,6 @@ and subtype_ret_ty (tc: Tctxt.t) (t1: Ast.ret_ty) (t2: Ast.ret_ty) : bool =
   | RetVoid, RetVoid -> true
   | RetVal t1', RetVal t2' -> subtype tc t1' t2'
   | _ -> false
-
-let ( <? ) (t: ty) : bool = 
-  match t with 
-  | TInt _ | TFloat _ -> true 
-  | _ -> false 
 
 let all_numbers (tl: ty list) : bool = 
   List.for_all (
@@ -143,9 +138,9 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
     |None -> type_error e ("variable " ^ i ^ " is not defined")
   )
   | Call (f, args) -> 
-    let argtypes = List.map (typecheck_exp tc) args in 
+    let _argtypes = List.map (typecheck_exp tc) args in 
     (match typecheck_exp tc f with 
-    | TRef (RFun (l, RetVal r)) -> 
+    | TRef (RFun (l, RetVal _r)) -> 
       let reql = List.length l in 
       let recl = List.length args in
       if reql <> recl then
@@ -169,8 +164,8 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
       | And | Or -> 
         if lt = TBool && rt = TBool then TBool
         else type_error e "&& or || used on non-bool arguments"
-      | At -> 
-        (match lt, rt with 
+      | At -> TBool
+        (* (match lt, rt with 
         | TRef (RArray lt'), TRef (RArray rt') -> 
           if all_numbers [lt' ; rt'] then meet_number e (lt', rt')
           else type_error e "@ called on non-numeric array"
@@ -178,7 +173,7 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
           let fields = lookup_class lt' tc in 
           (* lookup_field_option *) TBool
           (* else type_error e (lt' ^ " must implement __dot__") *)
-        | _ -> type_error e "@ called on non-array/matrix args")
+        | _ -> type_error e "@ called on non-array/matrix args") *)
       | _ -> 
         let args_valid = subtype tc lt rt || all_numbers [lt ; rt] in
         if not args_valid then 

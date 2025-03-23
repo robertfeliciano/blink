@@ -1,16 +1,17 @@
 open Ast
 
 type ctxt = (id * ty) list
-type class_ctxt = (Ast.id * Ast.field list) list
+(* type class_ctxt = (Ast.id * Ast.field list) list *)
 
 type t = {
   locals: ctxt;
   globals: ctxt;
-  classes: class_ctxt;
+  (* classes: class_ctxt; *)
 }
 
 
-let empty = { locals = []; globals = []; classes = [] }
+(* let empty = { locals = []; globals = []; classes = [] } *)
+let empty = { locals = []; globals = [] }
 
 (* locals ------------------------------------------------------------------- *)
 let add_local (c:t) (id:id) (bnd : Ast.ty) : t = {c with locals = (id, bnd)::c.locals}
@@ -37,7 +38,7 @@ let lookup_option id c : Ast.ty option =
 
 
 (* classures --------------------------------------------------------------- *)
-let add_class c id bnd = {c with classes=(id, bnd)::c.classes}
+(* let add_class c id bnd = {c with classes=(id, bnd)::c.classes}
 let lookup_class id c = List.assoc id c.classes
 
 let lookup_class_option id c =
@@ -55,7 +56,7 @@ let lookup_field_option st_name f_name c =
 let lookup_field st_name f_name c =
   match lookup_field_option st_name f_name c with
   | None -> failwith "classCtxt.lookup_field: Not found"
-  | Some x -> x
+  | Some x -> x 
 
 
 
@@ -67,4 +68,5 @@ let lookup_method_option c_name m_name c =
   match lookup_class_option c_name c with 
   | None -> None
   | Some (_fields, methods) -> lookup_method_aux m_name methods
+  *)
   
