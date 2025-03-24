@@ -138,17 +138,17 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
     |None -> type_error e ("variable " ^ i ^ " is not defined")
   )
   | Call (f, args) -> 
-    let _argtypes = List.map (typecheck_exp tc) args in 
     (match typecheck_exp tc f with 
-    | TRef (RFun (l, RetVal _r)) -> 
-      let reql = List.length l in 
-      let recl = List.length args in
-      if reql <> recl then
-        type_error e (Printf.sprintf "Expected %d args, received %d" reql recl )
-      else 
-        (* TODO *)
-        TBool
-    | _ -> TBool)
+    | TRef (RFun (arg_types, RetVal rt)) -> 
+      (try (
+        List.iter2 (
+          fun aty a -> if (subtype tc (typecheck_exp tc a) aty) then () else type_error e "invalid argument type"
+        )
+        arg_types args;
+        rt
+      ) with Invalid_argument _ -> type_error e "invalid number of arguments supplied")
+    | TRef (RFun (_, RetVoid)) -> type_error e "assigning void function return to variable."
+    | _ -> type_error e "attempted to call a non-function type." )
   | Array ens -> 
     let t = List.hd ens |> typecheck_exp tc in 
     let ts = List.map (typecheck_exp tc) ens in
