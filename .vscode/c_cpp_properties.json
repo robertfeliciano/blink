@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/robert/.opam/5.0.1+trunk/lib/ocaml",
+                "/home/robert/.opam/5.0.1+trunk/lib/ocaml/caml"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/lib64/ccache/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64",
+            "configurationProvider": "ms-vscode.makefile-tools"
+        }
+    ],
+    "version": 4
+}

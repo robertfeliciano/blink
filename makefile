@@ -1,6 +1,5 @@
 frontend:
-	dune build
-	@dune exec ./_build/default/src/main.exe
+	cd frontend && dune build
 
 clean: 
 	rm -rf _build
