@@ -1,8 +1,6 @@
-lexer: 
-	ocamllex src/lexer.mll
-
-parser:
-	menhir src/parser.mly
+frontend:
+	dune build
+	@dune exec ./_build/default/src/main.exe
 
 clean: 
 	rm -rf _build
