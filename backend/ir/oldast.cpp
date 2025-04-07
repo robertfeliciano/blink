@@ -158,14 +158,6 @@ Stmt* convert_stmt(value ocaml_stmt) {
     }
 }
 
-// Function to convert OCaml blocks to C++ blocks
-vector<Stmt*> convert_block(value ocaml_block) {
-    vector<Stmt*> block;
-    for (int i = 0; i < Wosize_val(ocaml_block); i++) {
-        block.push_back(convert_stmt(Field(ocaml_block, i)));
-    }
-    return block;
-}
 
 extern "C" {
     value caml_convert_ast(value ocaml_expr) {
