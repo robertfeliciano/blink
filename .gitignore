@@ -32,3 +32,4 @@ src/*.exe
 
 
 *.so
+backend/build/
