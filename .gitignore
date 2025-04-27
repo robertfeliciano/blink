@@ -29,3 +29,6 @@ setup.log
 _opam/
 
 src/*.exe
+
+
+*.so

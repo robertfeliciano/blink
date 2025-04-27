@@ -4,8 +4,8 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/home/robert/.opam/5.0.1+trunk/lib/ocaml",
-                "/home/robert/.opam/5.0.1+trunk/lib/ocaml/caml"
+                "/home/robert/.opam/clang-switch/lib/ocaml",
+                "/home/robert/.opam/clang-switch/lib/ocaml/caml"
             ],
             "defines": [],
             "compilerPath": "/usr/lib64/ccache/clang",
