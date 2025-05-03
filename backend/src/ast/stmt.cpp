@@ -1,4 +1,5 @@
 #include <utility>
+#include <sstream>
 
 #include <caml/mlvalues.h>
 
@@ -40,7 +41,7 @@ Node<Stmt> convert_stmt_node(value v) {
                 value ret_val = Field(stmt, 0);
                 if (Is_block(ret_val)) {
                     node.elt.val = Ret {
-                        .value = std::make_unique<Node<Exp>>(convert_exp_node(Field(ret_val, 0))),
+                        .value = std::make_shared<Node<Exp>>(convert_exp_node(Field(ret_val, 0))),
                     };
                 } else {
                     node.elt.val = Ret {
@@ -117,4 +118,87 @@ Node<Stmt> convert_stmt_node(value v) {
     }
 
     return node;
+}
+
+inline std::string indent(int level) {
+    return std::string(level * 2, ' ');
+}
+
+
+struct StmtToStringVisitor {
+    int indentLevel;
+    StmtToStringVisitor(int level) : indentLevel(level) {}
+
+    std::string operator()(const Assn& s) const {
+        std::ostringstream oss;
+        oss << indent(indentLevel) << expToString(s.lhs->elt) << " = " << expToString(s.rhs->elt) << ";";
+        return oss.str();
+    }
+    std::string operator()(const Ret& ret) const {
+        std::ostringstream oss;
+        if (ret.value.has_value()) {
+            std::shared_ptr<Node<Exp>> exp = ret.value.value();
+            oss << indent(indentLevel) << "return " << expToString(exp->elt) << ";";
+        } else {
+            oss << indent(indentLevel) << "return;";
+        }
+        return oss.str();
+    }
+    std::string operator()(const SCall& s) const {
+        std::ostringstream oss;
+        oss << indent(indentLevel) << expToString(s.callee->elt) << "(";
+        for (size_t i = 0; i < s.args.size(); ++i) {
+            oss << expToString(s.args[i]->elt);
+            if (i < s.args.size() - 1) {
+                oss << ", ";
+            }
+        }
+        oss << ");";
+        return oss.str();
+    }
+    std::string operator()(const VDecl& s) const {
+        std::ostringstream oss;
+        // TODO create type to string function
+        oss << indent(indentLevel) << (s.is_const ? "const " : "") << tyToString(s.ty) << " " << s.id;
+        if (s.init) {
+            oss << " = " << expToString(s.init->elt);
+        }
+        oss << ";";
+        return oss.str();
+    }
+    std::string operator()(const If& s) const {
+        std::ostringstream oss;
+        oss << indent(indentLevel) << "if (" << expToString(s.cond->elt) << ") {\n";
+        for (const auto& stmt : s.then_branch) {
+            oss << stmtToString(stmt->elt, indentLevel + 1) << "\n";
+        }
+        oss << indent(indentLevel) << "}";
+        if (!s.else_branch.empty()) {
+            oss << " else {\n";
+            for (const auto& stmt : s.else_branch) {
+                oss << stmtToString(stmt->elt, indentLevel + 1) << "\n";
+            }
+            oss << indent(indentLevel) << "}";
+        }
+        return oss.str();
+    }
+    std::string operator()(const While& s) const {
+        std::ostringstream oss;
+        oss << indent(indentLevel) << "while (" << expToString(s.cond->elt) << ") {\n";
+        for (const auto& stmt : s.body) {
+            oss << stmtToString(stmt->elt, indentLevel + 1) << "\n";
+        }
+        oss << indent(indentLevel) << "}";
+        return oss.str();
+    }
+    std::string operator()(const Break&) const {
+        return indent(indentLevel) + "break;";
+    }
+    std::string operator()(const Continue&) const {
+        return indent(indentLevel) + "continue;";
+    }
+};
+
+inline std::string stmtToString(const Stmt& s, int indentLevel = 0) {
+    return std::visit(StmtToStringVisitor{indentLevel}, s.val);
 }

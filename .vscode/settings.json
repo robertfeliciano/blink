@@ -85,12 +85,15 @@
         "ios": "cpp",
         "locale": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "*.ipp": "cpp",
+        "__node_handle": "cpp"
     },
     "github.copilot.enable": {
-        "*": true,
+        "*": false,
         "plaintext": false,
         "markdown": false,
         "scminput": false
-    }
+    },
+    "cmake.sourceDirectory": "/home/robert/programming/compilers/blink/backend"
 }

@@ -34,6 +34,35 @@ BinOp convert_binop(value v) {
     }
 }
 
+inline std::string toString(BinOp op) {
+    switch (op) {
+        case BinOp::Add: return "+";
+        case BinOp::Sub: return "-";
+        case BinOp::Mul: return "*";
+        case BinOp::Div: return "/";
+        case BinOp::At: return "@";
+        case BinOp::Mod: return "%";
+        case BinOp::Pow: return "^";
+        case BinOp::Eqeq: return "==";
+        case BinOp::Neq: return "!=";
+        case BinOp::Lt: return "<";
+        case BinOp::Lte: return "<=";
+        case BinOp::Gt: return ">";
+        case BinOp::Gte: return ">=";
+        case BinOp::And: return "&&";
+        case BinOp::Or: return "||";
+    }
+    throw std::runtime_error("Unknown BinOp");
+}
+
+inline std::string toString(UnOp op) {
+    switch (op) {
+        case UnOp::Neg: return "-";
+        case UnOp::Not: return "!";
+    }
+    throw std::runtime_error("Unknown UnOp");
+}
+
 Node<Exp> convert_exp_node(value v) {
     Node<Exp> node;
     // get node loc
@@ -139,4 +168,50 @@ Node<Exp> convert_exp_node(value v) {
     }
 
     return node;
+}
+
+struct ExpToStringVisitor {
+    std::string operator()(const EInt& e) const  { return std::to_string(e.value); }
+    std::string operator()(const EBool& e) const { return e.value ? "true" : "false"; }
+    std::string operator()(const EVar& e) const  { return e.id; }
+    std::string operator()(const EFloat& e) const { return std::to_string(e.value); }
+    std::string operator()(const EStr& e) const { return "\"" + e.value + "\""; }
+    std::string operator()(const ECall& e) const {
+        std::string result = expToString(e.callee->elt) + "(";
+        for (size_t i = 0; i < e.args.size(); ++i) {
+            result += expToString(e.args[i]->elt);
+            if (i < e.args.size() - 1) {
+                result += ", ";
+            }
+        }
+        result += ")";
+        return result;
+    }
+    std::string operator()(const EBop& e) const {
+        return "(" + expToString(e.left->elt) + " " + toString(e.op) + " " + expToString(e.right->elt) + ")";
+    }
+    std::string operator()(const EUop& e) const {
+        return "(" + toString(e.op) + " " + expToString(e.arg->elt) + ")";
+    }
+    std::string operator()(const EIndex& e) const {
+        return expToString(e.collection->elt) + "[" + expToString(e.index->elt) + "]";
+    }
+    std::string operator()(const EArray& e) const {
+        std::string result = "[";
+        for (size_t i = 0; i < e.elements.size(); ++i) {
+            result += expToString(e.elements[i]->elt);
+            if (i < e.elements.size() - 1) {
+                result += ", ";
+            }
+        }
+        result += "]";
+        return result;
+    }
+    std::string operator()(const ERange& e) const {
+        return expToString(e.start->elt) + " .. " + (e.inclusive ? "=" : "") + expToString(e.end->elt);
+    }
+};
+
+inline std::string expToString(const Exp& e) {
+    return std::visit(ExpToStringVisitor{}, e.val);
 }

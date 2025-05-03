@@ -82,3 +82,9 @@ struct Exp {
 };
 
 Node<Exp> convert_exp_node(value v);
+
+std::string toString(BinOp op);
+
+std::string toString(UnOp op);
+
+std::string expToString(const Exp& exp);

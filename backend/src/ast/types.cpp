@@ -118,3 +118,43 @@ RetTy convert_ret_ty(value v) {
 
     return ret;
 }
+
+inline std::string tyToString(const Ty& ty) {
+    switch (ty.tag) {
+        case TyTag::TBool: return "bool";
+        case TyTag::TInt: {
+            switch (ty.int_ty->tag) {
+                case IntTyTag::Signed: 
+                    switch (ty.int_ty->sint) {
+                        case Sint::Ti8: return "i8";
+                        case Sint::Ti16: return "i16";
+                        case Sint::Ti32: return "i32";
+                        case Sint::Ti64: return "i64";
+                        case Sint::Ti128: return "i128";
+                    }
+                case IntTyTag::Unsigned: 
+                    switch (ty.int_ty->uint) {
+                        case Uint::Tu8: return "u8";
+                        case Uint::Tu16: return "u16";
+                        case Uint::Tu32: return "u32";
+                        case Uint::Tu64: return "u64";
+                        case Uint::Tu128: return "u128";
+                    }
+            }
+        }
+        case TyTag::TFloat: {
+            switch (*(ty.float_ty)) {
+                case FloatTy::Tf32: return "f32";
+                case FloatTy::Tf64: return "f64";
+            }
+        }
+        case TyTag::TRef: {
+            switch (ty.ref_ty->tag) {
+                case RefTyTag::RString: return "string";
+                case RefTyTag::RArray: return "array";
+                case RefTyTag::RFun: return "function";
+            }
+        }
+    }
+    throw std::runtime_error("Unknown type");
+}

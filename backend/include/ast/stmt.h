@@ -24,7 +24,7 @@ struct VDecl {
 };
 
 struct Ret {
-    std::optional<std::unique_ptr<Node<Exp>>> value;
+    std::optional<std::shared_ptr<Node<Exp>>> value;
 };
 
 struct SCall {
@@ -64,3 +64,5 @@ struct Stmt {
 };
 
 Node<Stmt> convert_stmt_node(value v);
+
+std::string stmtToString(const Stmt& stmt, int indentLevel);

@@ -116,3 +116,5 @@ type decl =
 (* | Gcdecl of cdecl node *)
 
 type prog = decl list
+
+external convert_caml_ast: prog -> unit = "convert_caml_ast"

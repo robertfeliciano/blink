@@ -62,3 +62,5 @@ struct Ty {
 Ty convert_ty(value v);
 
 RetTy convert_ret_ty(value v);
+
+std::string tyToString(const Ty& ty);

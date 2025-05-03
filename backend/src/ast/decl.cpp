@@ -1,6 +1,6 @@
 #include <memory>
 #include <string>
-#include <variant>
+#include <sstream>
 
 #include <caml/mlvalues.h>
 
@@ -62,4 +62,39 @@ Decl convert_decl(value v) {
     }
 
     return decl;
+}
+
+struct DeclToStringVisitor {
+    std::string operator()(const Node<GDecl>& gNode) const {
+        const auto &g = gNode.elt;
+        return "global " + g.name + " = " + expToString(g.init.elt) + ";";
+    }
+    std::string operator()(const Node<FDecl>& fNode) const {
+        const auto &f = fNode.elt;
+        std::ostringstream oss;
+        oss << "function " << f.fname << "(";
+        for (size_t i = 0; i < f.args.size(); ++i) {
+            oss << tyToString(f.args[i].first) << " " << f.args[i].second;
+            if (i < f.args.size() - 1) {
+                oss << ", ";
+            }
+        }
+        switch (f.rtyp.tag) {
+            case RetTyTag::RetVoid:
+                oss << ") -> void";
+                break;
+            case RetTyTag::RetVal:
+                oss << ") -> " << tyToString(*f.rtyp.val);
+                break;
+        }
+        for (const auto& stmt : f.body) {
+            oss << stmtToString(stmt.elt, 1) << "\n";
+        }
+        oss << "}";
+        return oss.str();
+    }
+};
+
+inline std::string declToString(const Decl& decl) {
+    return std::visit(DeclToStringVisitor{}, decl.val);
 }

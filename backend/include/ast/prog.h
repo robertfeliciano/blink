@@ -7,3 +7,5 @@
 using Program = std::vector<Decl>;
 
 Program convert_program(value v);
+
+std::string programToString(const Program& prog);

@@ -32,6 +32,15 @@ file(GLOB_RECURSE SOURCES
     main.cpp
 )
 
-add_library(convert SHARED ${SOURCES})
+add_library(convert_static STATIC ${SOURCES})
+set_target_properties(convert_static PROPERTIES
+    OUTPUT_NAME "convert"
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib
+)
 
-set_target_properties(convert PROPERTIES OUTPUT_NAME "convert")
+add_library(convert SHARED ${SOURCES})
+set_target_properties(convert PROPERTIES
+    OUTPUT_NAME "convert"
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib
+    PREFIX "dll"  # OCaml expects 'dllconvert.so'
+)

@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include <caml/mlvalues.h>
 
 #include <ast/prog.h>
@@ -13,4 +15,10 @@ Program convert_program(value v) {
     return program;
 }
 
-
+inline std::string programToString(const Program& prog) {
+    std::ostringstream oss;
+    for (const auto& decl : prog) {
+        oss << declToString(decl) << "\n";
+    }
+    return oss.str();
+}

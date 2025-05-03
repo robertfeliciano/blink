@@ -24,3 +24,5 @@ struct Decl {
 };
 
 Decl convert_decl(value v);
+
+std::string declToString(const Decl& decl);
