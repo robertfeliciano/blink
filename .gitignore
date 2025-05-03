@@ -33,3 +33,5 @@ src/*.exe
 
 *.so
 backend/build/
+
+.vscode/
