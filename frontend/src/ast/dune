@@ -1,6 +1,8 @@
 (library
  (name ast)
  (public_name blink.ast)
+ (preprocess (pps ppx_deriving.show))
  (libraries util)
  (foreign_archives ../../lib/convert)
- (modes byte native))
+ (modes byte native)
+ (c_library_flags (:standard -lstdc++)))

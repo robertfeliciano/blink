@@ -9,7 +9,7 @@ let type_error (l: 'a node) err =
 
 let typecheck_prog = function
 | Gfdecl f -> Gfdecl f
-| other -> other
+(* | other -> other *)
 
 let signed_int_hierarchy: sint list = [Ti8; Ti16; Ti32; Ti64; Ti128]
 let unsigned_int_hierarchy: uint list = [Tu8; Tu16; Tu32; Tu64; Tu128]
@@ -206,7 +206,7 @@ let rec create_function_ctxt (p: Ast.prog) (tc: Tctxt.t) : Tctxt.t =
     | None -> 
       let func_type = get_fdecl_type this_node tc in
       Tctxt.add_global tc fname func_type |> create_function_ctxt t)
-  | _::t -> create_function_ctxt t tc
+  (* | _::t -> create_function_ctxt t tc *)
   | [] -> tc
 
 (* let rec typecheck_exp 

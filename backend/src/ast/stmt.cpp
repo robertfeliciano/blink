@@ -104,8 +104,9 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
         }
-    } else {
-        switch(Tag_val(stmt)){
+    } 
+    else {
+        switch(Int_val(stmt)){
             case 6: { 
                 node.elt.val = Break{};
                 break;
@@ -120,7 +121,7 @@ Node<Stmt> convert_stmt_node(value v) {
     return node;
 }
 
-inline std::string indent(int level) {
+std::string indent(int level) {
     return std::string(level * 2, ' ');
 }
 
@@ -199,6 +200,6 @@ struct StmtToStringVisitor {
     }
 };
 
-inline std::string stmtToString(const Stmt& s, int indentLevel = 0) {
+std::string stmtToString(const Stmt& s, int indentLevel = 0) {
     return std::visit(StmtToStringVisitor{indentLevel}, s.val);
 }

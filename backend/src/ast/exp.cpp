@@ -34,7 +34,7 @@ BinOp convert_binop(value v) {
     }
 }
 
-inline std::string toString(BinOp op) {
+std::string toString(BinOp op) {
     switch (op) {
         case BinOp::Add: return "+";
         case BinOp::Sub: return "-";
@@ -55,7 +55,7 @@ inline std::string toString(BinOp op) {
     throw std::runtime_error("Unknown BinOp");
 }
 
-inline std::string toString(UnOp op) {
+std::string toString(UnOp op) {
     switch (op) {
         case UnOp::Neg: return "-";
         case UnOp::Not: return "!";
@@ -212,6 +212,6 @@ struct ExpToStringVisitor {
     }
 };
 
-inline std::string expToString(const Exp& e) {
+std::string expToString(const Exp& e) {
     return std::visit(ExpToStringVisitor{}, e.val);
 }
