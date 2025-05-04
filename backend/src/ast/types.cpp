@@ -1,10 +1,11 @@
 #include <stdexcept>
-
+#include <iostream>
 #include <caml/mlvalues.h>
 
 #include <ast/types.h>
 
 Sint convert_sint(value v) {
+    std::cout << Int_val(v) << std::endl;
     switch (Int_val(v)) {
         case 0: return Sint::Ti8;
         case 1: return Sint::Ti16;
@@ -147,7 +148,8 @@ std::string tyToString(const Ty& ty) {
         case TyTag::TRef: {
             switch (ty.ref_ty->tag) {
                 case RefTyTag::RString: return "string";
-                case RefTyTag::RArray: return "array";
+                case RefTyTag::RArray: 
+                    return "array of " + tyToString(*(ty.ref_ty->inner));
                 case RefTyTag::RFun: return "function";
             }
         }

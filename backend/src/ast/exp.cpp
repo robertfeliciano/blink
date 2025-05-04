@@ -71,11 +71,13 @@ Node<Exp> convert_exp_node(value v) {
     if (Is_block(exp)) {
         switch(Tag_val(exp)){
             case 0: {
+                puts("breh");
                 bool b = Bool_val(Field(exp, 0));
                 node.elt.val = EBool{b};
                 break;
             }
             case 1: {
+                puts("blob");
                 int i = Int_val(Field(exp, 0));
                 node.elt.val = EInt{i};
                 break;

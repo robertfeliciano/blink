@@ -1,5 +1,6 @@
 #include <utility>
 #include <sstream>
+#include <iostream>
 
 #include <caml/mlvalues.h>
 
@@ -8,14 +9,14 @@
 Node<Stmt> convert_stmt_node(value v) {
     Node<Stmt> node;
     // get node loc
-    value stmt = Field(v, 0);
+    value elt = Field(v, 0);
 
-    if (Is_block(stmt)) {
-        switch(Tag_val(stmt)){
+    if (Is_block(elt)) {
+        switch(Tag_val(elt)){
             case 0: { 
-                Node<Exp> lhs = convert_exp_node(Field(stmt, 0));
+                Node<Exp> lhs = convert_exp_node(Field(elt, 0));
                 // ignore AOp since it will be desugared (x += 1 -> x = x + 1)
-                Node<Exp> rhs = convert_exp_node(Field(stmt, 2));
+                Node<Exp> rhs = convert_exp_node(Field(elt, 2));
                 node.elt.val = Assn {
                     .lhs = std::make_unique<Node<Exp>>(std::move(lhs)),
                     .rhs = std::make_unique<Node<Exp>>(std::move(rhs)),
@@ -23,8 +24,9 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
             case 1: { 
-                value decl = Field(stmt, 0);
+                value decl = Field(elt, 0);
                 std::string id = String_val(Field(decl, 0));
+                std::cout << id << std::endl;
                 // at this point we know the types of all vdecls (after typechecking)
                 Ty ty = convert_ty(Field(decl, 1));
                 Node<Exp> init = convert_exp_node(Field(decl, 2));
@@ -38,10 +40,10 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
             case 2: { 
-                value ret_val = Field(stmt, 0);
+                value ret_val = Field(elt, 0);
                 if (Is_block(ret_val)) {
                     node.elt.val = Ret {
-                        .value = std::make_shared<Node<Exp>>(convert_exp_node(Field(ret_val, 0))),
+                        .value = std::make_shared<Node<Exp>>(convert_exp_node(ret_val)),
                     };
                 } else {
                     node.elt.val = Ret {
@@ -51,9 +53,9 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
             case 3: { 
-                Node<Exp> callee = convert_exp_node(Field(stmt, 0));
+                Node<Exp> callee = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Exp>>> args;
-                value arg_list = Field(stmt, 1);
+                value arg_list = Field(elt, 1);
                 while (arg_list != Val_emptylist) {
                     value arg = Field(arg_list, 0);
                     args.push_back(std::make_unique<Node<Exp>>(convert_exp_node(arg)));
@@ -66,16 +68,16 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
             case 4: { 
-                Node<Exp> cond = convert_exp_node(Field(stmt, 0));
+                Node<Exp> cond = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Stmt>>> then_branch;
-                value then_list = Field(stmt, 1);
+                value then_list = Field(elt, 1);
                 while (then_list != Val_emptylist) {
                     value then_stmt = Field(then_list, 0);
                     then_branch.push_back(std::make_unique<Node<Stmt>>(convert_stmt_node(then_stmt)));
                     then_list = Field(then_list, 1);
                 }
                 std::vector<std::unique_ptr<Node<Stmt>>> else_branch;
-                value else_list = Field(stmt, 2);
+                value else_list = Field(elt, 2);
                 while (else_list != Val_emptylist) {
                     value else_stmt = Field(else_list, 0);
                     else_branch.push_back(std::make_unique<Node<Stmt>>(convert_stmt_node(else_stmt)));
@@ -89,9 +91,9 @@ Node<Stmt> convert_stmt_node(value v) {
                 break;
             }
             case 5: { 
-                Node<Exp> cond = convert_exp_node(Field(stmt, 0));
+                Node<Exp> cond = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Stmt>>> body;
-                value body_list = Field(stmt, 1);
+                value body_list = Field(elt, 1);
                 while (body_list != Val_emptylist) {
                     value body_stmt = Field(body_list, 0);
                     body.push_back(std::make_unique<Node<Stmt>>(convert_stmt_node(body_stmt)));
@@ -106,7 +108,7 @@ Node<Stmt> convert_stmt_node(value v) {
         }
     } 
     else {
-        switch(Int_val(stmt)){
+        switch(Int_val(elt)){
             case 6: { 
                 node.elt.val = Break{};
                 break;

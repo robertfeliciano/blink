@@ -87,7 +87,9 @@
         "queue": "cpp",
         "stack": "cpp",
         "*.ipp": "cpp",
-        "__node_handle": "cpp"
+        "__node_handle": "cpp",
+        "forward_list": "cpp",
+        "__hash_table": "cpp"
     },
     "github.copilot.enable": {
         "*": false,

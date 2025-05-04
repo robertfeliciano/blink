@@ -19,16 +19,15 @@ Node<GDecl> convert_gdecl_node(value v) {
     return node;
 }
 
-Node<FDecl> convert_fdecl_node(value fdecl_val) {
+Node<FDecl> convert_fdecl_node(value fdecl_node) {
     Node<FDecl> node;
-    // get node loc
-    
+    value elt = Field(fdecl_node, 0);
+    // get node loc... value loc = Field(fdecl, 1)
     FDecl f;
-    f.rtyp = convert_ret_ty(Field(fdecl_val, 0));
+    f.rtyp = convert_ret_ty(Field(elt, 0));
+    f.fname = std::string(String_val(Field(elt, 1)));
 
-    f.fname = std::string(String_val(Field(fdecl_val, 1)));
-
-    value args = Field(fdecl_val, 2);
+    value args = Field(elt, 2);
     while (args != Val_emptylist) {
         value pair = Field(args, 0);
         f.args.emplace_back(
@@ -38,22 +37,23 @@ Node<FDecl> convert_fdecl_node(value fdecl_val) {
         args = Field(args, 1);
     }
 
-    value body = Field(fdecl_val, 3);
+    value body = Field(elt, 3);
     while (body != Val_emptylist) {
-        f.body.push_back(convert_stmt_node(Field(body, 0)));
+        value stmt_node = Field(body, 0);
+        f.body.push_back(convert_stmt_node(stmt_node));
         body = Field(body, 1);
     }
     node.elt = std::move(f);
     return node;
 }
 
-Decl convert_decl(value v) {
+Decl convert_decl(value d) {
     Decl decl;
-    int tag = Tag_val(v);
 
-    switch (tag) {
+    switch (Tag_val(d)) {
         case 0:
-            decl.val = convert_fdecl_node(v);
+            value fdecl_node = Field(d, 0);
+            decl.val = convert_fdecl_node(fdecl_node);
             break;
     }
 
@@ -68,7 +68,7 @@ struct DeclToStringVisitor {
     std::string operator()(const Node<FDecl>& fNode) const {
         const auto &f = fNode.elt;
         std::ostringstream oss;
-        oss << "function " << f.fname << "(";
+        oss << "fun " << f.fname << "(";
         for (size_t i = 0; i < f.args.size(); ++i) {
             oss << tyToString(f.args[i].first) << " " << f.args[i].second;
             if (i < f.args.size() - 1) {
@@ -83,6 +83,7 @@ struct DeclToStringVisitor {
                 oss << ") -> " << tyToString(*f.rtyp.val);
                 break;
         }
+        oss << " {\n";
         for (const auto& stmt : f.body) {
             oss << stmtToString(stmt.elt, 1) << "\n";
         }
