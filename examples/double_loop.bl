@@ -1,3 +1,4 @@
+/*
 fun main(argv: [string]) => i32 {
     for i in 0..10 {
         for j in i..=10 by 2 {
@@ -8,6 +9,24 @@ fun main(argv: [string]) => i32 {
                 print("hello world");
             }
         }
+    }
+    return 1;
+}
+*/
+
+fun main(argv: [[string]]) => i32 {
+    let i: i32 = 0;
+    while i < 10 {
+        let j: i32 = i;
+        while j <= 10 {
+            if i + j > 6 {
+                break;
+            } else {
+                print("hello world");
+            }
+            j = j + 2;
+        }
+        i = i + 1;
     }
     return 1;
 }

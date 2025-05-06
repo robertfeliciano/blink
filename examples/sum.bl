@@ -1,14 +1,19 @@
 fun summation(start: i8, end: i8) => i8 {
-    let s = 0;
+    let s: u8 = 0;
+    /*
     for n in start..end+1 {
         s += n;
+    }
+    */
+    while (start <= end) {
+        s = s + n;
     }
     return s;
 }
 
 fun main(argv: [string]) => i32 {
-    let sum = summation(0, argv[1]);
-    if sum < 100 {
+    let sum: i8 = summation(0, argv[1]);
+    if (sum < 100) {
         print("hi");
     } else {
         print("bye");

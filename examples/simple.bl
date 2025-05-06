@@ -5,8 +5,14 @@ fun right_bound(i: u8) => u8 {
 
 fun main(argv: [string]) => i32 {
     let x: u32 = 0;
+    /*
     for i in 0..right_bound(x) by 2 {
         x += i;
+    }
+    */
+    while i < right_bound(x) {
+        x = x + i;
+        i = i + 2;
     }
     print(x);
     return 0;
