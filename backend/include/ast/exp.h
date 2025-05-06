@@ -33,7 +33,7 @@ enum class BinOp {
     Or
 };
 
-struct EInt  { int value; };
+struct EInt  { int64_t value; };
 struct EBool { bool value; };
 struct EVar  { std::string id; };
 struct EFloat { double value; };

@@ -1,12 +1,12 @@
 #include <stdexcept>
-
+#include <iostream>
 #include <caml/mlvalues.h>
 
 #include <ast/exp.h>
 
 
 UnOp convert_unop(value v) {
-    switch (Tag_val(v)) {
+    switch (Int_val(v)) {
         case 0: return UnOp::Neg;
         case 1: return UnOp::Not;
         default: throw std::runtime_error("Unknown UnOp");
@@ -14,7 +14,7 @@ UnOp convert_unop(value v) {
 }
 
 BinOp convert_binop(value v) {
-    switch (Tag_val(v)) {
+    switch (Int_val(v)) {
         case 0: return BinOp::Add;
         case 1: return BinOp::Sub;
         case 2: return BinOp::Mul;
@@ -42,7 +42,7 @@ std::string toString(BinOp op) {
         case BinOp::Div: return "/";
         case BinOp::At: return "@";
         case BinOp::Mod: return "%";
-        case BinOp::Pow: return "^";
+        case BinOp::Pow: return "**";
         case BinOp::Eqeq: return "==";
         case BinOp::Neq: return "!=";
         case BinOp::Lt: return "<";
@@ -63,22 +63,19 @@ std::string toString(UnOp op) {
     throw std::runtime_error("Unknown UnOp");
 }
 
-Node<Exp> convert_exp_node(value v) {
+Node<Exp> convert_exp_node(value exp_node) {
     Node<Exp> node;
     // get node loc
-    value exp = Field(v, 0);
-
+    value exp = Field(exp_node, 0);
     if (Is_block(exp)) {
         switch(Tag_val(exp)){
             case 0: {
-                puts("breh");
                 bool b = Bool_val(Field(exp, 0));
                 node.elt.val = EBool{b};
                 break;
             }
             case 1: {
-                puts("blob");
-                int i = Int_val(Field(exp, 0));
+                int i = Int64_val(Field(exp, 0));
                 node.elt.val = EInt{i};
                 break;
             }
@@ -93,8 +90,7 @@ Node<Exp> convert_exp_node(value v) {
                 break;
             }
             case 4: {
-                value id_node = Field(exp, 0);
-                std::string var = String_val(Field(id_node, 0));
+                std::string var = String_val(Field(exp, 0));
                 node.elt.val = EVar{var};
                 break;
             }
@@ -114,7 +110,7 @@ Node<Exp> convert_exp_node(value v) {
                 break;
             }
             case 6: {
-                BinOp bop = static_cast<BinOp>(convert_binop(Int_val(Field(exp, 0))));
+                BinOp bop = static_cast<BinOp>(convert_binop(Field(exp, 0)));
                 Node<Exp> lhs = convert_exp_node(Field(exp, 1));
                 Node<Exp> rhs = convert_exp_node(Field(exp, 2));
                 node.elt.val = EBop {

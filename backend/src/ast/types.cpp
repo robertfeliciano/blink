@@ -5,7 +5,6 @@
 #include <ast/types.h>
 
 Sint convert_sint(value v) {
-    std::cout << Int_val(v) << std::endl;
     switch (Int_val(v)) {
         case 0: return Sint::Ti8;
         case 1: return Sint::Ti16;

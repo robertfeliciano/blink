@@ -13,7 +13,7 @@ Node<Stmt> convert_stmt_node(value v) {
 
     if (Is_block(elt)) {
         switch(Tag_val(elt)){
-            case 0: { 
+            case 0: { // assn
                 Node<Exp> lhs = convert_exp_node(Field(elt, 0));
                 // ignore AOp since it will be desugared (x += 1 -> x = x + 1)
                 Node<Exp> rhs = convert_exp_node(Field(elt, 2));
@@ -23,12 +23,12 @@ Node<Stmt> convert_stmt_node(value v) {
                 };
                 break;
             }
-            case 1: { 
+            case 1: { // var decl
                 value decl = Field(elt, 0);
                 std::string id = String_val(Field(decl, 0));
-                std::cout << id << std::endl;
                 // at this point we know the types of all vdecls (after typechecking)
-                Ty ty = convert_ty(Field(decl, 1));
+                value ty_option = Field(decl, 1);
+                Ty ty = convert_ty(Field(ty_option, 0));
                 Node<Exp> init = convert_exp_node(Field(decl, 2));
                 bool is_const = Bool_val(Field(decl, 3));
                 node.elt.val = VDecl {
@@ -39,11 +39,12 @@ Node<Stmt> convert_stmt_node(value v) {
                 };
                 break;
             }
-            case 2: { 
-                value ret_val = Field(elt, 0);
-                if (Is_block(ret_val)) {
+            case 2: { // ret
+                value ret_val_option = Field(elt, 0);
+                if (Is_block(ret_val_option)) {
+                    value ret_exp_node = Field(ret_val_option, 0);
                     node.elt.val = Ret {
-                        .value = std::make_shared<Node<Exp>>(convert_exp_node(ret_val)),
+                        .value = std::make_shared<Node<Exp>>(convert_exp_node(ret_exp_node)),
                     };
                 } else {
                     node.elt.val = Ret {
@@ -52,7 +53,7 @@ Node<Stmt> convert_stmt_node(value v) {
                 }
                 break;
             }
-            case 3: { 
+            case 3: { // SCall
                 Node<Exp> callee = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Exp>>> args;
                 value arg_list = Field(elt, 1);
@@ -67,7 +68,7 @@ Node<Stmt> convert_stmt_node(value v) {
                 };
                 break;
             }
-            case 4: { 
+            case 4: { // if else
                 Node<Exp> cond = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Stmt>>> then_branch;
                 value then_list = Field(elt, 1);
@@ -90,13 +91,16 @@ Node<Stmt> convert_stmt_node(value v) {
                 };
                 break;
             }
-            case 5: { 
+            case 5: {
+                // ignore for loop
+            }
+            case 6: { // while
                 Node<Exp> cond = convert_exp_node(Field(elt, 0));
                 std::vector<std::unique_ptr<Node<Stmt>>> body;
                 value body_list = Field(elt, 1);
                 while (body_list != Val_emptylist) {
-                    value body_stmt = Field(body_list, 0);
-                    body.push_back(std::make_unique<Node<Stmt>>(convert_stmt_node(body_stmt)));
+                    value body_stmt_node = Field(body_list, 0);
+                    body.push_back(std::make_unique<Node<Stmt>>(convert_stmt_node(body_stmt_node)));
                     body_list = Field(body_list, 1);
                 }
                 node.elt.val = While {
@@ -109,11 +113,11 @@ Node<Stmt> convert_stmt_node(value v) {
     } 
     else {
         switch(Int_val(elt)){
-            case 6: { 
+            case 0: {
                 node.elt.val = Break{};
                 break;
             }
-            case 7: { 
+            case 1: {
                 node.elt.val = Continue{};
                 break;
             }
