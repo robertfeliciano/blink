@@ -31,37 +31,48 @@ tmp1 = x * 3
 x = tmp1 + 2
 
 a = [1, 2, 3+4] becomes
-tmp = e+4
+let tmp = 3+4
 a = [1, 2, tmp]
+
+
+let x = arr[funcCall(2, 3+4)];
+becomes
+let dtmp1 = 3+4;
+let x = arr[funcCall(2, dtmp1)];
 *)
 
 let rec desugar_exp (e: exp) : stmt node list * exp node = 
   match e with 
-  (* | Call(c, es) -> 
-    let cstmts, c' = desugar_exp c.elt *)
+  | Call(c, es) -> 
+    let cstmts, c' = desugar_exp c.elt in
+    let estmts, es' = List.split @@ List.map (fun v -> desugar_exp v.elt) es in 
+    let dtmp = gensym "dtmp" in 
+    let res = [Decl(dtmp, None, Call(c', es') |> nl, false) |> nl] in 
+    List.flatten estmts @ cstmts @ res, nl_id dtmp
   | Bop(bop, lhs, rhs) -> 
     let lstmts, lhs' = desugar_exp lhs.elt in 
     let rstmts, rhs' = desugar_exp rhs.elt in 
-    let dtmp = nl_id @@ gensym "dtmp" in
-    let res = [nl @@ Assn(dtmp, Eq, nl @@ Bop(bop, lhs', rhs'))] in
-    (lstmts @ rstmts @ res, dtmp)
+    let dtmp = gensym "dtmp" in
+    let res = [Decl(dtmp, None, Bop(bop, lhs', rhs') |> nl, false) |> nl] in 
+    lstmts @ rstmts @ res, nl_id dtmp
   | Uop(uop, o) -> 
     let ostmts, o' = desugar_exp o.elt in 
-    let dtmp = nl_id @@ gensym "dtmp" in
-    let res = [nl @@ Assn(dtmp, Eq, nl @@ Uop(uop, o'))] in 
-    (ostmts @ res, dtmp)
+    let dtmp = gensym "dtmp" in
+    let res = [Decl(dtmp, None, Uop(uop, o') |> nl, false) |> nl] in
+    ostmts @ res, nl_id dtmp
   | Index(c, i) -> 
     let cstmts, cvar = desugar_exp c.elt in 
     let istmts, ivar = desugar_exp i.elt in
-    let dtmp = nl_id @@ gensym "dtmp" in
-    let res = [nl @@ Assn(dtmp, Eq, nl @@ Index(cvar, ivar))] in
-    (cstmts @ istmts @ res, dtmp)
+    let dtmp = gensym "dtmp" in
+    let res = [Decl(dtmp, None, Index(cvar, ivar) |> nl, false) |> nl] in 
+    cstmts @ istmts @ res, nl_id dtmp
   | Array (es) -> 
     let estmts, es' = List.split @@ List.map (fun v -> desugar_exp v.elt) es in 
-    let dtmp = nl_id @@ gensym "dtmp" in
-    let res = [nl @@ Assn(dtmp, Eq, nl @@ Array(es'))] in 
-    List.flatten estmts @ res, dtmp
+    let dtmp = gensym "dtmp" in
+    let res = [Decl(dtmp, None, Array(es') |> nl, false) |> nl] in
+    List.flatten estmts @ res, nl_id dtmp
   | _ -> [], nl e
+  (* TODO desugar range into some kind of struct or something *)
 
 (* let rec desugar_stmt (s: stmt node) : stmt node list = 
   let node_creator elem = {elt = elem; loc = s.loc} in 
