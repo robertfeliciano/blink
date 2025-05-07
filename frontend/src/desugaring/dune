@@ -1,0 +1,4 @@
+(library
+ (name desugaring)
+ (public_name blink.desugaring)
+ (libraries core ast fmt))
