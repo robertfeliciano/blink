@@ -41,36 +41,42 @@ let dtmp1 = 3+4;
 let x = arr[funcCall(2, dtmp1)];
 *)
 
+let split (res: (stmt node list * exp node) list) = 
+  let rec aux lst stmts exps =
+    match lst with 
+    | [] -> (stmts, exps) 
+    | (s, e)::t -> aux t (s @ stmts) (e :: exps)
+  in aux res [] []
+
+let combine l1 l2 elem = 
+  List.rev_append l1 (elem :: l2)
+
 let rec desugar_exp (e: exp) : stmt node list * exp node = 
+  let dtmp = gensym "dtmp" in 
   match e with 
   | Call(c, es) -> 
     let cstmts, c' = desugar_exp c.elt in
-    let estmts, es' = List.split @@ List.map (fun v -> desugar_exp v.elt) es in 
-    let dtmp = gensym "dtmp" in 
-    let res = [Decl(dtmp, None, Call(c', es') |> nl, false) |> nl] in 
-    List.flatten estmts @ cstmts @ res, nl_id dtmp
+    let estmts, es' = split @@ List.map (fun v -> desugar_exp v.elt) es in 
+    let res = Decl(dtmp, None, Call(c', es') |> nl, false) |> nl in 
+    combine estmts cstmts res, nl_id dtmp
   | Bop(bop, lhs, rhs) -> 
     let lstmts, lhs' = desugar_exp lhs.elt in 
     let rstmts, rhs' = desugar_exp rhs.elt in 
-    let dtmp = gensym "dtmp" in
-    let res = [Decl(dtmp, None, Bop(bop, lhs', rhs') |> nl, false) |> nl] in 
-    lstmts @ rstmts @ res, nl_id dtmp
+    let res = Decl(dtmp, None, Bop(bop, lhs', rhs') |> nl, false) |> nl in 
+    combine lstmts rstmts res, nl_id dtmp
   | Uop(uop, o) -> 
     let ostmts, o' = desugar_exp o.elt in 
-    let dtmp = gensym "dtmp" in
-    let res = [Decl(dtmp, None, Uop(uop, o') |> nl, false) |> nl] in
-    ostmts @ res, nl_id dtmp
+    let res = Decl(dtmp, None, Uop(uop, o') |> nl, false) |> nl in
+    combine [] ostmts res, nl_id dtmp
   | Index(c, i) -> 
     let cstmts, cvar = desugar_exp c.elt in 
     let istmts, ivar = desugar_exp i.elt in
-    let dtmp = gensym "dtmp" in
-    let res = [Decl(dtmp, None, Index(cvar, ivar) |> nl, false) |> nl] in 
-    cstmts @ istmts @ res, nl_id dtmp
+    let res = Decl(dtmp, None, Index(cvar, ivar) |> nl, false) |> nl in 
+    combine cstmts istmts res, nl_id dtmp
   | Array (es) -> 
-    let estmts, es' = List.split @@ List.map (fun v -> desugar_exp v.elt) es in 
-    let dtmp = gensym "dtmp" in
-    let res = [Decl(dtmp, None, Array(es') |> nl, false) |> nl] in
-    List.flatten estmts @ res, nl_id dtmp
+    let estmts, es' = split @@ List.map (fun v -> desugar_exp v.elt) es in 
+    let res = Decl(dtmp, None, Array(es') |> nl, false) |> nl in
+    combine [] estmts res, nl_id dtmp
   | _ -> [], nl e
   (* TODO desugar range into some kind of struct or something *)
 
