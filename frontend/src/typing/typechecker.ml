@@ -88,8 +88,8 @@ and subtype_ref (tc : Tctxt.t) (t1 : Ast.ref_ty) (t2 : Ast.ref_ty) : bool =
   | RString, RString -> true
   | RArray t1', RArray t2' -> subtype tc t1' t2'
   (* | RClass c1, RClass c2 -> subtype_class tc c1 c2 *)
-  | RFun(ptyps1, rtyps1), RFun(ptyps2, rtyps2) -> let subtype_arg = fun (ty1) (ty2) -> subtype tc ty2 ty1 in
-  (List.for_all2 subtype_arg ptyps1 ptyps2) && (subtype_ret_ty tc rtyps1 rtyps2)
+  | RFun(pty1, rty1), RFun(pty2, rty2) -> let subtype_arg = fun (ty1) (ty2) -> subtype tc ty2 ty1 in
+  (List.for_all2 subtype_arg pty1 pty2) && (subtype_ret_ty tc rty1 rty2)
   | _ -> false
 
 and subtype_list tc l1 l2 : bool = 
@@ -124,6 +124,19 @@ let all_numbers (tl: ty list) : bool =
       | TInt _ | TFloat _ -> true 
       | _ -> false ) 
     tl
+
+let type_of_binop (n: exp node) (b:binop) (l:ty) (r:ty) : ty * ty * ty = 
+  let res_ty = match l,r with 
+  | TInt _, TInt _
+  | TFloat _, TFloat _
+  | TInt _, TFloat _
+  | TFloat _, TInt _ -> meet_number n (l,r)
+  | _ when l = r -> l (* bools, strings, arrays result in themselves by default *)
+  | _ -> type_error n "unable to reconcile types"
+  in match b with 
+  | Add | Sub | Mul | Div | Mod | Pow | At -> l, r, res_ty
+  | Lt | Lte | Gt | Gte | Eqeq | Neq -> l, r, TBool
+  | And | Or -> TBool, TBool, TBool
 
 let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
   let {elt; loc=_} = e in
@@ -189,7 +202,7 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
     | _ -> type_error e "bad type for neg or not operator")
     
   | _ -> TBool
-
+  
 let get_fdecl_type (e: Ast.fdecl node) tc = 
   let {elt={frtyp; fname=_; args; body=_}; loc=_} = e in
   let arg_types = List.map (fun (t, _) -> typecheck_ty e tc t ; t) args in
