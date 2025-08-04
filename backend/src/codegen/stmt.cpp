@@ -26,7 +26,20 @@ llvm::Value* StmtToLLVisitor::operator()(const Assn& s) {
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const VDecl& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(VDecl) not supported yet");
+    if (s.init == nullptr) {
+        throw std::runtime_error("Null initialization for VDecl... How?");
+    }
+    llvm::Value* init = gen.codegenExp(s.init->elt);
+    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
+    llvm::IRBuilder<> tmp(
+        &(parent->getEntryBlock()),
+        parent->getEntryBlock().begin()
+    );
+    llvm::AllocaInst* var = tmp.CreateAlloca(init->getType(), nullptr,
+                        llvm::Twine(s.id));
+    gen.varEnv[s.id] = var;
+    gen.builder->CreateStore(init, var);
+    return init;
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const SCall& s) {

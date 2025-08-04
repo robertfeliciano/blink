@@ -2,7 +2,7 @@
 #include "codegen/exp.h"
 
 llvm::Value* ExpToLLVisitor::operator()(const EInt& e) {
-    return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(64, e.value));
+    return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(32, e.value));
 }
 
 llvm::Value* ExpToLLVisitor::operator()(const EBool& e) {
