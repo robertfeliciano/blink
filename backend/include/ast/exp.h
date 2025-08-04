@@ -6,6 +6,8 @@
 #include <variant>
 #include <optional>
 
+#include <caml/mlvalues.h>
+
 #include <ast/node.h>
 
 struct Exp;

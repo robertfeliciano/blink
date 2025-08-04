@@ -2,8 +2,6 @@
 #include <sstream>
 #include <iostream>
 
-#include <caml/mlvalues.h>
-
 #include <ast/stmt.h>
 
 Node<Stmt> convert_stmt_node(value v) {

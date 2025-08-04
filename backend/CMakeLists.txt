@@ -29,7 +29,34 @@ include_directories(
 
 file(GLOB_RECURSE SOURCES
     src/ast/*.cpp
+    src/codegen/*.cpp
     main.cpp
+)
+
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+include_directories(${LLVM_INCLUDE_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
+
+llvm_map_components_to_libnames(llvm_libs
+    core
+    irreader
+    support
+    bitreader
+    asmparser
+    passes
+    instcombine
+    scalaropts
+    analysis
+    transformutils
+    ipo
+    aggressiveinstcombine
+    vectorize
+    frontendopenmp
+    globalisel
 )
 
 add_library(convert_static STATIC ${SOURCES})
@@ -44,3 +71,6 @@ set_target_properties(convert PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib
     PREFIX "dll"  # OCaml expects 'dllconvert.so'
 )
+
+target_link_libraries(convert PRIVATE ${llvm_libs})
+target_link_libraries(convert_static PRIVATE ${llvm_libs})

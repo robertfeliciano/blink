@@ -1,5 +1,9 @@
+#pragma once
+
 #include <vector>
 #include <memory>
+
+#include <caml/mlvalues.h>
 
 struct Ty;
 
