@@ -47,7 +47,41 @@ llvm::Value* StmtToLLVisitor::operator()(const SCall& s) {
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const If& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(If) not supported yet");
+    llvm::Value* cond = gen.codegenExp(s.cond->elt);
+    if (cond == nullptr) {
+        throw std::runtime_error("null if condition! what gives?");
+    }
+    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(*gen.ctxt, "then", parent);
+    llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(*gen.ctxt, "else", parent);
+    llvm::BasicBlock* finallyBlock = llvm::BasicBlock::Create(*gen.ctxt, "finally", parent);
+
+    gen.builder->CreateCondBr(cond, thenBlock, elseBlock);
+
+    gen.builder->SetInsertPoint(thenBlock);
+
+    for (auto& s : s.then_branch) {
+        gen.codegenStmt(s->elt);
+    }
+
+    thenBlock = gen.builder->GetInsertBlock();
+    gen.builder->CreateBr(finallyBlock);
+    
+    parent->getBasicBlockList().push_back(elseBlock);
+    gen.builder->SetInsertPoint(elseBlock);
+
+    for (auto& s : s.else_branch) {
+        gen.codegenStmt(s->elt);
+    }
+
+    elseBlock = gen.builder->GetInsertBlock();
+    gen.builder->CreateBr(finallyBlock);
+    
+    parent->getBasicBlockList().push_back(finallyBlock);
+    gen.builder->SetInsertPoint(finallyBlock);
+
+    return llvm::Constant::getNullValue(llvm::Type::getInt32Ty(*gen.ctxt));
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const While& s) {
