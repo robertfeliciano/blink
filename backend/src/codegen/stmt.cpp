@@ -85,7 +85,32 @@ llvm::Value* StmtToLLVisitor::operator()(const If& s) {
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const While& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(While) not supported yet");
+    llvm::Value* cond = gen.codegenExp(s.cond->elt);
+    if (cond == nullptr) {
+        throw std::runtime_error("null loop condition! what??");
+    }
+
+    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* loop = llvm::BasicBlock::Create(*gen.ctxt, "loop");
+    llvm::BasicBlock* loopEnd = llvm::BasicBlock::Create(*gen.ctxt, "loop_end");
+
+    gen.builder->CreateCondBr(cond, loop, loopEnd);
+
+    parent->getBasicBlockList().push_back(loop);
+    gen.builder->SetInsertPoint(loop);
+
+    for (auto& stmt : s.body) {
+        gen.codegenStmt(stmt->elt);
+    }
+    
+    loop = gen.builder->GetInsertBlock();
+    gen.builder->CreateCondBr(cond, loop, loopEnd);
+
+    parent->getBasicBlockList().push_back(loopEnd);
+    gen.builder->SetInsertPoint(loopEnd);
+    
+    return llvm::Constant::getNullValue(llvm::Type::getInt32Ty(*gen.ctxt));
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const Break& s) {
