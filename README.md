@@ -6,7 +6,9 @@ Blink aims to be a GPU accelerated programming language focused on machine learn
 
 One time I made the mistake of not touching this project for 2 months and I completely forgot how to compile it. 
 
-Starting in the root directory, `blink/`, run the following commands: 
+Run `make` in your terminal.
+
+Alternative, starting in the root directory, `blink/`, run the following commands: 
 
 `cd backend`
 

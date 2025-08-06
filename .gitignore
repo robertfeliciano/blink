@@ -35,3 +35,7 @@ src/*.exe
 backend/build/
 
 .vscode/
+
+**/*.ll
+
+blink
