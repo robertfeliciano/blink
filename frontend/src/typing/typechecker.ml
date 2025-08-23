@@ -7,8 +7,8 @@ let type_error (l: 'a node) err =
   let (_, (s, e), _) = l.loc in
   raise (TypeError (Printf.sprintf "[%d, %d] %s" s e err))
 
-let typecheck_prog = function
-| Gfdecl f -> Gfdecl f
+(* let typecheck_prog = function *)
+(* | Gfdecl f -> Gfdecl f *)
 (* | other -> other *)
 
 let signed_int_hierarchy: sint list = [Ti8; Ti16; Ti32; Ti64; Ti128]
@@ -201,7 +201,7 @@ let get_fdecl_type (e: Ast.fdecl node) tc =
   List.iter (typecheck_ty e tc) arg_types;
   TRef (RFun (arg_types, frtyp))
 
-let rec create_function_ctxt (p: Ast.prog) (tc: Tctxt.t) : Tctxt.t =
+(* let rec create_function_ctxt (p: Ast.prog) (tc: Tctxt.t) : Tctxt.t =
   match p with 
   | Gfdecl ({elt={frtyp; fname; args; body}; loc})::t ->
     let this_node = {elt={frtyp; fname; args; body}; loc} in
@@ -211,7 +211,7 @@ let rec create_function_ctxt (p: Ast.prog) (tc: Tctxt.t) : Tctxt.t =
       let func_type = get_fdecl_type this_node tc in
       Tctxt.add_global tc fname func_type |> create_function_ctxt t)
   (* | _::t -> create_function_ctxt t tc *)
-  | [] -> tc
+  | [] -> tc *)
 
 (* let rec typecheck_exp 
 
@@ -288,5 +288,5 @@ and typecheck_block (tc: Tctxt.t) (b: block) (rty: ret_ty) (returns: bool) : boo
     let tc', returns' = typecheck_stmt tc h rty in typecheck_block tc' t rty returns'
   | [] -> returns 
 
-let typecheck ast = 
-  List.map typecheck_prog ast
+(* let typecheck ast = 
+  List.map typecheck_prog ast *)

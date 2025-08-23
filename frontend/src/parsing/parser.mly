@@ -108,14 +108,14 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %nonassoc LBRACKET
 %nonassoc LPAREN
 
-%start prog
+%start program
 %start exp_top
 %start stmt_top
 
 %type <Ast.exp Ast.node> exp_top
 %type <Ast.stmt Ast.node> stmt_top
 
-%type <Ast.prog> prog
+%type <Ast.program> program
 %type <Ast.exp Ast.node> exp
 %type <Ast.stmt Ast.node> stmt
 %type <Ast.block> block
@@ -132,7 +132,7 @@ program:
   | fns=list(fdecl) EOF { Prog(fns) }
 
 fdecl:
-  | FUN fname=IDENT LPAREN args=arglist RPAREN frtpy=ret_ty_spec body=block
+  | FUN fname=IDENT LPAREN args=arglist RPAREN frtyp=ret_ty_spec body=block
     { (loc $startpos $endpos { frtyp; fname; args; body }) }
 
 %inline arg:

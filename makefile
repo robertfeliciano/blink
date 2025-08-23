@@ -9,7 +9,7 @@ backend:
 	cd backend/build && make
 
 frontend: 
-	cd frontend && dune build && mv ./_build/default/src/blink.exe ../blink 
+	cd frontend && dune build && mv ./_build/default/src/blink.exe ../blink -f
 
 clean: 
 	@rm -rf backend/build && cd frontend && dune clean

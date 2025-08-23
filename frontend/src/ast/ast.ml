@@ -217,6 +217,6 @@ let show_decl d = show_fdecl d.elt
 
 let show_prog (p:program) = 
   let (Prog fns) = p in 
-  let rec aux fn s = 
+  let aux fn s = 
     s ^ show_decl fn ^ "\n" 
   in List.fold_right aux fns "\n"
