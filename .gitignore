@@ -39,3 +39,5 @@ backend/build/
 **/*.ll
 
 blink
+
+build/

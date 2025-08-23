@@ -128,16 +128,12 @@ exp_top:
 stmt_top:
   | s=stmt EOF { s }
 
-prog:
-  | p=list(decl) EOF  { p }
+program: 
+  | fns=list(fdecl) EOF { Prog(fns) }
 
-decl:
-  // | GLOBAL name=IDENT EQ init=gexp SEMI
-  //   { Gvdecl (loc $startpos $endpos { name; init }) }
-  | FUN fname=IDENT LPAREN args=arglist RPAREN frtyp=ret_ty_spec body=block
-    { Gfdecl (loc $startpos $endpos { frtyp; fname; args; body }) }
-//   | STRUCT name=UIDENT LBRACE fs=separated_list(SEMI, decl_field) RBRACE 
-//     { Gtdecl (loc $startpos $endpos (name, fs)) }
+fdecl:
+  | FUN fname=IDENT LPAREN args=arglist RPAREN frtpy=ret_ty_spec body=block
+    { (loc $startpos $endpos { frtyp; fname; args; body }) }
 
 %inline arg:
   | i=IDENT t=ty_spec { (t, i) }

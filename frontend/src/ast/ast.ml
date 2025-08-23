@@ -122,14 +122,9 @@ type field = { fieldName : id; ftyp : ty }
 
 (* type cdecl = id * (field list * fdecl list) *)
 
-type decl =
-(* | Gvdecl of gdecl node *)
-| Gfdecl of fdecl node
-(* | Gcdecl of cdecl node *)
+type program = Prog of fdecl node list [@@boxed]
 
-type prog = decl list
-
-external convert_caml_ast: prog -> unit = "convert_caml_ast"
+external convert_caml_ast: program -> unit = "convert_caml_ast"
 
 let rec show_exp = function
 | Bool b -> Printf.sprintf "Bool(%b)" b
@@ -173,43 +168,43 @@ let show_vdecl (id, ty_opt, exp, is_const) =
       (show_node show_exp exp)
       is_const
     
-      let rec show_stmt = function
-      | Assn (lhs, op, rhs) ->
-          Printf.sprintf "Assn(%s, %s, %s)"
-            (show_node show_exp lhs)
-            (show_aop op)
-            (show_node show_exp rhs)
-      | Decl v -> show_vdecl v
-      | Ret exp_opt ->
-          Printf.sprintf "Ret(%s)"
-            (match exp_opt with
-             | Some exp -> show_node show_exp exp
-             | None -> "None")
-      | SCall (fn, args) ->
-          Printf.sprintf "SCall(%s, [%s])"
-            (show_node show_exp fn)
-            (String.concat "; " (List.map (show_node show_exp) args))
-      | If (cond, then_block, else_block) ->
-          Printf.sprintf "If(%s, [%s], [%s])"
-            (show_node show_exp cond)
-            (String.concat "; " (List.map show_node_stmt then_block))
-            (String.concat "; " (List.map show_node_stmt else_block))
-      | For (id, start, stop_opt, body) ->
-          Printf.sprintf "For(%s, %s, %s, [%s])"
-            (show_node (fun x -> x) id)
-            (show_node show_exp start)
-            (match stop_opt with
-             | Some stop -> show_node show_exp stop
-             | None -> "None")
-            (String.concat "; " (List.map show_node_stmt body))
-      | While (cond, body) ->
-          Printf.sprintf "While(%s, [%s])"
-            (show_node show_exp cond)
-            (String.concat "; " (List.map show_node_stmt body))
-      | Break -> "Break"
-      | Continue -> "Continue"
-      and show_node_stmt stmt_node =
-        (show_node show_stmt stmt_node) ^ ";\n"
+let rec show_stmt = function
+| Assn (lhs, op, rhs) ->
+    Printf.sprintf "Assn(%s, %s, %s)"
+      (show_node show_exp lhs)
+      (show_aop op)
+      (show_node show_exp rhs)
+| Decl v -> show_vdecl v
+| Ret exp_opt ->
+    Printf.sprintf "Ret(%s)"
+      (match exp_opt with
+        | Some exp -> show_node show_exp exp
+        | None -> "None")
+| SCall (fn, args) ->
+    Printf.sprintf "SCall(%s, [%s])"
+      (show_node show_exp fn)
+      (String.concat "; " (List.map (show_node show_exp) args))
+| If (cond, then_block, else_block) ->
+    Printf.sprintf "If(%s, [%s], [%s])"
+      (show_node show_exp cond)
+      (String.concat "; " (List.map show_node_stmt then_block))
+      (String.concat "; " (List.map show_node_stmt else_block))
+| For (id, start, stop_opt, body) ->
+    Printf.sprintf "For(%s, %s, %s, [%s])"
+      (show_node (fun x -> x) id)
+      (show_node show_exp start)
+      (match stop_opt with
+        | Some stop -> show_node show_exp stop
+        | None -> "None")
+      (String.concat "; " (List.map show_node_stmt body))
+| While (cond, body) ->
+    Printf.sprintf "While(%s, [%s])"
+      (show_node show_exp cond)
+      (String.concat "; " (List.map show_node_stmt body))
+| Break -> "Break"
+| Continue -> "Continue"
+and show_node_stmt stmt_node =
+  (show_node show_stmt stmt_node) ^ ";\n"
 
 let show_fdecl { frtyp; fname; args; body } =
   Printf.sprintf "{ frtyp = %s; fname = %s; args = [%s]; body = [\n%s] }\n"
@@ -220,13 +215,8 @@ let show_fdecl { frtyp; fname; args; body } =
 
 let show_decl d = show_fdecl d.elt
 
-
-let show_prog p = 
-  let rec aux pr s =
-    match pr with 
-    | [] -> s ^ "\n"
-    | h :: t ->
-      match h with 
-      | Gfdecl f -> aux t (s ^ show_decl f)
-  in
-  aux p ""
+let show_prog (p:program) = 
+  let (Prog fns) = p in 
+  let rec aux fn s = 
+    s ^ show_decl fn ^ "\n" 
+  in List.fold_right aux fns "\n"
