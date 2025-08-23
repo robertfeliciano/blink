@@ -51,34 +51,49 @@ let split (res: (stmt node list * exp node) list) =
 let combine l1 l2 elem = 
   List.rev_append l1 (elem :: l2)
 
-let rec desugar_exp (e: exp) : stmt node list * exp node = 
+let rec desugar_exp (e: exp node) : stmt node list * exp node = 
   let dtmp = gensym "dtmp" in 
-  match e with 
+  match e.elt with 
   | Call(c, es) -> 
-    let cstmts, c' = desugar_exp c.elt in
-    let estmts, es' = split @@ List.map (fun v -> desugar_exp v.elt) es in 
+    let cstmts, c' = desugar_exp c in
+    let estmts, es' = split @@ List.map (fun v -> desugar_exp v) es in 
     let res = Decl(dtmp, None, Call(c', es') |> nl, false) |> nl in 
     combine estmts cstmts res, nl_id dtmp
   | Bop(bop, lhs, rhs) -> 
-    let lstmts, lhs' = desugar_exp lhs.elt in 
-    let rstmts, rhs' = desugar_exp rhs.elt in 
+    let lstmts, lhs' = desugar_exp lhs in 
+    let rstmts, rhs' = desugar_exp rhs in 
     let res = Decl(dtmp, None, Bop(bop, lhs', rhs') |> nl, false) |> nl in 
     combine lstmts rstmts res, nl_id dtmp
   | Uop(uop, o) -> 
-    let ostmts, o' = desugar_exp o.elt in 
+    let ostmts, o' = desugar_exp o in 
     let res = Decl(dtmp, None, Uop(uop, o') |> nl, false) |> nl in
     combine [] ostmts res, nl_id dtmp
   | Index(c, i) -> 
-    let cstmts, cvar = desugar_exp c.elt in 
-    let istmts, ivar = desugar_exp i.elt in
+    let cstmts, cvar = desugar_exp c in 
+    let istmts, ivar = desugar_exp i in
     let res = Decl(dtmp, None, Index(cvar, ivar) |> nl, false) |> nl in 
     combine cstmts istmts res, nl_id dtmp
   | Array (es) -> 
-    let estmts, es' = split @@ List.map (fun v -> desugar_exp v.elt) es in 
+    let estmts, es' = split @@ List.map (fun v -> desugar_exp v) es in 
     let res = Decl(dtmp, None, Array(es') |> nl, false) |> nl in
     combine [] estmts res, nl_id dtmp
-  | _ -> [], nl e
+  | _ -> [], e
   (* TODO desugar range into some kind of struct or something *)
+
+(* let rec desugar_stmt (s: stmt node) : stmt node list = 
+  let node_creator elem = {elt = elem; loc = s.loc} in 
+  match s.elt with 
+  | Assn(lhs, op, rhs) -> 
+    let rhs' = 
+    if op <> Eq then 
+      let base_op = base_op (op, s.loc) in 
+      no_loc @@ Bop(base_op, lhs, rhs)
+    else 
+      rhs
+    in 
+    let ds_rhs = desugar_exp rhs' in
+    fst ds_rhs @ [node_creator @@ Assn(lhs, Eq, snd ds_rhs)]
+  | _ -> failwith "hi" *)
 
 (* let rec desugar_stmt (s: stmt node) : stmt node list = 
   let node_creator elem = {elt = elem; loc = s.loc} in 

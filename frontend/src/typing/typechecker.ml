@@ -177,16 +177,7 @@ let rec typecheck_exp (tc: Tctxt.t) (e: Ast.exp node) : Ast.ty =
       | And | Or -> 
         if lt = TBool && rt = TBool then TBool
         else type_error e "&& or || used on non-bool arguments"
-      | At -> TBool
-        (* (match lt, rt with 
-        | TRef (RArray lt'), TRef (RArray rt') -> 
-          if all_numbers [lt' ; rt'] then meet_number e (lt', rt')
-          else type_error e "@ called on non-numeric array"
-        | TRef (RClass lt'), TRef (RClass rt') when lt' = "Matrix" && rt' = "Matrix" -> 
-          let fields = lookup_class lt' tc in 
-          (* lookup_field_option *) TBool
-          (* else type_error e (lt' ^ " must implement __dot__") *)
-        | _ -> type_error e "@ called on non-array/matrix args") *)
+      | At -> type_error e "@ not yet supported."
       | _ -> 
         let args_valid = subtype tc lt rt || all_numbers [lt ; rt] in
         if not args_valid then 
@@ -234,6 +225,68 @@ let typecheck_stmt (tc: Tctxt.t) (s: stmt node) (rty: ret_ty) : Tctxt.t =
     Assn ({elt=lhs; loc=lhs_loc}, aop=aop, e=e)
   | _ -> _ *)
 
+let typecheck_vdecl (tc: Tctxt.t) (s: stmt node) (v: vdecl) : Tctxt.t = 
+  let i, ty_opt, e, _ = v in 
+  match Tctxt.lookup_local_option i tc with 
+  | Some _ -> type_error s ("Variable " ^ i ^ " is already declared")
+  | None -> (
+    let ty' =  typecheck_exp tc e in 
+    match ty_opt with 
+    | Some ty -> 
+      if ty <> ty' then 
+        type_error s ("Declared type of " ^ i ^ " does not match inferred type.")
+      else 
+        Tctxt.add_local tc i ty'
+    | None -> 
+        Tctxt.add_local tc i ty'
+  )
+
+let rec typecheck_stmt (tc: Tctxt.t) (s: stmt node) (rty: ret_ty) : Tctxt.t * bool = 
+  let {elt=stmt; loc=_stmt_loc} = s in
+  match stmt with
+  | Assn ({elt=le;loc=lloc}, _aop, {elt=re;loc=rloc}) ->
+    let ltyp = (
+      match le with 
+      | Id i -> 
+        let gcheck = lookup_global_option i tc in 
+        begin
+          match gcheck with
+          | Some (TRef (RFun _)) -> 
+            let lcheck = lookup_local_option i tc in 
+            begin 
+              match lcheck with 
+              | Some (any) -> any
+              | _ -> type_error s "LHS of assignment is function..."
+            end
+          | _ -> typecheck_exp tc {elt=le;loc=lloc}
+          end
+      | _ -> typecheck_exp tc {elt=le;loc=lloc}
+    ) in 
+    let rtyp = typecheck_exp tc {elt=re;loc=rloc} in 
+    if subtype tc ltyp rtyp then (tc, false) else type_error s "cannot reconcile types"
+  | Decl v -> (typecheck_vdecl tc s v, false)
+  | Ret e_opt -> (
+    match e_opt with 
+    | None -> if rty = RetVoid then (tc, true) else type_error s (Printf.sprintf "function must return %s" (show_ret_ty rty))
+    | Some e -> 
+      match rty with 
+      | RetVal rv -> if subtype tc rv (typecheck_exp tc e) then (tc, true) else type_error s (Printf.sprintf "function must return %s" (show_ret_ty rty))
+      | RetVoid -> type_error s "unexpected return for void function"
+  )
+  | If (e, b1, b2) -> 
+    if (not (typecheck_exp tc e = TBool)) then type_error s "Condition must be of type bool" else 
+      let r1 = typecheck_block tc b1 rty false in 
+      let r2 = typecheck_block tc b2 rty false in
+      tc, r1 && r2
+      
+
+  | Break | Continue -> (tc, false)
+  | _ -> (tc, false)
+and typecheck_block (tc: Tctxt.t) (b: block) (rty: ret_ty) (returns: bool) : bool = 
+  match b with 
+  | h::t -> if returns then type_error h "Function returns too early." else 
+    let tc', returns' = typecheck_stmt tc h rty in typecheck_block tc' t rty returns'
+  | [] -> returns 
 
 let typecheck ast = 
   List.map typecheck_prog ast

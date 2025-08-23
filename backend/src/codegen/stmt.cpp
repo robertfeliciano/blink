@@ -43,7 +43,7 @@ llvm::Value* StmtToLLVisitor::operator()(const VDecl& s) {
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const SCall& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(SCall) not supported yet");
+    llvm::Function* callee = gen.mod->getFunction(s.callee->elt)
 }
 
 llvm::Value* StmtToLLVisitor::operator()(const If& s) {
