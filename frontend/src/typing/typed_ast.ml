@@ -1,7 +1,3 @@
-module Range = Util.Range
-
-type 'a node = { elt: 'a; loc: Range.t }
-
 type id = string
 
 type sint = 
@@ -80,14 +76,33 @@ type aop =
 [@@deriving show]
 
 type exp = 
-  | Bool of bool
-  | Int of int64 * int_ty
-  | TFloat of float * float_ty
-  | Str of string 
-  | Id of id
-  | Call of exp node * exp node list * ty
-  | Bop of binop * exp node * exp node * ty
-  | Uop of unop * exp node * ty
-  | Index of exp node * exp node * ty
-  | Array of exp node list * ty
-  | Range of exp node * exp node * bool
+| Bool of bool
+| Int of int64 * int_ty
+| Float of float * float_ty
+| Str of string 
+| Id of id
+| Call of exp * exp list * ty
+| Bop of binop * exp * exp * ty
+| Uop of unop * exp * ty
+| Index of exp * exp * ty
+| Array of exp list * ty
+| Range of exp * exp * bool
+
+type vdecl = id * ty * exp * bool
+
+
+type stmt = 
+| Assn of exp * aop * exp 
+| Decl of vdecl (* includes whether it was declared as constant or not *)
+| Ret of exp option
+| SCall of exp * exp list
+| If of exp * block * block 
+| For of id * exp * exp option * block
+| While of exp * block
+| Break
+| Continue
+and block = stmt list
+
+type fdecl = { frtyp: ret_ty ; fname: id ; args: (ty * id) list ; mutable body : block }
+
+type program = Prog of fdecl list

@@ -96,21 +96,6 @@ and subtype_list tc l1 l2 : bool =
   if List.length l1 != List.length l2 then false 
   else List.fold_left2 (fun a x y -> a && subtype tc x y ) true l1 l2
 
-(* and subtype_class (tc: Tctxt.t) (s1: id) (s2: id) : bool = 
-  s1 = s2 || subtype_fields tc s1 s2 *)
-
-(* and subtype_fields c n1 n2 : bool =
-  let fields1 = Tctxt.lookup_class n1 c in
-  let fields2 = Tctxt.lookup_class n2 c in
-  let rec helper l1 l2 =
-    match (l1, l2) with
-    | _, [] -> true
-    | [], _ -> false
-    | f1::t1, f2::t2 -> f1.fieldName = f2.fieldName && f1.ftyp = f2.ftyp
-                                                    && helper t1 t2 in
-  helper fields1 fields2 *)
-
-
 and subtype_ret_ty (tc: Tctxt.t) (t1: Ast.ret_ty) (t2: Ast.ret_ty) : bool =
   match t1,t2 with
   | RetVoid, RetVoid -> true

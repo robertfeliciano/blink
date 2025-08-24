@@ -106,7 +106,7 @@ rule read = parse
   | "//" { read_single_line_comment lexbuf }
   | "/*" { read_multi_line_comment lexbuf } 
   | id { IDENT (Lexing.lexeme lexbuf) }
-  | int { INT (Int64.of_string (Lexing.lexeme lexbuf)) }
+  | int64 { INT (Int64.of_string (Lexing.lexeme lexbuf)) }
   | decimal { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
   | scientific { FLOAT (float_from_sci (Lexing.lexeme lexbuf)) }
   | '"' { read_string (Buffer.create 17) lexbuf }
