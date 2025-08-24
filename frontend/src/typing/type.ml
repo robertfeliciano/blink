@@ -242,7 +242,15 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       else 
         meet_number e (lty, rty)
     ) in Typed_ast.Bop(binop', te1, te2, res_ty), res_ty
-  | x -> ()
+  | Uop (unop, e1) -> 
+    let te1, ety = type_exp tc e1 in 
+    let unop' = convert_unop unop in 
+    let res_ty = (match unop, ety with 
+      | Neg, t when all_numbers [t] -> t
+      | Not, t when t  = TBool -> TBool
+      | _ -> type_error e "bad type for neg or not operator")
+    in Typed_ast.Uop(unop', te1, res_ty), res_ty
+  | _ -> ()
   
 let type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt: Ast.stmt) : (Tctxt.t * Typed_ast.stmt) = 
   match stmt with 
