@@ -52,6 +52,37 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
 
+let convert_unop : Ast.unop -> Typed_ast.unop  = function
+  | Ast.Neg -> Typed_ast.Neg
+  | Ast.Not -> Typed_ast.Not
+
+let convert_binop : Ast.binop -> Typed_ast.binop = function
+  | Ast.Add  -> Typed_ast.Add
+  | Ast.Sub  -> Typed_ast.Sub
+  | Ast.Mul  -> Typed_ast.Mul
+  | Ast.Div  -> Typed_ast.Div
+  | Ast.At   -> Typed_ast.At
+  | Ast.Mod  -> Typed_ast.Mod
+  | Ast.Pow  -> Typed_ast.Pow
+  | Ast.Eqeq -> Typed_ast.Eqeq
+  | Ast.Neq  -> Typed_ast.Neq
+  | Ast.Lt   -> Typed_ast.Lt
+  | Ast.Lte  -> Typed_ast.Lte
+  | Ast.Gt   -> Typed_ast.Gt
+  | Ast.Gte  -> Typed_ast.Gte
+  | Ast.And  -> Typed_ast.And
+  | Ast.Or   -> Typed_ast.Or
+
+let convert_aop : Ast.aop -> Typed_ast.aop = function
+  | Ast.Eq    -> Typed_ast.Eq
+  | Ast.PluEq -> Typed_ast.PluEq
+  | Ast.MinEq -> Typed_ast.MinEq
+  | Ast.TimEq -> Typed_ast.TimEq
+  | Ast.DivEq -> Typed_ast.DivEq
+  | Ast.AtEq  -> Typed_ast.AtEq
+  | Ast.PowEq -> Typed_ast.PowEq
+  | Ast.ModEq -> Typed_ast.ModEq
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
   | TInt _
@@ -87,6 +118,56 @@ let create_fn_ctxt (tc: Tctxt.t) (Prog fns: Ast.program) : Tctxt.t =
     )
   | [] -> tc
   in aux tc fns 
+
+let signed_int_hierarchy: Typed_ast.sint list = [Ti8; Ti16; Ti32; Ti64; Ti128]
+let unsigned_int_hierarchy: Typed_ast.uint list = [Tu8; Tu16; Tu32; Tu64; Tu128]
+let float_hierarchy: Typed_ast.float_ty list = [Tf32; Tf64]
+
+
+let widest_int (ity1: Typed_ast.int_ty) (ity2: Typed_ast.int_ty) (n: 'a node) : Typed_ast.int_ty =
+  let find_index l e = 
+    let rec aux i = function 
+    | [] ->  type_error n "Invalid int type spec"
+    | h::t -> if h = e then i else aux (i+1) t 
+  in aux 0 l 
+  in
+  let max a b = if a > b then a else b in 
+  let widest l t1 t2 = 
+    (List.nth l 
+    (max (find_index l t1) (find_index l t2))) in
+  let widest' t1 t2 =
+    (List.nth signed_int_hierarchy
+    (max (find_index signed_int_hierarchy t1) (find_index unsigned_int_hierarchy t2))) in
+  match ity1, ity2 with 
+  | TSigned s, TUnsigned u
+  | TUnsigned u, TSigned s -> 
+    TSigned (widest' s u)
+
+  | TSigned t1, TSigned t2 -> 
+    TSigned (widest signed_int_hierarchy t1 t2)
+
+  | TUnsigned t1, TUnsigned t2 -> 
+    TUnsigned (widest unsigned_int_hierarchy t1 t2)
+
+let widest_float (fty1: Typed_ast.float_ty) (fty2: Typed_ast.float_ty) : Typed_ast.float_ty  =
+  if fty1 = fty2 then fty1 else Tf64
+
+let meet_number (n: 'a node) : Typed_ast.ty * Typed_ast.ty -> Typed_ast.ty = function
+  | TInt i1, TInt i2 -> TInt (widest_int i1 i2 n)
+  | TFloat f, TInt i 
+  | TInt i, TFloat f when i <> TSigned Ti64 && i <> TUnsigned Tu64 -> TFloat f
+  | TFloat _, TInt _
+  | TInt _, TFloat _ -> TFloat Tf64
+  | TFloat f1, TFloat f2 -> TFloat (widest_float f1 f2)
+  | _ -> type_error n "unreachable state: meeting non-numbers."
+
+let all_numbers (tl: Typed_ast.ty list) : bool = 
+  List.for_all (
+    fun t ->  
+      match t with 
+      | Typed_ast.TInt _ | Typed_ast.TFloat _ -> true 
+      | _ -> false ) 
+    tl
 
 let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match t1, t2 with 
@@ -142,6 +223,25 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       ) with Invalid_argument _ -> type_error e "invalid number of arguments supplied")
     | TRef (RFun (_, RetVoid)) -> type_error e "assigning void function return to variable."
     | _ -> type_error e "attempted to call a non-function type." )
+  | Bop (binop, e1, e2) -> 
+    let te1, lty = type_exp tc e1 in 
+    let te2, rty = type_exp tc e2 in 
+    let binop' = convert_binop binop in 
+    let res_ty = (match binop with 
+    | Eqeq | Neq -> 
+      if (subtype tc lty rty) && (subtype tc rty lty) then Typed_ast.TBool
+      else type_error e "== or != used with non type-compatible arguments"
+    | And | Or -> 
+      if lty = Typed_ast.TBool && rty = Typed_ast.TBool then Typed_ast.TBool 
+        else type_error e "&& or || used on non-bool arguments"
+    | At -> type_error e "@ not yet supported."
+    | _ -> 
+      let args_valid = subtype tc lty rty || all_numbers [lty ; rty] in
+      if not args_valid then 
+        type_error e "using binary operator on non-number types"
+      else 
+        meet_number e (lty, rty)
+    ) in Typed_ast.Bop(binop', te1, te2, res_ty), res_ty
   | x -> ()
   
 let type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt: Ast.stmt) : (Tctxt.t * Typed_ast.stmt) = 
