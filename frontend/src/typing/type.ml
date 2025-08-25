@@ -250,9 +250,20 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       | Not, t when t  = TBool -> TBool
       | _ -> type_error e "bad type for neg or not operator")
     in Typed_ast.Uop(unop', te1, res_ty), res_ty
-  | _ -> ()
+  | Index (e_iter, e_idx) -> 
+    let t_iter, iter_ty = type_exp tc e_iter in 
+    let arr_ty = (match iter_ty with 
+      | Typed_ast.TRef (Typed_ast.RArray arr_ty') -> arr_ty'
+      | _ -> type_error e "cannot index non-array type") in
+    let t_idx, idx_ty = type_exp tc e_idx in 
+    let _ = (match idx_ty with 
+      | Typed_ast.TInt _ -> ()
+      | _ -> type_error e "index must be integer type") in 
+    Typed_ast.Index(t_iter, t_idx, arr_ty), arr_ty
+  | _ -> type_error e "not supported yet"
   
-let type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt: Ast.stmt) : (Tctxt.t * Typed_ast.stmt) = 
+let type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) : (Tctxt.t * Typed_ast.stmt) = 
+  let {elt=stmt; loc=_} = stmt_n in
   match stmt with 
   | Ast.Decl v -> 
       (* Add logic to typecheck standalone expressions *)
