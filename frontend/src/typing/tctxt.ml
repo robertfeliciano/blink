@@ -1,7 +1,7 @@
-open Ast
+open Typed_ast
 
 type ctxt = (id * ty) list
-(* type class_ctxt = (Ast.id * Ast.field list) list *)
+(* type class_ctxt = ( id *  field list) list *)
 
 type t = {
   locals: ctxt;
@@ -14,24 +14,24 @@ type t = {
 let empty = { locals = []; globals = [] }
 
 (* locals ------------------------------------------------------------------- *)
-let add_local (c:t) (id:id) (bnd : Ast.ty) : t = {c with locals = (id, bnd)::c.locals}
-let lookup_local (id : Ast.id) (c : t) : Ast.ty = List.assoc id c.locals
-let lookup_local_option id c : Ast.ty option =
+let add_local (c:t) (id:id) (bnd :  ty) : t = {c with locals = (id, bnd)::c.locals}
+let lookup_local (id :  id) (c : t) :  ty = List.assoc id c.locals
+let lookup_local_option id c :  ty option =
   try Some (List.assoc id c.locals) with Not_found -> None
 
 (* globals ------------------------------------------------------------------ *)
-let add_global (c:t) (id:id) (bnd:Ast.ty) : t = {c with globals = (id, bnd)::c.globals}
-let lookup_global (id : Ast.id) (c : t) : Ast.ty = List.assoc id c.globals
-let lookup_global_option id c : Ast.ty option =
+let add_global (c:t) (id:id) (bnd: ty) : t = {c with globals = (id, bnd)::c.globals}
+let lookup_global (id :  id) (c : t) :  ty = List.assoc id c.globals
+let lookup_global_option id c :  ty option =
   try Some (List.assoc id c.globals) with Not_found -> None
 
 (* general-purpose lookup: for local _or_ global *)
-let lookup id c : Ast.ty =
+let lookup id c :  ty =
   match lookup_local_option id c with
   | None -> lookup_global id c
   | Some x -> x
 
-let lookup_option id c : Ast.ty option =
+let lookup_option id c :  ty option =
   match lookup_local_option id c with
   | None -> lookup_global_option id c
   | Some x -> Some x

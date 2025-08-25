@@ -184,43 +184,75 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       | _ -> type_error e "index must be integer type") in 
     Typed_ast.Index(t_iter, t_idx, arr_ty), arr_ty
   | _ -> type_error e "not supported yet"
-  
-let type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) : (Tctxt.t * Typed_ast.stmt) = 
+
+  (* TODO resolve *)
+let check_given_type (given: Typed_ast.ty) (determined: Typed_ast.ty) : (Typed_ast.ty) = 
+  Typed_ast.TBool
+
+let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list) (in_loop: bool) : Tctxt.t * Typed_ast.stmt list =
+  let tc_new, rev_stmts =
+    List.fold_left 
+      (fun (tc_acc, tstmts) s -> 
+        let (tc', tstmt) = type_stmt tc_acc frtyp s in_loop in 
+        (tc', tstmt::tstmts))
+        (tc, [])
+        stmts 
+  in tc_new, List.rev rev_stmts
+      
+and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop: bool) : (Tctxt.t * Typed_ast.stmt) = 
   let {elt=stmt; loc=_} = stmt_n in
   match stmt with 
-  | Ast.Decl v -> 
-      (* Add logic to typecheck standalone expressions *)
-      ()
+  | Ast.Decl (i, ty_opt, en, const) -> 
+    let te, e_ty = type_exp tc en in 
+    let tc', resolved_ty = (match ty_opt with 
+      | None -> add_local tc i e_ty, e_ty
+      | Some t -> 
+        let resolved = check_given_type (convert_ty t) e_ty in 
+        add_local tc i resolved, resolved)
+    in tc', Typed_ast.Decl(i, resolved_ty, te, const)
   | Ast.Assn (e1, op, e2) -> 
-      (* Add logic to typecheck the assignment *)
-      ()
+    let te1, _e1ty = type_exp tc e1 in 
+    let te2, _e2ty = type_exp tc e2 in 
+    tc, Typed_ast.Assn(te1, convert_aop op, te2)
   | Ast.Ret expr -> 
-      (* Add logic to typecheck the return statement *)
-      ()
+    let te_opt = (match expr with 
+    | Some e -> 
+      let te, _expr_ty = type_exp tc e in 
+      Some(te)
+    | None -> None) in tc, Typed_ast.Ret te_opt
   | Ast.SCall (en, ens) -> 
       ()
   | Ast.If (cond, then_branch, else_branch) -> 
-      (* Add logic to typecheck if-else statements *)
-      ()
+    let tcond, cond_ty = type_exp tc cond in
+    if cond_ty <> Typed_ast.TBool then
+      type_error cond "if condition must be bool";
+    let (_tc_then, t_then) = type_block tc frtyp then_branch in_loop in
+    let (_tc_else, t_else) = type_block tc frtyp else_branch in_loop in
+    (tc, Typed_ast.If(tcond, t_then, t_else))
   | Ast.While (cond, body) -> 
-      (* Add logic to typecheck while loops *)
-      ()
+    let tcond, cond_ty = type_exp tc cond in 
+    if cond_ty <> Typed_ast.TBool then 
+      type_error cond "while condition must be bool";
+    let (_tc_while, t_body) = type_block tc frtyp body true in 
+    (tc, Typed_ast.While(tcond, t_body))
   | Ast.For (i, e1, e2, body) -> 
       ()
-  | Ast.Break -> Typed_ast.Break
-  | Ast.Continue -> Typed_ast.Continue
+  | Ast.Break -> 
+    if (not in_loop) then type_error stmt_n "break can only be used inside loop" else (tc, Typed_ast.Break)
+  | Ast.Continue -> 
+    if (not in_loop) then type_error stmt_n "continue can only be used inside loop" else (tc, Typed_ast.Continue)
 
 let type_fn (tc: Tctxt.t) (fn: fdecl node) : (Typed_ast.fdecl) = 
   let { elt = f; loc = _ } = fn in
   let { frtyp; fname; args; body } = f in
   let tc' = List.fold_left 
-  (fun acc (t,a) -> 
-    typecheck_ty fn acc t; 
-    add_local acc a t
-  ) tc args in 
+    (fun acc (t,a) -> 
+      typecheck_ty fn acc t; 
+      add_local acc a (convert_ty t)
+    ) tc args in 
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, id) -> (convert_ty ty, id)) args in
-  let typed_body = List.map (type_stmt tc' frtyp) body in 
+  let (_tc_final, typed_body) = type_block tc' frtyp body false in 
   {
     frtyp=frtyp';
     fname;
