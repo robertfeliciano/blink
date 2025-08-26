@@ -7,6 +7,10 @@ let type_error (l: 'a node) err =
   let (_, (s, e), _) = l.loc in
   raise (TypeError (Printf.sprintf "[%d, %d] %s" s e err))
 
+let type_warning (l: 'a node) err = 
+  let (_, (s, e), _) = l.loc in
+  Printf.eprintf "[%d, %d] Warning: %s" s e err
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
   | TInt _
@@ -17,6 +21,7 @@ and typecheck_rty  (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
   | RArray t -> typecheck_ty l tc t 
+  | RRange (t1, t2) -> typecheck_ty l tc t1 ; typecheck_ty l tc t2
   | RFun (tl, rt) -> (List.iter (typecheck_ty l tc) tl; typecheck_ret_ty l tc rt)
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with
@@ -38,7 +43,7 @@ let create_fn_ctxt (tc: Tctxt.t) (Prog fns: Ast.program) : Tctxt.t =
     let func_type = get_fdecl_type fn tc in (
       match lookup_global_option fn.elt.fname tc with
       | Some _ -> type_error fn (Printf.sprintf "function with name %s already exists" fn.elt.fname)
-      | None -> let new_tc = Tctxt.add_global tc fn.elt.fname func_type in aux new_tc t
+      | None -> let new_tc = Tctxt.add_global tc fn.elt.fname (convert_ty func_type) in aux new_tc t
     )
   | [] -> tc
   in aux tc fns 
@@ -84,13 +89,13 @@ let meet_number (n: 'a node) : Typed_ast.ty * Typed_ast.ty -> Typed_ast.ty = fun
   | TFloat f1, TFloat f2 -> TFloat (widest_float f1 f2)
   | _ -> type_error n "unreachable state: meeting non-numbers."
 
+let is_number (t: Typed_ast.ty) : bool = 
+  match t with 
+  | Typed_ast.TInt _ | Typed_ast.TFloat _ -> true 
+  | _ -> false 
+
 let all_numbers (tl: Typed_ast.ty list) : bool = 
-  List.for_all (
-    fun t ->  
-      match t with 
-      | Typed_ast.TInt _ | Typed_ast.TFloat _ -> true 
-      | _ -> false ) 
-    tl
+  List.for_all is_number tl
 
 let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match t1, t2 with 
@@ -130,7 +135,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
   | Str s -> let ty = Typed_ast.TRef (Typed_ast.RString) in 
     (Typed_ast.Str s, ty)
   | Id i -> (match Tctxt.lookup_option i tc with 
-    | Some t -> (Id i, convert_ty t)
+    | Some t -> (Id i, t)
     | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call (f, args) -> 
     (match snd @@ type_exp tc f with 
@@ -169,7 +174,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
     let te1, ety = type_exp tc e1 in 
     let unop' = convert_unop unop in 
     let res_ty = (match unop, ety with 
-      | Neg, t when all_numbers [t] -> t
+      | Neg, t when is_number t -> t
       | Not, t when t  = TBool -> TBool
       | _ -> type_error e "bad type for neg or not operator")
     in Typed_ast.Uop(unop', te1, res_ty), res_ty
@@ -184,10 +189,6 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       | _ -> type_error e "index must be integer type") in 
     Typed_ast.Index(t_iter, t_idx, arr_ty), arr_ty
   | _ -> type_error e "not supported yet"
-
-  (* TODO resolve *)
-let check_given_type (given: Typed_ast.ty) (determined: Typed_ast.ty) : (Typed_ast.ty) = 
-  Typed_ast.TBool
 
 let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list) (in_loop: bool) : Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
@@ -206,41 +207,88 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
     let te, e_ty = type_exp tc en in 
     let tc', resolved_ty = (match ty_opt with 
       | None -> add_local tc i e_ty, e_ty
-      | Some t -> 
-        let resolved = check_given_type (convert_ty t) e_ty in 
+      | Some given_ty -> 
+        let resolved = 
+          if convert_ty given_ty <> e_ty 
+            then type_error stmt_n ("Provided type " ^ (Ast.show_ty given_ty) ^ " does not match inferred type " ^ (Typed_ast.show_ty e_ty))
+          else e_ty 
+        in
         add_local tc i resolved, resolved)
     in tc', Typed_ast.Decl(i, resolved_ty, te, const)
+
   | Ast.Assn (e1, op, e2) -> 
     let te1, _e1ty = type_exp tc e1 in 
     let te2, _e2ty = type_exp tc e2 in 
     tc, Typed_ast.Assn(te1, convert_aop op, te2)
+
   | Ast.Ret expr -> 
     let te_opt = (match expr with 
     | Some e -> 
       let te, _expr_ty = type_exp tc e in 
       Some(te)
     | None -> None) in tc, Typed_ast.Ret te_opt
+
   | Ast.SCall (en, ens) -> 
-      ()
+    let te, fty = type_exp tc en in
+    begin
+      match fty with 
+      | Typed_ast.TRef (Typed_ast.RFun (_, a)) when a <> Typed_ast.RetVoid -> type_warning stmt_n "Ignoring non-void function"
+      | _ -> type_error stmt_n "How did we manage to parse this as a function call?"
+    end;
+    let t_ens = List.map (fun en' -> type_exp tc en' |> fst) ens in 
+    tc, Typed_ast.SCall (te, t_ens)
+
   | Ast.If (cond, then_branch, else_branch) -> 
     let tcond, cond_ty = type_exp tc cond in
     if cond_ty <> Typed_ast.TBool then
       type_error cond "if condition must be bool";
     let (_tc_then, t_then) = type_block tc frtyp then_branch in_loop in
     let (_tc_else, t_else) = type_block tc frtyp else_branch in_loop in
-    (tc, Typed_ast.If(tcond, t_then, t_else))
+    tc, Typed_ast.If(tcond, t_then, t_else)
+
   | Ast.While (cond, body) -> 
     let tcond, cond_ty = type_exp tc cond in 
     if cond_ty <> Typed_ast.TBool then 
       type_error cond "while condition must be bool";
     let (_tc_while, t_body) = type_block tc frtyp body true in 
-    (tc, Typed_ast.While(tcond, t_body))
-  | Ast.For (i, e1, e2, body) -> 
-      ()
+    tc, Typed_ast.While(tcond, t_body)
+
+  | Ast.For (i_node, iter_exp, step_opt, body) -> 
+    let titer, iter_ty = type_exp tc iter_exp in
+    let elem_ty =
+      match iter_ty with
+      | Typed_ast.TRef (Typed_ast.RArray t) -> t
+      | Typed_ast.TRef (Typed_ast.RString) -> Typed_ast.TInt (Typed_ast.TSigned Typed_ast.Ti8)   (* chars in string *)
+      | Typed_ast.TRef (Typed_ast.RRange (t1, _t2)) -> t1
+      | _ ->
+          type_error iter_exp "for loop must iterate over an array, string, or range"
+    in
+    let t_step =
+      match (iter_ty, step_opt) with
+      | (Typed_ast.TRef (Typed_ast.RRange _), Some step_exp) ->
+          let ts, step_ty = type_exp tc step_exp in
+          begin 
+          if (is_number step_ty) then 
+            ts
+          else 
+            type_error step_exp "for loop step must be an integer"
+          end
+      | (Typed_ast.TRef (Typed_ast.RRange _), None) -> Typed_ast.Int (1L, Typed_ast.TSigned Typed_ast.Ti32)
+      | (_, Some _) ->
+          type_error iter_exp "step is only allowed when iterating over ranges"
+      | (_, None) -> 
+          (* no step needed for strings/arrays *)
+          Typed_ast.Int (1L, Typed_ast.TSigned Typed_ast.Ti32)  (* ignored *)
+    in
+    let tc_loop = add_local tc i_node.elt elem_ty in
+    let (_tc_body, t_body) = type_block tc_loop frtyp body true in
+    (tc, Typed_ast.For (i_node.elt, titer, t_step, t_body))
+
   | Ast.Break -> 
-    if (not in_loop) then type_error stmt_n "break can only be used inside loop" else (tc, Typed_ast.Break)
+    if (not in_loop) then type_error stmt_n "break can only be used inside loop" else tc, Typed_ast.Break
+
   | Ast.Continue -> 
-    if (not in_loop) then type_error stmt_n "continue can only be used inside loop" else (tc, Typed_ast.Continue)
+    if (not in_loop) then type_error stmt_n "continue can only be used inside loop" else tc, Typed_ast.Continue
 
 let type_fn (tc: Tctxt.t) (fn: fdecl node) : (Typed_ast.fdecl) = 
   let { elt = f; loc = _ } = fn in
@@ -265,4 +313,4 @@ let type_program (prog: Ast.program) : unit =
   (* create class ctxt *)
   let fc = create_fn_ctxt (Tctxt.empty) prog in 
   let (Prog fns) = prog in
-  let fns_t = List.map (fun fn -> type_fn fc fn) fns in ()
+  let _fns_t = List.map (fun fn -> type_fn fc fn) fns in ()

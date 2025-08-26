@@ -1,4 +1,4 @@
-open Ast
+(* open Ast
 open Tctxt
 
 exception TypeError of string
@@ -274,4 +274,4 @@ and typecheck_block (tc: Tctxt.t) (b: block) (rty: ret_ty) (returns: bool) : boo
   | [] -> returns 
 
 (* let typecheck ast = 
-  List.map typecheck_prog ast *)
+  List.map typecheck_prog ast *) *)

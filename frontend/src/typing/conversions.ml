@@ -41,6 +41,7 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   match r with
   | Ast.RString -> Typed_ast.RString
   | Ast.RArray t -> Typed_ast.RArray (convert_ty t)
+  | Ast.RRange (t1,t2) -> Typed_ast.RRange ((convert_ty t1), (convert_ty t2))
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
 

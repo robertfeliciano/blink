@@ -34,6 +34,7 @@ type ty =
 and ref_ty =
 | RString
 | RArray of ty
+| RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
 and ret_ty =
@@ -97,7 +98,7 @@ type stmt =
 | Ret of exp option
 | SCall of exp * exp list
 | If of exp * block * block 
-| For of id * exp * exp option * block
+| For of id * exp * exp * block
 | While of exp * block
 | Break
 | Continue

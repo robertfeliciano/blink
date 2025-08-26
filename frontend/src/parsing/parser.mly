@@ -175,6 +175,7 @@ ty:
 %inline ref_ty:
   | TSTRING { RString }
   | LBRACKET t=ty RBRACKET { RArray t }
+  | tl=ty RANGE tr=ty { RRange (tl, tr) }
 
 %inline bop:
   | PLUS  { Add }

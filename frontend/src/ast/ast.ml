@@ -44,6 +44,7 @@ type ty =
 and ref_ty =
 | RString
 | RArray of ty
+| RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
 and ret_ty =
