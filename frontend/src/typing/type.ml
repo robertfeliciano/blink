@@ -250,7 +250,8 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
     let te, fty = type_exp tc en in
     begin
       match fty with 
-      | Typed_ast.TRef (Typed_ast.RFun (_, a)) when a <> Typed_ast.RetVoid -> type_warning stmt_n "Ignoring non-void function"
+      | Typed_ast.TRef (Typed_ast.RFun (_, Typed_ast.RetVoid)) -> ()
+      | Typed_ast.TRef (Typed_ast.RFun (_, _)) -> type_warning stmt_n "Ignoring non-void function"
       | _ -> type_error stmt_n "How did we manage to parse this as a function call?"
     end;
     let t_ens = List.map (fun en' -> type_exp tc en' |> fst) ens in 
