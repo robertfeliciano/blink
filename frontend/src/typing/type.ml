@@ -128,20 +128,20 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
   let {elt=e';loc=_} = e in 
   match e' with
   | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
-  
+
   | Int i -> let ty = Typed_ast.TInt (Typed_ast.TSigned Typed_ast.Ti32) in
     (Typed_ast.Int (i, Typed_ast.TSigned Typed_ast.Ti32), ty)
-    
+
   | Float f -> let ty = Typed_ast.TFloat (Typed_ast.Tf64) in 
     (Typed_ast.Float (f, (Typed_ast.Tf64)), ty)
-    
+
   | Str s -> let ty = Typed_ast.TRef (Typed_ast.RString) in 
     (Typed_ast.Str s, ty)
-    
+
   | Id i -> (match Tctxt.lookup_option i tc with 
     | Some t -> (Id i, t)
     | None -> type_error e ("variable " ^ i ^ " is not defined"))
-    
+
   | Call (f, args) -> 
     (match snd @@ type_exp tc f with 
     | TRef (RFun (arg_types, RetVal rt)) -> 
@@ -156,7 +156,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       ) with Invalid_argument _ -> type_error e "invalid number of arguments supplied")
     | TRef (RFun (_, RetVoid)) -> type_error e "assigning void function return to variable."
     | _ -> type_error e "attempted to call a non-function type." )
-    
+
   | Bop (binop, e1, e2) -> 
     let te1, lty = type_exp tc e1 in 
     let te2, rty = type_exp tc e2 in 
@@ -176,7 +176,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       else 
         meet_number e (lty, rty)
     ) in Typed_ast.Bop(binop', te1, te2, res_ty), res_ty
-    
+
   | Uop (unop, e1) -> 
     let te1, ety = type_exp tc e1 in 
     let unop' = convert_unop unop in 
@@ -185,7 +185,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       | Not, t when t  = TBool -> TBool
       | _ -> type_error e "bad type for neg or not operator")
     in Typed_ast.Uop(unop', te1, res_ty), res_ty
-    
+
   | Index (e_iter, e_idx) -> 
     let t_iter, iter_ty = type_exp tc e_iter in 
     let arr_ty = (match iter_ty with 
@@ -196,7 +196,16 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
       | Typed_ast.TInt _ -> ()
       | _ -> type_error e "index must be integer type") in 
     Typed_ast.Index(t_iter, t_idx, arr_ty), arr_ty
-    
+  
+  | Range (el, er, incl) -> 
+    let tel, el_ty = type_exp tc el in 
+    let ter, er_ty = type_exp tc er in 
+    if all_numbers [el_ty ; er_ty] then 
+      (* TODO figure out if we should check if bounds are mixed floats/ints or not *)
+      Typed_ast.Range (tel, ter, incl), Typed_ast.TRef (Typed_ast.RRange (el_ty, er_ty))
+    else  
+      type_error e "Range must have numeric bounds..."
+
   | _ -> type_error e "not supported yet"
 
 let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list) (in_loop: bool) : Tctxt.t * Typed_ast.stmt list =
