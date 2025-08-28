@@ -32,11 +32,12 @@ let type_error (l: 'a node) err =
   raise (TypeError (
     Printf.sprintf
       "Error at %s:%d:%d:\n\
-       %s%s\n\
-            %s\n\
-       %s"
+      %s%s\n\
+      %s\n\
+      %s"
       filename l1 c1
-      line_indicator line underline
+      line_indicator line 
+      underline
       err
   ))
 
