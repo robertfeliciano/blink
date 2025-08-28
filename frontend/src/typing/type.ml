@@ -242,16 +242,25 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
     else  
       type_error e "Range must have numeric bounds..."
 
-and type_array (tc: Tctxt.t) (enl: exp node list) : (Typed_ast.exp * Typed_ast.ty) = 
-  if List.length enl = 0 then 
+and type_array (tc: Tctxt.t) (ens: exp node list) : (Typed_ast.exp * Typed_ast.ty) = 
+  if List.length ens = 0 then 
     (Typed_ast.(Array ([], TInt (TSigned Ti32), 0L)),
     Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
   else
-    let el, ty = List.map (fun en -> type_exp tc en) enl |> List.split in 
-    (* if List.for_all (fun e -> ) *)
-      
-    (Typed_ast.Array (el, List.nth ty 0, (-1L)),
-    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
+    let el, tys = List.map (fun en -> type_exp tc en) ens |> List.split in 
+    let expected_ty = List.hd tys in 
+    let common_ty = 
+      List.fold_left 
+        (fun acc t -> 
+          if subtype tc t acc then 
+            acc
+          else 
+            type_error (List.hd ens) ("Array elements must have compatible types. Expected type %s" ^ Typed_ast.show_ty expected_ty)
+        ) expected_ty (List.tl tys)
+    in
+    let size = Int64.of_int (List.length ens) in
+    (Typed_ast.Array (el, common_ty, size),
+    Typed_ast.(TRef (RArray (common_ty, size))))
 
 let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list) (in_loop: bool) : Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
@@ -270,8 +279,14 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
     let te, e_ty = type_exp tc en in 
     begin 
     match te, ty_opt with 
+    (* TODO check array and types and stuff *)
     | Typed_ast.(Array (_, _, 0L)), None -> 
       type_error stmt_n (Printf.sprintf "Could not infer type of `%s`. Please give it an explicit type." i)
+
+    | _, Some Typed_ast.(TRef RArray(_, wsize)) when wsize < 0L -> 
+      type_error stmt_n (Printf.sprintf "Declared array `%s` with negative size specified." i)
+      
+    | Typed_ast.(Array (_, _, fsize)), Some Typed_ast.(TRef RArray(_, wsize)) when fsize <> wsize -> ()
     | _ -> ()
     end;
     let tc', resolved_ty = (match ty_opt with 

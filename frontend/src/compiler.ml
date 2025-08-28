@@ -1,5 +1,5 @@
 open Core
-open Parsing.Parse_blink
+open Parsing.Parse
 open Typing.Type
 open Typing.Typed_ast
 
