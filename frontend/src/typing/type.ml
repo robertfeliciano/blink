@@ -162,7 +162,7 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
     let te2, rty = type_exp tc e2 in 
     let binop' = convert_binop binop in 
     let res_ty = (match binop with 
-    | Eqeq | Neq -> 
+    | Eqeq | Neq | Gt | Gte | Lt | Lte -> 
       if (subtype tc lty rty) && (subtype tc rty lty) then Typed_ast.TBool
       else type_error e "== or != used with non type-compatible arguments"
     | And | Or -> 
@@ -327,9 +327,17 @@ let type_fn (tc: Tctxt.t) (fn: fdecl node) : (Typed_ast.fdecl) =
     body = typed_body;
   }
 
-let type_program (prog: Ast.program) : unit =
+let type_program (prog: Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   (* create class ctxt *)
   let fc = create_fn_ctxt (Tctxt.empty) prog in 
   let (Prog fns) = prog in
-  let _fns_t = List.map (fun fn -> type_fn fc fn) fns in ()
+  let fns_t = List.map (fun fn -> type_fn fc fn) fns in 
+  Prog fns_t
+
+
+let type_prog (prog: Ast.program) : (Typed_ast.program, Core.Error.t) result= 
+  try Ok (type_program prog) with 
+  | TypeError msg -> 
+    let err = Fmt.str "Type Error: %s" msg in
+    Error (Core.Error.of_string err)
