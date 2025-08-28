@@ -3,9 +3,42 @@ open Tctxt
 open Conversions
 
 exception TypeError of string
-let type_error (l: 'a node) err = 
-  let (_, (s, e), _) = l.loc in
-  raise (TypeError (Printf.sprintf "[%d, %d] %s" s e err))
+
+let make_error_underline c1 c2 =
+  let spaces = String.make (c1 - 1) ' ' in
+  let carets = String.make (c2 - c1) '^' in
+  spaces ^ "\x1b[31m" ^ carets ^ "\x1b[0m"
+
+let get_line filename lno =
+  try
+    let ic = open_in filename in
+    let rec loop n =
+      match input_line ic with
+      | line when n = 1 -> line
+      | _ -> loop (n - 1)
+      | exception End_of_file -> Printf.sprintf "<line %d not found>" lno
+    in
+    let l = loop lno in 
+    close_in ic; l
+  with Sys_error _ ->
+    Printf.sprintf "<source unavailable: %s>" filename
+  
+let type_error (l: 'a node) err =
+  let (filename, (l1, c1), (_l2, c2)) = l.loc in
+  let line = get_line filename l1 in
+  let line_indicator = Printf.sprintf "%4d | " l1 in 
+  let offset = String.length line_indicator in
+  let underline = make_error_underline (c1+offset) (c2+offset) in
+  raise (TypeError (
+    Printf.sprintf
+      "Error at %s:%d:%d:\n\
+       %s%s\n\
+            %s\n\
+       %s"
+      filename l1 c1
+      line_indicator line underline
+      err
+  ))
 
 let type_warning (l: 'a node) err = 
   let (_, (s, e), _) = l.loc in
