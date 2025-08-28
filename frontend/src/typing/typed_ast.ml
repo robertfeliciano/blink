@@ -33,7 +33,7 @@ type ty =
 | TRef of ref_ty
 and ref_ty =
 | RString
-| RArray of ty
+| RArray of ty * int64
 | RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
@@ -86,7 +86,7 @@ type exp =
 | Bop of binop * exp * exp * ty
 | Uop of unop * exp * ty
 | Index of exp * exp * ty
-| Array of exp list * ty
+| Array of exp list * ty * int64
 | Range of exp * exp * bool
 
 type vdecl = id * ty * exp * bool
@@ -136,10 +136,11 @@ let rec show_exp = function
         (show_exp arr)
         (show_exp idx)
         (show_ty ty)
-  | Array (elems, ty) ->
-      Printf.sprintf "Array([%s], %s)"
+  | Array (elems, ty, sz) ->
+      Printf.sprintf "Array([%s], %s;%Ld)"
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty)
+        sz
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)"
         (show_exp start)

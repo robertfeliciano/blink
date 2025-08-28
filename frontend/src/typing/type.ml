@@ -54,7 +54,7 @@ let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
 and typecheck_rty  (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
-  | RArray t -> typecheck_ty l tc t 
+  | RArray (t, sz) -> if sz < 0L then type_error l "negative length specified" else typecheck_ty l tc t 
   | RRange (t1, t2) -> typecheck_ty l tc t1 ; typecheck_ty l tc t2
   | RFun (tl, rt) -> (List.iter (typecheck_ty l tc) tl; typecheck_ret_ty l tc rt)
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
@@ -142,7 +142,7 @@ let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
 and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) : bool = 
   match t1, t2 with 
   | RString, RString -> true
-  | RArray t1', RArray t2' -> subtype tc t1' t2'
+  | RArray (t1', _sz1), RArray (t2', _sz2) -> subtype tc t1' t2'
   (* | RClass c1, RClass c2 -> subtype_class tc c1 c2 *)
   | RFun(pty1, rty1), RFun(pty2, rty2) -> let subtype_arg = fun (ty1) (ty2) -> subtype tc ty2 ty1 in
   (List.for_all2 subtype_arg pty1 pty2) && (subtype_ret_ty tc rty1 rty2)
@@ -163,13 +163,13 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
   match e' with
   | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
 
-  | Int i -> let ty = Typed_ast.TInt (Typed_ast.TSigned Typed_ast.Ti32) in
-    (Typed_ast.Int (i, Typed_ast.TSigned Typed_ast.Ti32), ty)
+  | Int i -> let ty = Typed_ast.(TInt (TSigned Ti32)) in
+    (Typed_ast.(Int (i, TSigned Ti32)), ty)
 
-  | Float f -> let ty = Typed_ast.TFloat (Typed_ast.Tf64) in 
-    (Typed_ast.Float (f, (Typed_ast.Tf64)), ty)
+  | Float f -> let ty = Typed_ast.(TFloat Tf64) in 
+    (Typed_ast.(Float (f, Tf64)), ty)
 
-  | Str s -> let ty = Typed_ast.TRef (Typed_ast.RString) in 
+  | Str s -> let ty = Typed_ast.(TRef RString) in 
     (Typed_ast.Str s, ty)
 
   | Id i -> (match Tctxt.lookup_option i tc with 
@@ -223,13 +223,15 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
   | Index (e_iter, e_idx) -> 
     let t_iter, iter_ty = type_exp tc e_iter in 
     let arr_ty = (match iter_ty with 
-      | Typed_ast.TRef (Typed_ast.RArray arr_ty') -> arr_ty'
+      | Typed_ast.(TRef RArray (arr_ty', _sz)) -> arr_ty'
       | _ -> type_error e "cannot index non-array type") in
     let t_idx, idx_ty = type_exp tc e_idx in 
     let _ = (match idx_ty with 
       | Typed_ast.TInt _ -> ()
       | _ -> type_error e "index must be integer type") in 
     Typed_ast.Index(t_iter, t_idx, arr_ty), arr_ty
+
+  | Array enl -> type_array tc enl
   
   | Range (el, er, incl) -> 
     let tel, el_ty = type_exp tc el in 
@@ -240,7 +242,16 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
     else  
       type_error e "Range must have numeric bounds..."
 
-  | _ -> type_error e "not supported yet"
+and type_array (tc: Tctxt.t) (enl: exp node list) : (Typed_ast.exp * Typed_ast.ty) = 
+  if List.length enl = 0 then 
+    (Typed_ast.(Array ([], TInt (TSigned Ti32), 0L)),
+    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
+  else
+    let el, ty = List.map (fun en -> type_exp tc en) enl |> List.split in 
+    (* if List.for_all (fun e -> ) *)
+      
+    (Typed_ast.Array (el, List.nth ty 0, (-1L)),
+    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
 
 let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list) (in_loop: bool) : Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
@@ -257,6 +268,12 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
   match stmt with 
   | Ast.Decl (i, ty_opt, en, const) -> 
     let te, e_ty = type_exp tc en in 
+    begin 
+    match te, ty_opt with 
+    | Typed_ast.(Array (_, _, 0L)), None -> 
+      type_error stmt_n (Printf.sprintf "Could not infer type of `%s`. Please give it an explicit type." i)
+    | _ -> ()
+    end;
     let tc', resolved_ty = (match ty_opt with 
       | None -> add_local tc i e_ty, e_ty
       | Some given_ty -> 
@@ -266,7 +283,8 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else e_ty 
         in
         add_local tc i resolved, resolved)
-    in tc', Typed_ast.Decl(i, resolved_ty, te, const)
+    in 
+    tc', Typed_ast.Decl(i, resolved_ty, te, const)
 
   | Ast.Assn (e1, op, e2) -> 
     let te1, _e1ty = type_exp tc e1 in 
@@ -284,8 +302,8 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
     let te, fty = type_exp tc en in
     begin
       match fty with 
-      | Typed_ast.TRef (Typed_ast.RFun (_, Typed_ast.RetVoid)) -> ()
-      | Typed_ast.TRef (Typed_ast.RFun (_, _)) -> type_warning stmt_n "Ignoring non-void function"
+      | Typed_ast.(TRef (RFun (_, RetVoid))) -> ()
+      | Typed_ast.(TRef (RFun (_, _))) -> type_warning stmt_n "Ignoring non-void function"
       | _ -> type_error stmt_n "How did we manage to parse this as a function call?"
     end;
     let t_ens = List.map (fun en' -> type_exp tc en' |> fst) ens in 
@@ -310,15 +328,15 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
     let titer, iter_ty = type_exp tc iter_exp in
     let elem_ty =
       match iter_ty with
-      | Typed_ast.TRef (Typed_ast.RArray t) -> t
-      | Typed_ast.TRef (Typed_ast.RString) -> Typed_ast.TInt (Typed_ast.TSigned Typed_ast.Ti8)   (* chars in string *)
-      | Typed_ast.TRef (Typed_ast.RRange (t1, _t2)) -> t1
+      | Typed_ast.(TRef (RArray (t, _))) -> t
+      | Typed_ast.(TRef (RString)) -> Typed_ast.(TInt (TSigned Ti8))
+      | Typed_ast.(TRef (RRange (t1, _t2))) -> t1
       | _ ->
           type_error iter_exp "for loop must iterate over an array, string, or range"
     in
     let t_step =
       match (iter_ty, step_opt) with
-      | (Typed_ast.TRef (Typed_ast.RRange _), Some step_exp) ->
+      | (Typed_ast.(TRef RRange _), Some step_exp) ->
           let ts, step_ty = type_exp tc step_exp in
           begin 
           if (is_number step_ty) then 
@@ -326,12 +344,12 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else 
             type_error step_exp "for loop step must be an integer"
           end
-      | (Typed_ast.TRef (Typed_ast.RRange _), None) -> Typed_ast.Int (1L, Typed_ast.TSigned Typed_ast.Ti32)
+      | (Typed_ast.(TRef RRange _), None) -> Typed_ast.(Int (1L, TSigned Ti32))
       | (_, Some _) ->
           type_error iter_exp "step is only allowed when iterating over ranges"
       | (_, None) -> 
           (* no step needed for strings/arrays *)
-          Typed_ast.Int (1L, Typed_ast.TSigned Typed_ast.Ti32)  (* ignored *)
+          Typed_ast.(Int (1L, TSigned Ti32))  (* ignored *)
     in
     let tc_loop = add_local tc i_node.elt elem_ty in
     let (_tc_body, t_body) = type_block tc_loop frtyp body true in

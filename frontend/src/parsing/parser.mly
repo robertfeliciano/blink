@@ -174,7 +174,7 @@ ty:
 
 %inline ref_ty:
   | TSTRING { RString }
-  | LBRACKET t=ty RBRACKET { RArray t }
+  | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
   | tl=ty RANGE tr=ty { RRange (tl, tr) }
 
 %inline bop:

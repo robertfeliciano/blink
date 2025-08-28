@@ -43,7 +43,7 @@ type ty =
 | TRef of ref_ty
 and ref_ty =
 | RString
-| RArray of ty
+| RArray of ty * int64
 | RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
