@@ -36,12 +36,22 @@ let test_simple_err _ =
   let e = Bop (Add, mk_node (Int 1L), mk_node (Str "some string")) in
   let f = fun () -> T.type_exp Tc.empty (mk_node e) in 
   assert_error f
+
+let test_stmt _ = 
+  let e = Bop (Add, mk_node (Int 1L), mk_node (Int 4L)) in
+  let s = Decl ("x", None, mk_node e, false) in 
+  let _, ts = T.type_stmt Tc.empty (RetVoid) (mk_node s) false in 
+  let ty_s = match ts with 
+  | Typing.Typed_ast.Decl(_, ty_s, _, _)  -> ty_s 
+  | _ -> TRef RString in
+  assert_equal ty_s (TInt (TSigned (Ti32)))
   
 let suite =
   "Typing tests" >::: [
     "test int" >:: test_int;
     "test bool" >:: test_bool;
     "test float" >:: test_float;
+    "test stmt" >:: test_stmt;
     "simple err" >:: test_simple_err;
   ]
 

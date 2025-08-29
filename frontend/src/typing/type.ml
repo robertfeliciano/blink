@@ -277,7 +277,7 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
   match stmt with 
   | Ast.Decl (i, ty_opt, en, const) -> 
     let te, e_ty = type_exp tc en in 
-    begin 
+    (* begin 
     match te, ty_opt with 
     (* TODO check array and types and stuff *)
     | Typed_ast.(Array (_, _, 0L)), None -> 
@@ -288,7 +288,7 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
       
     | Typed_ast.(Array (_, _, fsize)), Some Typed_ast.(TRef RArray(_, wsize)) when fsize <> wsize -> ()
     | _ -> ()
-    end;
+    end; *)
     let tc', resolved_ty = (match ty_opt with 
       | None -> add_local tc i e_ty, e_ty
       | Some given_ty -> 
