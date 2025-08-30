@@ -207,15 +207,50 @@ let int_in_float (n: Z.t) (t: Typed_ast.float_ty) : bool =
       (* f64 has 53 bits of precision *)
       leq (abs n) (shift_left one 53) 
 
-let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty) = 
+let rec eval_const_exp (e: exp node) : Z.t option =
+  match e.elt with
+  | Int i -> Some i
+  | Bop (Add, e1, e2) ->
+      (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(v1 + v2)
+      | _ -> None)
+  | Bop (Sub, e1, e2) ->
+      (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(v1 - v2)
+      | _ -> None)
+  | Bop (Mul, e1, e2) ->
+      (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(v1 * v2)
+      | _ -> None)
+  | Bop (Div, e1, e2) -> 
+    (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(v1 / v2)
+      | _ -> None)
+  | Bop (Mod, e1, e2) -> 
+    (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(v1 mod v2)
+      | _ -> None)
+| Bop (Pow, e1, e2) -> 
+  (match eval_const_exp e1, eval_const_exp e2 with
+    | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
+    | _ -> None)
+  | _ -> None
+      
+
+let rec type_exp ?(expected: Typed_ast.ty option) (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty) = 
   let {elt=e';loc=_} = e in 
   match e' with
   | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
 
-  | Int i -> 
-    let inferred_ty = infer_integer_ty i e in
-    let ty = Typed_ast.(TInt inferred_ty) in
-    (Typed_ast.(Int (i, inferred_ty)), ty)
+  | Int i ->
+    (match expected with
+     | Some (TInt target_ty) ->
+         if fits_in_ty i target_ty then
+           (Typed_ast.Int (i, target_ty), TInt target_ty)
+         else type_error e ("Integer literal " ^ Z.to_string i ^ " does not fit in type " ^ Typed_ast.show_ty (TInt target_ty))
+     | _ ->
+         let inferred_ty = infer_integer_ty i e in
+         (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
 
   | Float f -> let ty = Typed_ast.(TFloat Tf64) in 
     (Typed_ast.(Float (f, Tf64)), ty)
@@ -251,22 +286,25 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
   | Bop (binop, e1, e2) -> 
     let te1, lty = type_exp tc e1 in 
     let te2, rty = type_exp tc e2 in 
-    let binop' = convert_binop binop in 
-    let res_ty = (match binop with 
-    | Eqeq | Neq | Gt | Gte | Lt | Lte -> 
-      if (subtype tc lty rty) && (subtype tc rty lty) then Typed_ast.TBool
-      else type_error e "== or != used with non type-compatible arguments"
-    | And | Or -> 
-      if lty = Typed_ast.TBool && rty = Typed_ast.TBool then Typed_ast.TBool 
-        else type_error e "&& or || used on non-bool arguments"
-    | At -> type_error e "@ not yet supported."
-    | _ -> 
-      let args_valid = subtype tc lty rty || all_numbers [lty ; rty] in
-      if not args_valid then 
-        type_error e "using binary operator on non-number types"
-      else 
-        meet_number e (lty, rty)
-    ) in Typed_ast.Bop(binop', te1, te2, res_ty), res_ty
+    (match eval_const_exp e with 
+    | Some ev -> (Typed_ast.Int (ev, (TSigned Ti32)), TInt (TSigned Ti32)) (* will adjust later to expected_ty *)
+    | None -> 
+      let binop' = convert_binop binop in 
+      let res_ty = (match binop with 
+      | Eqeq | Neq | Gt | Gte | Lt | Lte -> 
+        if (subtype tc lty rty) && (subtype tc rty lty) then Typed_ast.TBool
+        else type_error e "== or != used with non type-compatible arguments"
+      | And | Or -> 
+        if lty = Typed_ast.TBool && rty = Typed_ast.TBool then Typed_ast.TBool 
+          else type_error e "&& or || used on non-bool arguments"
+      | At -> type_error e "@ not yet supported."
+      | _ -> 
+        let args_valid = subtype tc lty rty || all_numbers [lty ; rty] in
+        if not args_valid then 
+          type_error e "using binary operator on non-number types"
+        else 
+          meet_number e (lty, rty)
+      ) in Typed_ast.Bop(binop', te1, te2, res_ty), res_ty)
 
   | Uop (unop, e1) -> 
     let te1, ety = type_exp tc e1 in 
@@ -332,60 +370,59 @@ let rec type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node li
 and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop: bool) : (Tctxt.t * Typed_ast.stmt) = 
   let {elt=stmt; loc=_} = stmt_n in
   match stmt with 
-  | Ast.Decl (i, ty_opt, en, const) -> 
+  | Ast.Decl (i, None, en, const) -> 
     let te, e_ty = type_exp tc en in 
-    let tc', resolved_ty =
-      match ty_opt with
-      | None ->
-          add_local tc i e_ty, e_ty
-      | Some given_ty_ast ->
-          let given_ty = convert_ty given_ty_ast in
-          begin match e_ty, given_ty, te with
-          | Typed_ast.TInt _,
-            Typed_ast.TInt given_num_ty,
-            Typed_ast.Int (n, _) ->
-              if fits_in_ty n given_num_ty then
-                add_local tc i given_ty, given_ty
-              else
-                type_error stmt_n
-                  ("Integer literal " ^ Z.to_string n ^
-                   " does not fit in type " ^ Typed_ast.show_ty given_ty)
-          | Typed_ast.TFloat _,
-            Typed_ast.TFloat given_float_ty,
-            Typed_ast.Float (f, _) ->
-              let ok =
-                match given_float_ty with
-                | Tf32 -> 
-                  let f32_max = 3.40282347e38 in
-                  let f32_min = -.f32_max in
-                  f <= f32_max && f >= f32_min
-                | Tf64 -> true
-              in
-              if ok then add_local tc i given_ty, given_ty
-              else type_error stmt_n "Float literal out of range for f32"
-          | Typed_ast.TInt _, 
-            Typed_ast.TFloat given_float_ty, 
-            Typed_ast.Int (n, _) -> 
-              (* trying to auto upcast int to float *)
-              if int_in_float n given_float_ty then 
-                add_local tc i given_ty, given_ty 
-              else 
-                type_error stmt_n 
-                ("Integer literal " ^ Z.to_string n ^
-                 " does not fit in float type " ^ Typed_ast.show_ty given_ty)
-          (* note - we will not auto downcast, i.e. `let x: u8 = 12.14` is not valid *)
-          | _ ->
-              if given_ty = e_ty then
-                add_local tc i given_ty, given_ty
-              else
-                type_error stmt_n
-                  ("Provided type " ^ Ast.show_ty given_ty_ast ^
-                   " does not match inferred type " ^ Typed_ast.show_ty e_ty)
-          end
-    in
+    let tc', resolved_ty = add_local tc i e_ty, e_ty in 
+    tc', Typed_ast.Decl(i, resolved_ty, te, const)
+
+  | Ast.Decl (i, Some given_ty_ast, en, const) -> 
+    let given_ty = convert_ty given_ty_ast in
+    let te, e_ty = type_exp ~expected:given_ty tc en in
+    let tc', resolved_ty = 
+      match e_ty, given_ty, te with
+      | Typed_ast.TInt _,
+        Typed_ast.TInt given_num_ty,
+        Typed_ast.Int (n, _) ->
+          if fits_in_ty n given_num_ty then
+            add_local tc i given_ty, given_ty
+          else
+            type_error stmt_n
+              ("Integer literal " ^ Z.to_string n ^
+                " does not fit in type " ^ Typed_ast.show_ty given_ty)
+      | Typed_ast.TFloat _,
+        Typed_ast.TFloat given_float_ty,
+        Typed_ast.Float (f, _) ->
+          let ok =
+            match given_float_ty with
+            | Tf32 -> 
+              let f32_max = 3.40282347e38 in
+              let f32_min = -.f32_max in
+              f <= f32_max && f >= f32_min
+            | Tf64 -> true
+          in
+          if ok then add_local tc i given_ty, given_ty
+          else type_error stmt_n "Float literal out of range for f32"
+      | Typed_ast.TInt _, 
+        Typed_ast.TFloat given_float_ty, 
+        Typed_ast.Int (n, _) -> 
+          (* trying to auto upcast int to float *)
+          if int_in_float n given_float_ty then 
+            add_local tc i given_ty, given_ty 
+          else 
+            type_error stmt_n 
+            ("Integer literal " ^ Z.to_string n ^
+              " does not fit in float type " ^ Typed_ast.show_ty given_ty)
+      (* note - we will not auto downcast, i.e. `let x: u8 = 12.14` is not valid *)
+      | _ ->
+          if given_ty = e_ty then
+            add_local tc i given_ty, given_ty
+          else
+            type_error stmt_n
+              ("Provided type " ^ Ast.show_ty given_ty_ast ^
+                " does not match inferred type " ^ Typed_ast.show_ty e_ty)
+    in 
     tc', Typed_ast.Decl(i, resolved_ty, te, const)
   
-
   | Ast.Assn (e1, op, e2) -> 
     let te1, _e1ty = type_exp tc e1 in 
     let te2, _e2ty = type_exp tc e2 in 
