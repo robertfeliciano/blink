@@ -1,5 +1,6 @@
 open OUnit2
 open Ast
+open Z
 
 module T = Typing.Type
 module Tc = Typing.Tctxt
@@ -18,7 +19,7 @@ let assert_error (f: unit -> 'a) =
   assert_bool "TypeError raised" raised
 
 let test_int _ =
-  let e = Int 1L in
+  let e = Int (of_int 1) in
   let _, ty = T.type_exp Tc.empty (mk_node e) in
   assert_equal ty Typing.Typed_ast.(TInt (TSigned Ti32))
 
@@ -33,12 +34,12 @@ let test_float _ =
   assert_equal ty Typing.Typed_ast.(TFloat (Tf64))
   
 let test_simple_err _ = 
-  let e = Bop (Add, mk_node (Int 1L), mk_node (Str "some string")) in
+  let e = Bop (Add, mk_node (Int (of_int 1)), mk_node (Str "some string")) in
   let f = fun () -> T.type_exp Tc.empty (mk_node e) in 
   assert_error f
 
 let test_stmt _ = 
-  let e = Bop (Add, mk_node (Int 1L), mk_node (Int 4L)) in
+  let e = Bop (Add, mk_node (Int (of_int 1)), mk_node (Int (of_int 4))) in
   let s = Decl ("x", None, mk_node e, false) in 
   let _, ts = T.type_stmt Tc.empty (RetVoid) (mk_node s) false in 
   let ty_s = match ts with 

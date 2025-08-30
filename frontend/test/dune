@@ -1,6 +1,6 @@
 (test
  (name typing)
  (modules typing)
- (libraries blink.typing blink.ast ounit2)
+ (libraries blink.typing blink.ast ounit2 zarith)
  (preprocess
   (pps ppx_jane)))

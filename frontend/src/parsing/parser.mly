@@ -9,7 +9,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 
 /* tokens */
 %token EOF
-%token <int64>  INT
+%token <Z.t>  INT
 %token <float> FLOAT
 %token NULL
 %token <string> STRING

@@ -54,7 +54,7 @@ let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
 and typecheck_rty  (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
-  | RArray (t, sz) -> if sz < 0L then type_error l "negative length specified" else typecheck_ty l tc t 
+  | RArray (t, sz) -> if (Z.lt sz (Z.of_int 0)) then type_error l "negative length specified" else typecheck_ty l tc t 
   | RRange (t1, t2) -> typecheck_ty l tc t1 ; typecheck_ty l tc t2
   | RFun (tl, rt) -> (List.iter (typecheck_ty l tc) tl; typecheck_ret_ty l tc rt)
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
@@ -244,8 +244,8 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
 
 and type_array (tc: Tctxt.t) (ens: exp node list) : (Typed_ast.exp * Typed_ast.ty) = 
   if List.length ens = 0 then 
-    (Typed_ast.(Array ([], TInt (TSigned Ti32), 0L)),
-    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
+    (Typed_ast.(Array ([], TInt (TSigned Ti32), (Z.of_int 0))),
+    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), (Z.of_int 0)))))
   else
     let el, tys = List.map (fun en -> type_exp tc en) ens |> List.split in 
     let expected_ty = List.hd tys in 
@@ -258,7 +258,7 @@ and type_array (tc: Tctxt.t) (ens: exp node list) : (Typed_ast.exp * Typed_ast.t
             type_error (List.hd ens) ("Array elements must have compatible types. Expected type %s" ^ Typed_ast.show_ty expected_ty)
         ) expected_ty (List.tl tys)
     in
-    let size = Int64.of_int (List.length ens) in
+    let size = Z.of_int (List.length ens) in
     (Typed_ast.Array (el, common_ty, size),
     Typed_ast.(TRef (RArray (common_ty, size))))
 
@@ -359,12 +359,12 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else 
             type_error step_exp "for loop step must be an integer"
           end
-      | (Typed_ast.(TRef RRange _), None) -> Typed_ast.(Int (1L, TSigned Ti32))
+      | (Typed_ast.(TRef RRange _), None) -> Typed_ast.(Int (Z.of_int 1, TSigned Ti32))
       | (_, Some _) ->
           type_error iter_exp "step is only allowed when iterating over ranges"
       | (_, None) -> 
           (* no step needed for strings/arrays *)
-          Typed_ast.(Int (1L, TSigned Ti32))  (* ignored *)
+          Typed_ast.(Int (Z.of_int 1, TSigned Ti32))  (* ignored *)
     in
     let tc_loop = add_local tc i_node.elt elem_ty in
     let (_tc_body, t_body) = type_block tc_loop frtyp body true in

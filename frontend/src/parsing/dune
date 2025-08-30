@@ -1,7 +1,7 @@
 (library
  (name parsing)
  (public_name blink.parsing)
- (libraries core ast fmt))
+ (libraries core ast fmt zarith))
 
 (ocamllex lexer)
 

@@ -2,7 +2,7 @@ fun inferrable(a: i32) => i32 {
     return a + 5;
 }
 
-fun main(argv: [string]) => i32 {
+fun main(argv: [string; 2]) => i32 {
     let x = inferrable(10);
     return x;
 }

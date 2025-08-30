@@ -33,14 +33,13 @@ type ty =
 | TRef of ref_ty
 and ref_ty =
 | RString
-| RArray of ty * int64
+| RArray of ty * Z.t
 | RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
 and ret_ty =
 | RetVoid
 | RetVal of ty
-[@@deriving show]
 
 type unop = 
 | Neg
@@ -78,7 +77,7 @@ type aop =
 
 type exp = 
 | Bool of bool
-| Int of int64 * int_ty
+| Int of Z.t * int_ty
 | Float of float * float_ty
 | Str of string 
 | Id of id
@@ -86,7 +85,7 @@ type exp =
 | Bop of binop * exp * exp * ty
 | Uop of unop * exp * ty
 | Index of exp * exp * ty
-| Array of exp list * ty * int64
+| Array of exp list * ty * Z.t
 | Range of exp * exp * bool
 
 type vdecl = id * ty * exp * bool
@@ -109,9 +108,53 @@ type fdecl = { frtyp: ret_ty ; fname: id ; args: (ty * id) list ; mutable body :
 type program = Prog of fdecl list
 
 
+(* Show functions for basic types *)
+
+let show_sint = function
+  | Ti8 -> "Ti8"
+  | Ti16 -> "Ti16"
+  | Ti32 -> "Ti32"
+  | Ti64 -> "Ti64"
+  | Ti128 -> "Ti128"
+
+let show_uint = function
+  | Tu8 -> "Tu8"
+  | Tu16 -> "Tu16"
+  | Tu32 -> "Tu32"
+  | Tu64 -> "Tu64"
+  | Tu128 -> "Tu128"
+
+let show_float_ty = function
+  | Tf32 -> "Tf32"
+  | Tf64 -> "Tf64"
+
+let show_int_ty = function
+  | TSigned s -> Printf.sprintf "TSigned(%s)" (show_sint s)
+  | TUnsigned u -> Printf.sprintf "TUnsigned(%s)" (show_uint u)
+
+(* Manual show for ref_ty *)
+let rec show_ref_ty = function
+  | RString -> "RString"
+  | RArray (t, sz) -> Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
+  | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
+  | RFun (args, ret) -> 
+      let args_s = String.concat "; " (List.map show_ty args) in
+      Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
+
+and show_ret_ty = function
+  | RetVoid -> "RetVoid"
+  | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty t)
+
+and show_ty = function
+  | TBool -> "TBool"
+  | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
+  | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
+  | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
+
+
 let rec show_exp = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
-  | Int (i, ity) -> Printf.sprintf "Int(%Ld, %s)" i (show_int_ty ity)
+  | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
@@ -137,10 +180,10 @@ let rec show_exp = function
         (show_exp idx)
         (show_ty ty)
   | Array (elems, ty, sz) ->
-      Printf.sprintf "Array([%s], %s;%Ld)"
+      Printf.sprintf "Array([%s], %s;%s)"
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty)
-        sz
+        (Z.to_string sz)
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)"
         (show_exp start)

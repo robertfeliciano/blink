@@ -2,4 +2,4 @@
  (name typing)
  (public_name blink.typing)
  (preprocess (pps ppx_deriving.show))
- (libraries core ast util fmt))
+ (libraries core ast util fmt zarith))
