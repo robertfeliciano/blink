@@ -15,6 +15,20 @@ let signed_int_hierarchy: sint list = [Ti8; Ti16; Ti32; Ti64; Ti128]
 let unsigned_int_hierarchy: uint list = [Tu8; Tu16; Tu32; Tu64; Tu128]
 let float_hierarchy: float_ty list = [Tf32; Tf64]
 
+OLD ARRAY STUFF
+    (* begin 
+    match te, ty_opt with 
+    (* TODO check array and types and stuff *)
+    | Typed_ast.(Array (_, _, 0L)), None -> 
+      type_error stmt_n (Printf.sprintf "Could not infer type of `%s`. Please give it an explicit type." i)
+
+    | _, Some Typed_ast.(TRef RArray(_, wsize)) when wsize < 0L -> 
+      type_error stmt_n (Printf.sprintf "Declared array `%s` with negative size specified." i)
+      
+    | Typed_ast.(Array (_, _, fsize)), Some Typed_ast.(TRef RArray(_, wsize)) when fsize <> wsize -> ()
+    | _ -> ()
+    end; *)
+
 
 let widest_int (ity1: int_ty) (ity2: int_ty) (n: 'a node) : int_ty =
   let find_index l e = 

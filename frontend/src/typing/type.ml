@@ -158,13 +158,64 @@ and subtype_ret_ty (tc: Tctxt.t) (t1: Typed_ast.ret_ty) (t2: Typed_ast.ret_ty) :
   | RetVal t1', RetVal t2' -> subtype tc t1' t2'
   | _ -> false
 
+let infer_integer_ty (n: Z.t) (e: exp node) : Typed_ast.int_ty = 
+  let open Z in 
+  if geq n (of_int32 Int32.min_int) && leq n (of_int32 Int32.max_int) then 
+    TSigned Ti32
+  else if geq n (of_int64 Int64.min_int) && leq n (of_int64 Int64.max_int) then 
+    TSigned Ti64 
+  else if geq n zero && leq n (Z.of_string "18446744073709551615") then (* max uint64*)
+    TUnsigned Tu64
+  else
+    type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
+
+let fits_in_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
+  let open Z in
+  match t with
+  | TSigned Ti8  ->
+      geq n (of_int (-128)) && leq n (of_int 127)
+  | TSigned Ti16 ->
+      geq n (of_int (-32768)) && leq n (of_int 32767)
+  | TSigned Ti32 ->
+      geq n (of_int32 Int32.min_int) &&
+      leq n (of_int32 Int32.max_int)
+  | TSigned Ti64 ->
+      geq n (of_int64 Int64.min_int) &&
+      leq n (of_int64 Int64.max_int)
+  | TSigned Ti128 ->
+      let min_i128 = neg (shift_left one 127) in
+      let max_i128 = sub (shift_left one 127) one in
+      geq n min_i128 && leq n max_i128
+  | TUnsigned Tu8 ->
+      geq n zero && leq n (of_int 255)
+  | TUnsigned Tu16 ->
+      geq n zero && leq n (of_int 65535)
+  | TUnsigned Tu32 ->
+      geq n zero && leq n Z.(sub (shift_left one 32) one)
+  | TUnsigned Tu64 ->
+      geq n zero && leq n Z.(sub (shift_left one 64) one)
+  | TUnsigned Tu128 ->
+      geq n zero && leq n Z.(sub (shift_left one 128) one)
+    
+let int_in_float (n: Z.t) (t: Typed_ast.float_ty) : bool =
+  let open Z in
+  match t with
+  | Tf32 ->
+      (* f32 has 24 bits of precision *)
+      leq (abs n) (shift_left one 24)
+  | Tf64 ->
+      (* f64 has 53 bits of precision *)
+      leq (abs n) (shift_left one 53) 
+
 let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty) = 
   let {elt=e';loc=_} = e in 
   match e' with
   | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
 
-  | Int i -> let ty = Typed_ast.(TInt (TSigned Ti32)) in
-    (Typed_ast.(Int (i, TSigned Ti32)), ty)
+  | Int i -> 
+    let inferred_ty = infer_integer_ty i e in
+    let ty = Typed_ast.(TInt inferred_ty) in
+    (Typed_ast.(Int (i, inferred_ty)), ty)
 
   | Float f -> let ty = Typed_ast.(TFloat Tf64) in 
     (Typed_ast.(Float (f, Tf64)), ty)
@@ -184,11 +235,17 @@ let rec type_exp (tc: Tctxt.t) (e: Ast.exp node) : (Typed_ast.exp * Typed_ast.ty
         let typed_args = List.map2 
             (fun aty a -> 
               let te, ty = type_exp tc a in 
-              if (subtype tc ty aty) then te else type_error e ("invalid argument type for " ^ show_exp a.elt)
+              if (subtype tc ty aty) then 
+                te 
+              else 
+                let err_msg = "Invalid argument type for `" ^ show_exp a.elt 
+                ^ "`. expected " ^ (Typed_ast.show_ty aty) 
+                ^ ", got " ^ (Typed_ast.show_ty ty) ^ "." in
+                type_error e err_msg
             ) arg_types args in 
         (Typed_ast.Call (typed_callee,  typed_args, rt), rt)
       ) with Invalid_argument _ -> type_error e "invalid number of arguments supplied")
-    | TRef (RFun (_, RetVoid)) -> type_error e "assigning void function return to variable."
+    | TRef (RFun (_, RetVoid)) -> type_error e "assigning void function return type to variable."
     | _ -> type_error e "attempted to call a non-function type." )
 
   | Bop (binop, e1, e2) -> 
@@ -277,29 +334,57 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
   match stmt with 
   | Ast.Decl (i, ty_opt, en, const) -> 
     let te, e_ty = type_exp tc en in 
-    (* begin 
-    match te, ty_opt with 
-    (* TODO check array and types and stuff *)
-    | Typed_ast.(Array (_, _, 0L)), None -> 
-      type_error stmt_n (Printf.sprintf "Could not infer type of `%s`. Please give it an explicit type." i)
-
-    | _, Some Typed_ast.(TRef RArray(_, wsize)) when wsize < 0L -> 
-      type_error stmt_n (Printf.sprintf "Declared array `%s` with negative size specified." i)
-      
-    | Typed_ast.(Array (_, _, fsize)), Some Typed_ast.(TRef RArray(_, wsize)) when fsize <> wsize -> ()
-    | _ -> ()
-    end; *)
-    let tc', resolved_ty = (match ty_opt with 
-      | None -> add_local tc i e_ty, e_ty
-      | Some given_ty -> 
-        let resolved = 
-          if convert_ty given_ty <> e_ty 
-            then type_error stmt_n ("Provided type " ^ (Ast.show_ty given_ty) ^ " does not match inferred type " ^ (Typed_ast.show_ty e_ty))
-          else e_ty 
-        in
-        add_local tc i resolved, resolved)
-    in 
+    let tc', resolved_ty =
+      match ty_opt with
+      | None ->
+          add_local tc i e_ty, e_ty
+      | Some given_ty_ast ->
+          let given_ty = convert_ty given_ty_ast in
+          begin match e_ty, given_ty, te with
+          | Typed_ast.TInt _,
+            Typed_ast.TInt given_num_ty,
+            Typed_ast.Int (n, _) ->
+              if fits_in_ty n given_num_ty then
+                add_local tc i given_ty, given_ty
+              else
+                type_error stmt_n
+                  ("Integer literal " ^ Z.to_string n ^
+                   " does not fit in type " ^ Typed_ast.show_ty given_ty)
+          | Typed_ast.TFloat _,
+            Typed_ast.TFloat given_float_ty,
+            Typed_ast.Float (f, _) ->
+              let ok =
+                match given_float_ty with
+                | Tf32 -> 
+                  let f32_max = 3.40282347e38 in
+                  let f32_min = -.f32_max in
+                  f <= f32_max && f >= f32_min
+                | Tf64 -> true
+              in
+              if ok then add_local tc i given_ty, given_ty
+              else type_error stmt_n "Float literal out of range for f32"
+          | Typed_ast.TInt _, 
+            Typed_ast.TFloat given_float_ty, 
+            Typed_ast.Int (n, _) -> 
+              (* trying to auto upcast int to float *)
+              if int_in_float n given_float_ty then 
+                add_local tc i given_ty, given_ty 
+              else 
+                type_error stmt_n 
+                ("Integer literal " ^ Z.to_string n ^
+                 " does not fit in float type " ^ Typed_ast.show_ty given_ty)
+          (* note - we will not auto downcast, i.e. `let x: u8 = 12.14` is not valid *)
+          | _ ->
+              if given_ty = e_ty then
+                add_local tc i given_ty, given_ty
+              else
+                type_error stmt_n
+                  ("Provided type " ^ Ast.show_ty given_ty_ast ^
+                   " does not match inferred type " ^ Typed_ast.show_ty e_ty)
+          end
+    in
     tc', Typed_ast.Decl(i, resolved_ty, te, const)
+  
 
   | Ast.Assn (e1, op, e2) -> 
     let te1, _e1ty = type_exp tc e1 in 
