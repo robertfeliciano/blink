@@ -121,9 +121,39 @@ let is_number (t : Typed_ast.ty) : bool =
 
 let all_numbers (tl : Typed_ast.ty list) : bool = List.for_all is_number tl
 
+let rec equal_ty (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
+  match (t1, t2) with
+  | TBool, TBool -> true
+  | TInt k1, TInt k2 -> k1 = k2
+  | TFloat f1, TFloat f2 -> f1 = f2
+  | TRef r1, TRef r2 -> equal_ref_ty r1 r2
+  | _ -> false
+
+and equal_ref_ty (r1 : Typed_ast.ref_ty) (r2 : Typed_ast.ref_ty) : bool =
+  match (r1, r2) with
+  | RString, RString -> true
+  | RArray (t1, sz1), RArray (t2, sz2) -> sz1 = sz2 && equal_ty t1 t2
+  | RFun (params1, RetVal rt1), RFun (params2, RetVal rt2) ->
+      List.length params1 = List.length params2
+      && List.for_all2 equal_ty params1 params2
+      && equal_ty rt1 rt2
+  | RFun (_params1, RetVoid), RFun (_params2, RetVoid) ->
+      (* parameter lists must be *equal* to be equal types *)
+      (* if you want exact function type equality incl. params: *)
+      false
+  | _ -> false
+
+and equal_ret_ty (r1 : Typed_ast.ret_ty) (r2 : Typed_ast.ret_ty) : bool =
+  match (r1, r2) with
+  | RetVoid, RetVoid -> true
+  | RetVal rv1, RetVal rv2 -> equal_ty rv1 rv2
+  | _ -> false
+
 let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
-  | TBool, TBool | TInt _, TInt _ | TFloat _, TFloat _ -> true
+  | TBool, TBool -> true
+  | TInt k1, TInt k2 -> k1 = k2
+  | TFloat f1, TFloat f2 -> f1 = f2
   | TRef t1', TRef t2' -> subtype_ref tc t1' t2'
   | _ -> false
 
@@ -131,16 +161,14 @@ and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) :
     bool =
   match (t1, t2) with
   | RString, RString -> true
-  | RArray (t1', _sz1), RArray (t2', _sz2) -> subtype tc t1' t2'
-  (* | RClass c1, RClass c2 -> subtype_class tc c1 c2 *)
+  | RArray (t1', sz1), RArray (t2', sz2) -> sz1 = sz2 && subtype tc t1' t2'
   | RFun (pty1, rty1), RFun (pty2, rty2) ->
-      let subtype_arg = fun ty1 ty2 -> subtype tc ty2 ty1 in
-      List.for_all2 subtype_arg pty1 pty2 && subtype_ret_ty tc rty1 rty2
+      let contrav_params =
+        List.length pty1 = List.length pty2
+        && List.for_all2 (fun a1 a2 -> subtype tc a2 a1) pty1 pty2
+      in
+      contrav_params && subtype_ret_ty tc rty1 rty2
   | _ -> false
-
-and subtype_list tc l1 l2 : bool =
-  if List.length l1 != List.length l2 then false
-  else List.fold_left2 (fun a x y -> a && subtype tc x y) true l1 l2
 
 and subtype_ret_ty (tc : Tctxt.t) (t1 : Typed_ast.ret_ty)
     (t2 : Typed_ast.ret_ty) : bool =
@@ -165,19 +193,28 @@ let fits_in_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
   match t with
   | TSigned Ti8 -> geq n (of_int (-128)) && leq n (of_int 127)
   | TSigned Ti16 -> geq n (of_int (-32768)) && leq n (of_int 32767)
-  | TSigned Ti32 ->
-      geq n (of_int32 Int32.min_int) && leq n (of_int32 Int32.max_int)
-  | TSigned Ti64 ->
-      geq n (of_int64 Int64.min_int) && leq n (of_int64 Int64.max_int)
+  | TSigned Ti32 -> fits_int32 n
+  | TSigned Ti64 -> fits_int64 n
   | TSigned Ti128 ->
       let min_i128 = neg (shift_left one 127) in
       let max_i128 = sub (shift_left one 127) one in
       geq n min_i128 && leq n max_i128
   | TUnsigned Tu8 -> geq n zero && leq n (of_int 255)
   | TUnsigned Tu16 -> geq n zero && leq n (of_int 65535)
-  | TUnsigned Tu32 -> geq n zero && leq n Z.(sub (shift_left one 32) one)
-  | TUnsigned Tu64 -> geq n zero && leq n Z.(sub (shift_left one 64) one)
+  | TUnsigned Tu32 -> fits_int32_unsigned n
+  | TUnsigned Tu64 -> fits_int64_unsigned n
   | TUnsigned Tu128 -> geq n zero && leq n Z.(sub (shift_left one 128) one)
+
+let fits_in_float_ty (n: float) (t: Typed_ast.float_ty) : bool = 
+  match t with 
+  | Tf32 -> 
+      (* IEEE-754 f32 range limits *)
+      let max_f32 = 3.40282347e38 in
+      let min_f32 = -.max_f32 in
+      (not (Float.is_nan n)) &&
+      (Float.is_finite n) &&
+      n >= min_f32 && n <= max_f32
+  | Tf64 -> true
 
 let int_in_float (n : Z.t) (t : Typed_ast.float_ty) : bool =
   let open Z in

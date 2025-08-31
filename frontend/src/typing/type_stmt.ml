@@ -5,8 +5,8 @@ open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
 
-let rec type_stmt (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmt_n : Ast.stmt node)
-    (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
+let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+    (stmt_n : Ast.stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | Ast.Decl (i, None, en, const) ->
@@ -68,15 +68,22 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmt_n : Ast.stmt node)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const))
   | Ast.Assn (e1, op, e2) ->
-      let te1, _e1ty = type_exp tc e1 in
-      let te2, _e2ty = type_exp tc e2 in
+      let te1, e1ty = type_exp tc e1 in
+      let te2, _e2ty = type_exp ~expected:e1ty tc e2 in
       (tc, Typed_ast.Assn (te1, convert_aop op, te2))
   | Ast.Ret expr ->
       let te_opt =
         match expr with
-        | Some e ->
-            let te, _expr_ty = type_exp tc e in
-            Some te
+        | Some e -> (
+            let te, expr_ty = type_exp tc e in
+            match frtyp with
+            | RetVal r_ty ->
+                if not (equal_ty r_ty expr_ty) then
+                  type_error stmt_n
+                    ("Expected function return type " ^ Printer.show_ty r_ty
+                   ^ " but found " ^ Printer.show_ty expr_ty ^ ".")
+                else Some te
+            | RetVoid -> type_error stmt_n "")
         | None -> None
       in
       (tc, Typed_ast.Ret te_opt)
@@ -142,8 +149,9 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmt_n : Ast.stmt node)
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue)
 
-and type_block (tc : Tctxt.t) (frtyp : Ast.ret_ty) (stmts : Ast.stmt node list)
-    (in_loop : bool) : Tctxt.t * Typed_ast.stmt list =
+and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+    (stmts : Ast.stmt node list) (in_loop : bool) :
+    Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
     List.fold_left
       (fun (tc_acc, tstmts) s ->

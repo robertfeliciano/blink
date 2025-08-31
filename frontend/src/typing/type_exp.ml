@@ -21,8 +21,17 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           let inferred_ty = infer_integer_ty i e in
           (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
   | Float f ->
-      let ty = Typed_ast.(TFloat Tf64) in
-      (Typed_ast.(Float (f, Tf64)), ty)
+      let target_ty = 
+      (match expected with 
+      | Some (TFloat target_ty) -> target_ty
+      | None -> Typed_ast.Tf64
+      | _ -> type_error e "Will not cast float to non-float.") in
+      if fits_in_float_ty f target_ty then 
+        (Float (f, target_ty), TFloat target_ty)
+      else 
+        type_error e
+          ("Float literal " ^ Float.to_string f ^ " does not fit in type "
+          ^ Printer.show_ty (TFloat target_ty))
   | Str s ->
       let ty = Typed_ast.(TRef RString) in
       (Typed_ast.Str s, ty)
@@ -39,7 +48,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
               List.map2
                 (fun aty a ->
                   let te, ty = type_exp tc a in
-                  if subtype tc ty aty then te
+                  if equal_ty ty aty then te
                   else
                     let err_msg =
                       "Invalid argument type for `" ^ show_exp a.elt
@@ -90,9 +99,13 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       let unop' = convert_unop unop in
       let res_ty =
         match (unop, ety) with
-        | Neg, t when is_number t -> t
+        | Neg, t when is_number t -> (
+            match expected with
+            | Some (TInt (TUnsigned _)) ->
+                type_error e "Cannot assign negative number to unsigned int."
+            | _ -> t)
         | Not, t when t = TBool -> TBool
-        | _ -> type_error e "bad type for neg or not operator"
+        | _ -> type_error e "bad operand type"
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
@@ -125,16 +138,32 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
   | Array [], None ->
       type_error en
         "Could not infer type of empty array. Please provide type annotation."
-  | Array [], Some given_ty ->
-      ( Typed_ast.(Array ([], given_ty, 0L)),
-        Typed_ast.(TRef (RArray (given_ty, 0L))) )
-  | Array (h :: t), _ ->
-      let th, h_ty = type_exp tc h in
+  | Array [], Some (TRef (RArray (elt_ty, len))) ->
+      (Typed_ast.Array ([], elt_ty, len), TRef (RArray (elt_ty, len)))
+  | Array [], Some other ->
+      type_error en
+        ("Expected " ^ Printer.show_ty other ^ " but got empty array.")
+  | Array (h :: t), exp_opt ->
+      (* if there is an expected array type, use its element type to guide literals *)
+      let exp_elt, exp_len =
+        match exp_opt with
+        | Some (TRef (RArray (ety, elen))) -> (Some ety, Some elen)
+        | _ -> (None, None)
+      in
+      let th, h_ty =
+        match exp_elt with
+        | Some ety -> type_exp ~expected:ety tc h
+        | None -> type_exp tc h
+      in
       let typed_elems =
         List.map
           (fun elem ->
-            let te, ty = type_exp tc elem in
-            if subtype tc ty h_ty then te
+            let te, ty =
+              match exp_elt with
+              | Some ety -> type_exp ~expected:ety tc elem
+              | None -> type_exp tc elem
+            in
+            if equal_ty ty h_ty then te
             else
               type_error elem
                 ("Array element type mismatch. Expected " ^ Printer.show_ty h_ty
@@ -143,62 +172,19 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       in
       let all_elems = th :: typed_elems in
       let len = Int64.of_int (List.length all_elems) in
-      let arr_ty = Typed_ast.TRef (Typed_ast.RArray (h_ty, len)) in
-      if Option.is_some expected && Option.get expected != arr_ty then
-        type_error en
-          ("Array element type mismatch. Expected "
-          ^ Printer.show_ty (Option.get expected)
-          ^ " but got " ^ Printer.show_ty arr_ty)
-      else (Typed_ast.Array (all_elems, h_ty, len), arr_ty)
+      (* respect expected length when provided *)
+      (match exp_len with
+      | Some elen when elen <> len ->
+          type_error en
+            ("Array length mismatch. Expected " ^ Int64.to_string elen
+           ^ " but got " ^ Int64.to_string len)
+      | _ -> ());
+      let arr_ty = Typed_ast.(TRef (RArray (h_ty, len))) in
+      (match exp_opt with
+      | Some exp when not (equal_ty arr_ty exp) ->
+          type_error en
+            ("Array type mismatch. Expected " ^ Printer.show_ty exp
+           ^ " but got " ^ Printer.show_ty arr_ty)
+      | _ -> ());
+      (Typed_ast.Array (all_elems, h_ty, len), arr_ty)
   | _ -> type_error en "Somehow reached unreachable state."
-(* | Array ens -> 
-    (match expected with 
-      | None when List.length ens = 0 -> 
-        type_error en "Could not infer type of empty array. Please provide type annotation."
-      | None -> 
-        let el, tys = List.map (fun elem -> type_exp tc elem) ens |> List.split in  
-        let expected_ty = List.hd tys in
-        let common_ty = 
-          List.fold_left 
-          (fun acc t -> 
-            if subtype tc t acc 
-              then acc 
-            else 
-              type_error en ("Array elements must have compatible types. Expected type %s" ^ Printer.show_ty expected_ty))
-          expected_ty 
-        in 
-        (* placeholder *)
-        (Typed_ast.(Array ([], Typed_ast.TFloat Tf32, 0L)),
-        Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
-      | Some _ -> 
-        (* placeholder *)
-        (Typed_ast.(Array ([], Typed_ast.TFloat Tf32, 0L)),
-        Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
-    )
-  | _ -> type_error en "somehow reached unreachable state" *)
-(* match expected with 
-  | None -> 
-    if List.length ens = 0
-      then type_error
-  | Some _v -> 
-    (Typed_ast.(Array ([], TInt (TSigned Ti32), 0L)),
-    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L)))) *)
-
-(* if List.length ens = 0 then 
-    (Typed_ast.(Array ([], TInt (TSigned Ti32), 0L)),
-    Typed_ast.(TRef (RArray (TInt (TSigned Ti32), 0L))))
-  else
-    let el, tys = List.map (fun en -> type_exp tc en) ens |> List.split in 
-    let expected_ty = List.hd tys in 
-    let common_ty = 
-      List.fold_left 
-        (fun acc t -> 
-          if subtype tc t acc then 
-            acc
-          else 
-            type_error (List.hd ens) ("Array elements must have compatible types. Expected type %s" ^ Printer.show_ty expected_ty)
-        ) expected_ty (List.tl tys)
-    in
-    let size = List.length ens in
-    (Typed_ast.Array (el, common_ty, Int64.of_int size),
-    Typed_ast.(TRef (RArray (common_ty, Int64.of_int size)))) *)
