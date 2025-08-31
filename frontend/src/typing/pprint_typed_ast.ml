@@ -27,7 +27,7 @@ let show_int_ty = function
 (* Manual show for ref_ty *)
 let rec show_ref_ty = function
   | RString -> "RString"
-  | RArray (t, sz) -> Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
+  | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
   | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
   | RFun (args, ret) -> 
       let args_s = String.concat "; " (List.map show_ty args) in
@@ -72,10 +72,10 @@ let rec show_exp = function
         (show_exp idx)
         (show_ty ty)
   | Array (elems, ty, sz) ->
-      Printf.sprintf "Array([%s], %s;%s)"
+      Printf.sprintf "Array([%s], %s;%Ld)"
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty)
-        (Z.to_string sz)
+        sz
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)"
         (show_exp start)

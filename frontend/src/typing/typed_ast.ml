@@ -33,7 +33,7 @@ type ty =
 | TRef of ref_ty
 and ref_ty =
 | RString
-| RArray of ty * Z.t
+| RArray of ty * int64
 | RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
@@ -85,7 +85,7 @@ type exp =
 | Bop of binop * exp * exp * ty
 | Uop of unop * exp * ty
 | Index of exp * exp * ty
-| Array of exp list * ty * Z.t
+| Array of exp list * ty * int64
 | Range of exp * exp * bool
 
 type vdecl = id * ty * exp * bool
