@@ -1,13 +1,19 @@
-
 (executable
  (name blink)
  (modules blink)
- (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt compiler typing desugaring)
+ (libraries
+  core
+  core_unix
+  core_unix.sys_unix
+  core_unix.command_unix
+  fmt
+  compiler
+  typing
+  desugaring)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint
   (pps ppx_js_style -annotated-ignores -styler -pretty -dated-deprecation)))
-
 
 (library
  (public_name blink)

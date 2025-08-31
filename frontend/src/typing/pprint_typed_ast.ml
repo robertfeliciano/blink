@@ -16,9 +16,7 @@ let show_uint = function
   | Tu64 -> "Tu64"
   | Tu128 -> "Tu128"
 
-let show_float_ty = function
-  | Tf32 -> "Tf32"
-  | Tf64 -> "Tf64"
+let show_float_ty = function Tf32 -> "Tf32" | Tf64 -> "Tf64"
 
 let show_int_ty = function
   | TSigned s -> Printf.sprintf "TSigned(%s)" (show_sint s)
@@ -29,7 +27,7 @@ let rec show_ref_ty = function
   | RString -> "RString"
   | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
   | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
-  | RFun (args, ret) -> 
+  | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in
       Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
 
@@ -43,86 +41,69 @@ and show_ty = function
   | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
   | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
 
-
 let rec show_exp = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
-  | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
+  | Int (i, ity) ->
+      Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
   | Call (fn, args, ty) ->
-      Printf.sprintf "Call(%s, [%s], %s)"
-        (show_exp fn)
+      Printf.sprintf "Call(%s, [%s], %s)" (show_exp fn)
         (String.concat "; " (List.map show_exp args))
         (show_ty ty)
   | Bop (op, lhs, rhs, ty) ->
-      Printf.sprintf "Bop(%s, %s, %s, %s)"
-        (show_binop op)
-        (show_exp lhs)
-        (show_exp rhs)
-        (show_ty ty)
+      Printf.sprintf "Bop(%s, %s, %s, %s)" (show_binop op) (show_exp lhs)
+        (show_exp rhs) (show_ty ty)
   | Uop (op, e, ty) ->
-      Printf.sprintf "Uop(%s, %s, %s)"
-        (show_unop op)
-        (show_exp e)
-        (show_ty ty)
+      Printf.sprintf "Uop(%s, %s, %s)" (show_unop op) (show_exp e) (show_ty ty)
   | Index (arr, idx, ty) ->
-      Printf.sprintf "Index(%s, %s, %s)"
-        (show_exp arr)
-        (show_exp idx)
+      Printf.sprintf "Index(%s, %s, %s)" (show_exp arr) (show_exp idx)
         (show_ty ty)
   | Array (elems, ty, sz) ->
       Printf.sprintf "Array([%s], %s;%Ld)"
         (String.concat "; " (List.map show_exp elems))
-        (show_ty ty)
-        sz
+        (show_ty ty) sz
   | Range (start, stop, incl) ->
-      Printf.sprintf "Range(%s, %s, %b)"
-        (show_exp start)
-        (show_exp stop)
-        incl
+      Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
 
 let show_vdecl (id, ty, e, is_const) =
-  Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}"
-    id (show_ty ty) (show_exp e) is_const
+  Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)
+    (show_exp e) is_const
 
 let rec show_stmt = function
   | Assn (lhs, op, rhs) ->
-      Printf.sprintf "Assn(%s, %s, %s)"
-        (show_exp lhs) (show_aop op) (show_exp rhs)
+      Printf.sprintf "Assn(%s, %s, %s)" (show_exp lhs) (show_aop op)
+        (show_exp rhs)
   | Decl v -> show_vdecl v
   | Ret eo ->
       Printf.sprintf "Ret(%s)"
         (match eo with None -> "None" | Some e -> show_exp e)
   | SCall (fn, args) ->
-      Printf.sprintf "SCall(%s, [%s])"
-        (show_exp fn)
+      Printf.sprintf "SCall(%s, [%s])" (show_exp fn)
         (String.concat "; " (List.map show_exp args))
   | If (cond, tblock, eblock) ->
-      Printf.sprintf "If(%s, [%s], [%s])"
-        (show_exp cond)
+      Printf.sprintf "If(%s, [%s], [%s])" (show_exp cond)
         (String.concat "; " (List.map show_stmt tblock))
         (String.concat "; " (List.map show_stmt eblock))
   | For (id, start, stop, body) ->
-      Printf.sprintf "For(%s, %s, %s, [%s])"
-        id (show_exp start) (show_exp stop)
+      Printf.sprintf "For(%s, %s, %s, [%s])" id (show_exp start) (show_exp stop)
         (String.concat "; " (List.map show_stmt body))
   | While (cond, body) ->
-      Printf.sprintf "While(%s, [%s])"
-        (show_exp cond)
+      Printf.sprintf "While(%s, [%s])" (show_exp cond)
         (String.concat "; " (List.map show_stmt body))
   | Break -> "Break"
   | Continue -> "Continue"
 
-let show_block b =
-  String.concat ";\n" (List.map show_stmt b)
+let show_block b = String.concat ";\n" (List.map show_stmt b)
 
 let show_fdecl { frtyp; fname; args; body } =
   Printf.sprintf "fdecl{ret=%s; name=%s; args=[%s]; body=[\n%s\n]}"
-    (show_ret_ty frtyp)
-    fname
-    (String.concat "; " (List.map (fun (ty,id) -> Printf.sprintf "(%s,%s)" (show_ty ty) id) args))
+    (show_ret_ty frtyp) fname
+    (String.concat "; "
+       (List.map
+          (fun (ty, id) -> Printf.sprintf "(%s,%s)" (show_ty ty) id)
+          args))
     (show_block body)
 
-let show_typed_program (Prog fns) =
-  String.concat "\n" (List.map show_fdecl fns)
+let show_typed_program (Prog fns) = String.concat "\n" (List.map show_fdecl fns)
