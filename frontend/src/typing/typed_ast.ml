@@ -33,14 +33,13 @@ type ty =
 | TRef of ref_ty
 and ref_ty =
 | RString
-| RArray of ty
+| RArray of ty * int64
 | RRange of ty * ty
 (* | RClass of id *)
 | RFun of ty list * ret_ty
 and ret_ty =
 | RetVoid
 | RetVal of ty
-[@@deriving show]
 
 type unop = 
 | Neg
@@ -78,7 +77,7 @@ type aop =
 
 type exp = 
 | Bool of bool
-| Int of int64 * int_ty
+| Int of Z.t * int_ty
 | Float of float * float_ty
 | Str of string 
 | Id of id
@@ -86,7 +85,7 @@ type exp =
 | Bop of binop * exp * exp * ty
 | Uop of unop * exp * ty
 | Index of exp * exp * ty
-| Array of exp list * ty
+| Array of exp list * ty * int64
 | Range of exp * exp * bool
 
 type vdecl = id * ty * exp * bool

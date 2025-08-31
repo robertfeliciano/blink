@@ -11,7 +11,7 @@ fun summation(start: i8, end: i8) => i8 {
     return s;
 }
 
-fun main(argv: [string]) => i32 {
+fun main(argv: [string; 2]) => i32 {
     let sum: i8 = summation(0, argv[1]);
     if (sum < 100) {
         print("hi");

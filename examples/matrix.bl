@@ -1,7 +1,8 @@
 fun main() => void {
+    let empty: [i32; 0] = [];
     let A = [[1,2,3],[4,5,6],[7,8,9]];
     let x = [4, 8, 1];
-    let b: [i32] = A*x;
+    let b: [i32; 9] = A*x;
     print("result is {b}");
     return 0;
 }

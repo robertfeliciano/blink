@@ -2,7 +2,7 @@
 (executable
  (name blink)
  (modules blink)
- (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt compiler desugaring typing)
+ (libraries core core_unix core_unix.sys_unix core_unix.command_unix fmt compiler typing desugaring)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint

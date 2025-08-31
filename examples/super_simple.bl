@@ -1,4 +1,4 @@
-fun main(argv: [string]) => u64 {
+fun main(argv: [string; 2]) => u64 {
     let x: u8 = otherFunc(42, "somestring", nestedBrah(17));
     let y: u8 = x / 2;
     continue; 

@@ -25,8 +25,9 @@ let command =
   fun () -> 
     In_channel.with_file filename ~f:(fun ic -> 
       let lexbuf = Lexing.from_channel ic in
-      compile ~print_ast lexbuf
+      lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
+      compile ~print_ast lexbuf 
       ))
 
 
-  let () = Command_unix.run ~version:"1.0" ~build_info:"RWO" command
+let () = Command_unix.run ~version:"1.0" ~build_info:"RWO" command

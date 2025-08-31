@@ -1,0 +1,9 @@
+fun main(args: [string; 2]) => u16 {
+    let x: u8 = 0;
+    
+    let y = 12;
+    let f:f64 = y;
+
+
+    return x;
+}
