@@ -15,14 +15,15 @@ fun main(argv: [string; 2]) => i32 {
 */
 
 fun main(argv: [[string; 2]; 2]) => i32 {
-    let i: i32 = 0;
+    let i: u8 = 0;
     while i < 10 {
         let j: i32 = i;
         while j <= 10 {
             if i + j > 6 {
                 break;
             } else {
-                print("hello world");
+                continue;
+                //print("hello world");
             }
             j = j + 2;
         }

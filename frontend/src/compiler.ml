@@ -1,7 +1,7 @@
 open Core
 open Parsing.Parse
 open Typing.Type
-open Typing.Typed_ast
+open Typing.Pprint_typed_ast
 
 let ( >>= ) r f =
   match r with

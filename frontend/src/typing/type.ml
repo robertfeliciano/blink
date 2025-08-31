@@ -2,12 +2,14 @@ open Ast
 open Tctxt
 open Conversions
 
+module Printer = Pprint_typed_ast
+
 exception TypeError of string
 
 let make_error_underline c1 c2 =
   let spaces = String.make (c1 - 1) ' ' in
   let carets = String.make (c2 - c1) '^' in
-  spaces ^ "\x1b[31m" ^ carets ^ "\x1b[0m"
+  spaces ^ "\x1b[1;31m" ^ carets ^ "\x1b[0;0m"
 
 let get_line filename lno =
   try
@@ -211,15 +213,15 @@ let rec eval_const_exp (e: exp node) : Z.t option =
   match e.elt with
   | Int i -> Some i
   | Bop (Add, e1, e2) ->
-      (match eval_const_exp e1, eval_const_exp e2 with
+    (match eval_const_exp e1, eval_const_exp e2 with
       | Some v1, Some v2 -> Some Z.(v1 + v2)
       | _ -> None)
   | Bop (Sub, e1, e2) ->
-      (match eval_const_exp e1, eval_const_exp e2 with
+    (match eval_const_exp e1, eval_const_exp e2 with
       | Some v1, Some v2 -> Some Z.(v1 - v2)
       | _ -> None)
   | Bop (Mul, e1, e2) ->
-      (match eval_const_exp e1, eval_const_exp e2 with
+    (match eval_const_exp e1, eval_const_exp e2 with
       | Some v1, Some v2 -> Some Z.(v1 * v2)
       | _ -> None)
   | Bop (Div, e1, e2) -> 
@@ -230,10 +232,10 @@ let rec eval_const_exp (e: exp node) : Z.t option =
     (match eval_const_exp e1, eval_const_exp e2 with
       | Some v1, Some v2 -> Some Z.(v1 mod v2)
       | _ -> None)
-| Bop (Pow, e1, e2) -> 
-  (match eval_const_exp e1, eval_const_exp e2 with
-    | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
-    | _ -> None)
+  | Bop (Pow, e1, e2) -> 
+    (match eval_const_exp e1, eval_const_exp e2 with
+      | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
+      | _ -> None)
   | _ -> None
       
 
@@ -247,7 +249,7 @@ let rec type_exp ?(expected: Typed_ast.ty option) (tc: Tctxt.t) (e: Ast.exp node
      | Some (TInt target_ty) ->
          if fits_in_ty i target_ty then
            (Typed_ast.Int (i, target_ty), TInt target_ty)
-         else type_error e ("Integer literal " ^ Z.to_string i ^ " does not fit in type " ^ Typed_ast.show_ty (TInt target_ty))
+         else type_error e ("Integer literal " ^ Z.to_string i ^ " does not fit in type " ^ Printer.show_ty (TInt target_ty))
      | _ ->
          let inferred_ty = infer_integer_ty i e in
          (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
@@ -274,8 +276,8 @@ let rec type_exp ?(expected: Typed_ast.ty option) (tc: Tctxt.t) (e: Ast.exp node
                 te 
               else 
                 let err_msg = "Invalid argument type for `" ^ show_exp a.elt 
-                ^ "`. expected " ^ (Typed_ast.show_ty aty) 
-                ^ ", got " ^ (Typed_ast.show_ty ty) ^ "." in
+                ^ "`. expected " ^ (Printer.show_ty aty) 
+                ^ ", got " ^ (Printer.show_ty ty) ^ "." in
                 type_error e err_msg
             ) arg_types args in 
         (Typed_ast.Call (typed_callee,  typed_args, rt), rt)
@@ -350,7 +352,7 @@ and type_array (tc: Tctxt.t) (ens: exp node list) : (Typed_ast.exp * Typed_ast.t
           if subtype tc t acc then 
             acc
           else 
-            type_error (List.hd ens) ("Array elements must have compatible types. Expected type %s" ^ Typed_ast.show_ty expected_ty)
+            type_error (List.hd ens) ("Array elements must have compatible types. Expected type %s" ^ Printer.show_ty expected_ty)
         ) expected_ty (List.tl tys)
     in
     let size = Z.of_int (List.length ens) in
@@ -388,7 +390,7 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else
             type_error stmt_n
               ("Integer literal " ^ Z.to_string n ^
-                " does not fit in type " ^ Typed_ast.show_ty given_ty)
+                " does not fit in type " ^ Printer.show_ty given_ty)
       | Typed_ast.TFloat _,
         Typed_ast.TFloat given_float_ty,
         Typed_ast.Float (f, _) ->
@@ -411,7 +413,7 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else 
             type_error stmt_n 
             ("Integer literal " ^ Z.to_string n ^
-              " does not fit in float type " ^ Typed_ast.show_ty given_ty)
+              " does not fit in float type " ^ Printer.show_ty given_ty)
       (* note - we will not auto downcast, i.e. `let x: u8 = 12.14` is not valid *)
       | _ ->
           if given_ty = e_ty then
@@ -419,7 +421,7 @@ and type_stmt (tc: Tctxt.t) (frtyp: Ast.ret_ty) (stmt_n: Ast.stmt node) (in_loop
           else
             type_error stmt_n
               ("Provided type " ^ Ast.show_ty given_ty_ast ^
-                " does not match inferred type " ^ Typed_ast.show_ty e_ty)
+                " does not match inferred type " ^ Printer.show_ty e_ty)
     in 
     tc', Typed_ast.Decl(i, resolved_ty, te, const)
   
