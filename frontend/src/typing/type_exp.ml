@@ -68,7 +68,6 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
-      let _x = expected in
       match eval_const_exp e with
       | Some ev -> (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
       | None ->
@@ -76,7 +75,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           let res_ty =
             match binop with
             | Eqeq | Neq | Gt | Gte | Lt | Lte ->
-                if subtype tc lty rty && subtype tc rty lty then Typed_ast.TBool
+                if equal_ty lty rty then Typed_ast.TBool
                 else
                   type_error e
                     "== or != used with non type-compatible arguments"
@@ -86,9 +85,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
                 else type_error e "&& or || used on non-bool arguments"
             | At -> type_error e "@ not yet supported."
             | _ ->
-                let args_valid =
-                  subtype tc lty rty || all_numbers [ lty; rty ]
-                in
+                let args_valid = all_numbers [ lty; rty ] && equal_ty rty lty in
                 if not args_valid then
                   type_error e "using binary operator on non-number types"
                 else meet_number e (lty, rty)
@@ -123,8 +120,14 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       in
       (Typed_ast.Index (t_iter, t_idx, arr_ty), arr_ty)
   | Array _ -> type_array expected tc e
-  (* TODO actually type cast *)
-  | Cast (_e, _t) -> (Typed_ast.Bool true, Typed_ast.TBool)
+  | Cast (e, t) ->
+      let te, e_ty = type_exp tc e in
+      let tty = convert_ty t in
+      if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
+      else
+        type_error e
+          ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
+         ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
   | Range (el, er, incl) ->
       let tel, el_ty = type_exp tc el in
       let ter, er_ty = type_exp tc er in

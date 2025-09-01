@@ -64,6 +64,7 @@ let rec show_exp = function
       Printf.sprintf "Array([%s], %s;%Ld)"
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty) sz
+  | Cast (e, t) -> Printf.sprintf "Cast(%s, %s)" (show_exp e) (show_ty t)
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
 

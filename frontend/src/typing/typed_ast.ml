@@ -49,6 +49,7 @@ type exp =
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
   | Array of exp list * ty * int64
+  | Cast of exp * ty
   | Range of exp * exp * bool
 
 type vdecl = id * ty * exp * bool

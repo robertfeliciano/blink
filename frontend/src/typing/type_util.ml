@@ -153,9 +153,11 @@ and equal_ret_ty (r1 : Typed_ast.ret_ty) (r2 : Typed_ast.ret_ty) : bool =
 
 let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
-  | TBool, TBool -> true
-  | TInt k1, TInt k2 -> k1 = k2
-  | TFloat f1, TFloat f2 -> f1 = f2
+  | TBool, TBool
+  | TInt _, TInt _ 
+  | TFloat _, TFloat _ 
+  | TInt _, TFloat _ 
+  | TFloat _, TInt _ -> true
   | TRef t1', TRef t2' -> subtype_ref tc t1' t2'
   | _ -> false
 
@@ -167,7 +169,7 @@ and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) :
   | RFun (pty1, rty1), RFun (pty2, rty2) ->
       let contrav_params =
         List.length pty1 = List.length pty2
-        && List.for_all2 (fun a1 a2 -> subtype tc a2 a1) pty1 pty2
+        && List.for_all2 (fun a1 a2 -> equal_ty a2 a1) pty1 pty2
       in
       contrav_params && subtype_ret_ty tc rty1 rty2
   | _ -> false
