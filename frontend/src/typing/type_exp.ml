@@ -68,6 +68,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
+      let _x = expected in
       match eval_const_exp e with
       | Some ev -> (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
       | None ->
