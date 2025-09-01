@@ -97,6 +97,8 @@ let widest_int (ity1 : Typed_ast.int_ty) (ity2 : Typed_ast.int_ty) (n : 'a node)
          (find_index unsigned_int_hierarchy t2))
   in
   match (ity1, ity2) with
+  | TSigned Ti64, TUnsigned Tu64 | TUnsigned Tu64, TSigned Ti64 ->
+      type_error n "cannot implicitly combine u64 and i64"
   | TSigned s, TUnsigned u | TUnsigned u, TSigned s -> TSigned (widest' s u)
   | TSigned t1, TSigned t2 -> TSigned (widest signed_int_hierarchy t1 t2)
   | TUnsigned t1, TUnsigned t2 ->
@@ -188,7 +190,7 @@ let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
     TUnsigned Tu64
   else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
 
-let fits_in_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
+let fits_in_int_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
   let open Z in
   match t with
   | TSigned Ti8 -> geq n (of_int (-128)) && leq n (of_int 127)
@@ -205,15 +207,14 @@ let fits_in_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
   | TUnsigned Tu64 -> fits_int64_unsigned n
   | TUnsigned Tu128 -> geq n zero && leq n Z.(sub (shift_left one 128) one)
 
-let fits_in_float_ty (n: float) (t: Typed_ast.float_ty) : bool = 
-  match t with 
-  | Tf32 -> 
+let fits_in_float_ty (n : float) (t : Typed_ast.float_ty) : bool =
+  match t with
+  | Tf32 ->
       (* IEEE-754 f32 range limits *)
       let max_f32 = 3.40282347e38 in
       let min_f32 = -.max_f32 in
-      (not (Float.is_nan n)) &&
-      (Float.is_finite n) &&
-      n >= min_f32 && n <= max_f32
+      (not (Float.is_nan n))
+      && Float.is_finite n && n >= min_f32 && n <= max_f32
   | Tf64 -> true
 
 let int_in_float (n : Z.t) (t : Typed_ast.float_ty) : bool =

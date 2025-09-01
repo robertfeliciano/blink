@@ -59,6 +59,7 @@ type exp =
   | Uop of unop * exp node
   | Index of exp node * exp node
   | Array of exp node list
+  | Cast of exp node * ty
   | Range of
       exp node * exp node * bool (* includes whether right bound is inclusive *)
 
@@ -156,6 +157,8 @@ let rec show_exp = function
   | Array elems ->
       Printf.sprintf "Array([%s])"
         (String.concat "; " (List.map (show_node show_exp) elems))
+  | Cast (e, t) ->
+      Printf.sprintf "Cast(%s, %s)" (show_node show_exp e) (show_ty t)
   | Range (start, stop, inclusive) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_node show_exp start)
         (show_node show_exp stop) inclusive

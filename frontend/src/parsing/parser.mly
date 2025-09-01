@@ -90,6 +90,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token INHERITS  /* inherits */
 %token GLOBAL    /* global */
 %token QMARK     /* ? */
+%token AS
 
 %right POW
 %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
@@ -230,6 +231,7 @@ exp:
   | f=FLOAT                         { loc $startpos $endpos @@ Float f }
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
+  | e=exp AS t=ty_spec              { loc $startpos $endpos @@ Cast (e, t)}
   // | arr=array                       { loc $startpos $endpos @@ arr }
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
                                     { loc $startpos $endpos @@ Array elems }

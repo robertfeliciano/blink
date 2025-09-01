@@ -11,7 +11,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   | Int i -> (
       match expected with
       | Some (TInt target_ty) ->
-          if fits_in_ty i target_ty then
+          if fits_in_int_ty i target_ty then
             (Typed_ast.Int (i, target_ty), TInt target_ty)
           else
             type_error e
@@ -21,14 +21,15 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           let inferred_ty = infer_integer_ty i e in
           (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
   | Float f ->
-      let target_ty = 
-      (match expected with 
-      | Some (TFloat target_ty) -> target_ty
-      | None -> Typed_ast.Tf64
-      | _ -> type_error e "Will not cast float to non-float.") in
-      if fits_in_float_ty f target_ty then 
+      let target_ty =
+        match expected with
+        | Some (TFloat target_ty) -> target_ty
+        | None -> Typed_ast.Tf64
+        | _ -> type_error e "Will not cast float to non-float."
+      in
+      if fits_in_float_ty f target_ty then
         (Float (f, target_ty), TFloat target_ty)
-      else 
+      else
         type_error e
           ("Float literal " ^ Float.to_string f ^ " does not fit in type "
           ^ Printer.show_ty (TFloat target_ty))
@@ -40,10 +41,10 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | Some t -> (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call (f, args) -> (
-      match snd @@ type_exp tc f with
+    let typed_callee, typ = type_exp tc f in 
+      match typ with
       | TRef (RFun (arg_types, RetVal rt)) -> (
           try
-            let typed_callee, _ = type_exp tc f in
             let typed_args =
               List.map2
                 (fun aty a ->
@@ -70,7 +71,6 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       match eval_const_exp e with
       | Some ev ->
           (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
-          (* will adjust later to expected_ty *)
       | None ->
           let binop' = convert_binop binop in
           let res_ty =
@@ -123,6 +123,8 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       in
       (Typed_ast.Index (t_iter, t_idx, arr_ty), arr_ty)
   | Array _ -> type_array expected tc e
+  (* TODO actually type cast *)
+  | Cast (_e, _t) -> (Typed_ast.Bool true, Typed_ast.TBool)
   | Range (el, er, incl) ->
       let tel, el_ty = type_exp tc el in
       let ter, er_ty = type_exp tc er in
@@ -144,7 +146,6 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       type_error en
         ("Expected " ^ Printer.show_ty other ^ " but got empty array.")
   | Array (h :: t), exp_opt ->
-      (* if there is an expected array type, use its element type to guide literals *)
       let exp_elt, exp_len =
         match exp_opt with
         | Some (TRef (RArray (ety, elen))) -> (Some ety, Some elen)
@@ -172,7 +173,6 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       in
       let all_elems = th :: typed_elems in
       let len = Int64.of_int (List.length all_elems) in
-      (* respect expected length when provided *)
       (match exp_len with
       | Some elen when elen <> len ->
           type_error en
