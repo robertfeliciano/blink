@@ -89,11 +89,16 @@ type fdecl = {
   mutable body : block;
 }
 
-type field = { fieldName : id; ftyp : ty }
+type field = { fieldName : id; ftyp : ty; init : exp node option }
 
-(* type cdecl = id * (field list * fdecl list) *)
+type cdecl = {
+  cname : id;
+  impls : id list;
+  fields : field node list;
+  methods : fdecl node list;
+}
 
-type program = Prog of fdecl node list [@@boxed]
+type program = Prog of fdecl node list * cdecl node list [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"
 
@@ -213,6 +218,6 @@ let show_fdecl { frtyp; fname; args; body } =
 let show_decl d = show_fdecl d.elt
 
 let show_prog (p : program) =
-  let (Prog fns) = p in
+  let (Prog (fns, _cns)) = p in
   let aux fn s = s ^ show_decl fn ^ "\n" in
   List.fold_right aux fns "\n"

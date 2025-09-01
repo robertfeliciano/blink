@@ -154,10 +154,11 @@ and equal_ret_ty (r1 : Typed_ast.ret_ty) (r2 : Typed_ast.ret_ty) : bool =
 let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
   | TBool, TBool
-  | TInt _, TInt _ 
-  | TFloat _, TFloat _ 
-  | TInt _, TFloat _ 
-  | TFloat _, TInt _ -> true
+  | TInt _, TInt _
+  | TFloat _, TFloat _
+  | TInt _, TFloat _
+  | TFloat _, TInt _ ->
+      true
   | TRef t1', TRef t2' -> subtype_ref tc t1' t2'
   | _ -> false
 

@@ -20,7 +20,7 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
   let _tc_final, typed_body = type_block tc' frtyp' body false in
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
-let create_fn_ctxt (tc : Tctxt.t) (Prog fns : Ast.program) : Tctxt.t =
+let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) = function
     | fn :: t -> (
         let func_type = get_fdecl_type fn tc in
@@ -41,8 +41,8 @@ let create_fn_ctxt (tc : Tctxt.t) (Prog fns : Ast.program) : Tctxt.t =
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   (* create class ctxt *)
-  let fc = create_fn_ctxt Tctxt.empty prog in
-  let (Prog fns) = prog in
+  let (Prog (fns, _cns)) = prog in
+  let fc = create_fn_ctxt Tctxt.empty fns in
   let fns_t = List.map (fun fn -> type_fn fc fn) fns in
   Prog fns_t
 
