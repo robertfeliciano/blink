@@ -41,7 +41,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | Some t -> (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call (f, args) -> (
-    let typed_callee, typ = type_exp tc f in 
+      let typed_callee, typ = type_exp tc f in
       match typ with
       | TRef (RFun (arg_types, RetVal rt)) -> (
           try
@@ -69,8 +69,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
       match eval_const_exp e with
-      | Some ev ->
-          (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
+      | Some ev -> (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
       | None ->
           let binop' = convert_binop binop in
           let res_ty =

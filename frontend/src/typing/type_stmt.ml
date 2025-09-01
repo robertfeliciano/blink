@@ -65,8 +65,8 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
             else Some te
         | Some e, RetVoid ->
             type_error stmt_n
-              ("Expected function return type void, found "
-             ^ show_exp e.elt ^ ".")
+              ("Expected function return type void, found " ^ show_exp e.elt
+             ^ ".")
         | None, RetVal r_ty ->
             type_error stmt_n
               ("Expected function return type " ^ Printer.show_ty r_ty
@@ -77,15 +77,20 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
   | Ast.SCall (en, ens) ->
       let te, fty = type_exp tc en in
       let typed_args =
-      (match fty with
-      | Typed_ast.(TRef (RFun (args, RetVoid))) -> args
-      | Typed_ast.(TRef (RFun (args, _))) -> 
-          type_warning stmt_n "Ignoring non-void function"; args
-      | _ ->
-          type_error stmt_n
-            "How did we manage to parse this as a function call?")
+        match fty with
+        | Typed_ast.(TRef (RFun (args, RetVoid))) -> args
+        | Typed_ast.(TRef (RFun (args, _))) ->
+            type_warning stmt_n "Ignoring non-void function";
+            args
+        | _ ->
+            type_error stmt_n
+              "How did we manage to parse this as a function call?"
       in
-      let t_ens = List.map2 (fun en' arg_ty -> type_exp ~expected:arg_ty tc en' |> fst) ens typed_args in
+      let t_ens =
+        List.map2
+          (fun en' arg_ty -> type_exp ~expected:arg_ty tc en' |> fst)
+          ens typed_args
+      in
       (tc, Typed_ast.SCall (te, t_ens))
   | Ast.If (cond, then_branch, else_branch) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
