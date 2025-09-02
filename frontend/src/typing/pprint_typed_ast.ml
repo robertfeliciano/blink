@@ -27,6 +27,7 @@ let rec show_ref_ty = function
   | RString -> "RString"
   | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
   | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
+  | RClass (cn) -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in
       Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
@@ -67,6 +68,7 @@ let rec show_exp = function
   | Cast (e, t) -> Printf.sprintf "Cast(%s, %s)" (show_exp e) (show_ty t)
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
+  | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp e) i
 
 let show_vdecl (id, ty, e, is_const) =
   Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)
@@ -107,4 +109,5 @@ let show_fdecl { frtyp; fname; args; body } =
           args))
     (show_block body)
 
-let show_typed_program (Prog fns) = String.concat "\n" (List.map show_fdecl fns)
+let show_typed_program (Prog (fns, _)) =
+  String.concat "\n" (List.map show_fdecl fns)

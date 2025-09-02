@@ -20,7 +20,7 @@ and ref_ty =
   | RString
   | RArray of ty * Z.t
   | RRange of ty * ty
-  (* | RClass of id *)
+  | RClass of id
   | RFun of ty list * ret_ty
 
 and ret_ty = RetVoid | RetVal of ty
@@ -54,6 +54,7 @@ type exp =
   | Float of float
   | Str of string
   | Id of id
+  | Proj of exp node * id
   | Call of exp node * exp node list
   | Bop of binop * exp node * exp node
   | Uop of unop * exp node
@@ -128,6 +129,7 @@ let rec show_ref_ty = function
   | RArray (t, sz) ->
       Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
   | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
+  | RClass (cn) -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in
       Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
@@ -167,6 +169,7 @@ let rec show_exp = function
   | Range (start, stop, inclusive) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_node show_exp start)
         (show_node show_exp stop) inclusive
+  | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_node show_exp e) i
 
 let show_vdecl (id, ty_opt, exp, is_const) =
   Printf.sprintf "{ id = %s; ty = %s; exp = %s; is_const = %b }" id

@@ -10,7 +10,7 @@ and ref_ty =
   | RString
   | RArray of ty * int64
   | RRange of ty * ty
-  (* | RClass of id *)
+  | RClass of id
   | RFun of ty list * ret_ty
 
 and ret_ty = RetVoid | RetVal of ty
@@ -51,6 +51,7 @@ type exp =
   | Array of exp list * ty * int64
   | Cast of exp * ty
   | Range of exp * exp * bool
+  | Proj of exp * id
 
 type vdecl = id * ty * exp * bool
 
@@ -74,4 +75,13 @@ type fdecl = {
   mutable body : block;
 }
 
-type program = Prog of fdecl list
+type field = { fieldName : id; ftyp : ty; init : exp }
+
+type cdecl = {
+  cname : id;
+  impls : id list;
+  fields : field list;
+  methods : fdecl list;
+}
+
+type program = Prog of fdecl list * cdecl list [@@boxed]

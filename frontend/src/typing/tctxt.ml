@@ -1,12 +1,13 @@
 open Typed_ast
 
 type ctxt = (id * ty) list
-(* type class_ctxt = ( id *  field list) list *)
+type method_header = id * ret_ty * (ty * id) list
+type class_ctxt = (id * (field list * method_header list)) list
+(* class name * fields * (method name * return type * arg list) *)
 
-type t = { locals : ctxt; globals : ctxt (* classes: class_ctxt; *) }
+type t = { locals : ctxt; globals : ctxt; classes : class_ctxt }
 
-(* let empty = { locals = []; globals = []; classes = [] } *)
-let empty = { locals = []; globals = [] }
+let empty = { locals = []; globals = []; classes = [] }
 
 (* locals ------------------------------------------------------------------- *)
 let add_local (c : t) (id : id) (bnd : ty) : t =
@@ -35,8 +36,9 @@ let lookup_option id c : ty option =
   | None -> lookup_global_option id c
   | Some x -> Some x
 
-(* classures --------------------------------------------------------------- *)
-(* let add_class c id bnd = {c with classes=(id, bnd)::c.classes}
+let add_class c id fields funs =
+  { c with classes = (id, (fields, funs)) :: c.classes }
+
 let lookup_class id c = List.assoc id c.classes
 
 let lookup_class_option id c =
@@ -46,24 +48,20 @@ let lookup_field_option st_name f_name c =
   let rec lookup_field_aux f_name l =
     match l with
     | [] -> None
-    | h :: t -> if h.fieldName = f_name then Some h.ftyp else lookup_field_aux f_name t in
+    | h :: t ->
+        if h.fieldName = f_name then Some h.ftyp else lookup_field_aux f_name t
+  in
   match lookup_class_option st_name c with
   | None -> None
   | Some (fields, _methods) -> lookup_field_aux f_name fields
 
-let lookup_field st_name f_name c =
-  match lookup_field_option st_name f_name c with
-  | None -> failwith "classCtxt.lookup_field: Not found"
-  | Some x -> x 
-
-
-
 let lookup_method_option c_name m_name c =
-  let rec lookup_method_aux m_name l = 
-    match l with 
+  let rec lookup_method_aux m_name l =
+    match l with
     | [] -> None
-    | h :: t -> if h.fname = m_name then Some h else lookup_method_aux m_name t in 
-  match lookup_class_option c_name c with 
+    | (m, rtyp, args) :: t ->
+        if m = m_name then Some (rtyp, args) else lookup_method_aux m_name t
+  in
+  match lookup_class_option c_name c with
   | None -> None
   | Some (_fields, methods) -> lookup_method_aux m_name methods
-  *)

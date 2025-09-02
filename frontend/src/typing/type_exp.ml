@@ -136,6 +136,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
         ( Typed_ast.Range (tel, ter, incl),
           Typed_ast.TRef (Typed_ast.RRange (el_ty, er_ty)) )
       else type_error e "Range must have numeric bounds..."
+  | Proj (_ec, _f) -> type_error e "projections not available yet"
 
 and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
     Typed_ast.exp * Typed_ast.ty =

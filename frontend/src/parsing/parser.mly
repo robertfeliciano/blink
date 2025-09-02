@@ -290,6 +290,8 @@ postfix:
       { loc $startpos $endpos @@ Call (p, args) }
   | p=postfix AS t=ty_spec
       { loc $startpos $endpos @@ Cast (p, t) }
+  | p=postfix DOT i=IDENT
+      { loc $startpos $endpos @@ Proj (p, i) }
 
 (* -----------------------
    LHS (for assignments)
