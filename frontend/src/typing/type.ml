@@ -60,10 +60,9 @@ let create_class_ctxt (tc: Tctxt.t) (cns: cdecl node list) : Tctxt.t =
 
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
-  (* create class ctxt *)
-  let (Prog (fns, _cns)) = prog in
-  (* let cc = create_class_ctxt Tctxt.empty in  *)
-  let fc = create_fn_ctxt Tctxt.empty fns in
+  let (Prog (fns, cns)) = prog in
+  let cc = create_class_ctxt Tctxt.empty cns in 
+  let fc = create_fn_ctxt cc fns in
   let fns_t = List.map (fun fn -> type_fn fc fn) fns in
   Prog (fns_t, [])
 
