@@ -41,6 +41,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | Some t -> (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call (f, args) -> (
+    (* separate match for call of method *)
       let typed_callee, typ = type_exp tc f in
       match typ with
       | TRef (RFun (arg_types, RetVal rt)) -> (
@@ -136,7 +137,19 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
         ( Typed_ast.Range (tel, ter, incl),
           Typed_ast.TRef (Typed_ast.RRange (el_ty, er_ty)) )
       else type_error e "Range must have numeric bounds..."
-  | Proj (_ec, _f) -> type_error e "projections not available yet"
+  | Proj (ec, f) -> 
+      let tec, e_ty = type_exp tc ec in 
+      match e_ty with 
+      | Typed_ast.(TRef (RClass cid)) -> 
+        (match Tctxt.lookup_field_option cid f tc with 
+          | Some fty -> Typed_ast.Proj(tec, f), fty
+          | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
+        )
+      | _ -> type_error ec "Must project field of a class."
+
+(* and type_call (expected: Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
+    Typed_ast.exp * Typed_ast.ty =
+  match (en.elt, expected) with  *)
 
 and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
     Typed_ast.exp * Typed_ast.ty =

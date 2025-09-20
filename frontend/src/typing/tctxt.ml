@@ -44,7 +44,7 @@ let lookup_class id c = List.assoc id c.classes
 let lookup_class_option id c =
   try Some (lookup_class id c) with Not_found -> None
 
-let lookup_field_option st_name f_name c =
+let lookup_field_option c_name f_name c =
   let rec lookup_field_aux f_name l =
     match l with
     | [] -> None
@@ -53,7 +53,7 @@ let lookup_field_option st_name f_name c =
         let ftyp = snd h in
         if field_name = f_name then Some ftyp else lookup_field_aux f_name t
   in
-  match lookup_class_option st_name c with
+  match lookup_class_option c_name c with
   | None -> None
   | Some (fields, _methods) -> lookup_field_aux f_name fields
 

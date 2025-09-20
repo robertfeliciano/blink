@@ -6,14 +6,14 @@ open Conversions
 module Printer = Pprint_typed_ast
 
 let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmt_n : Ast.stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
+    (stmt_n : stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
-  | Ast.Decl (i, None, en, const) ->
+  | Decl (i, None, en, const) ->
       let te, e_ty = type_exp tc en in
       let tc', resolved_ty = (add_local tc i e_ty, e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const))
-  | Ast.Decl (i, Some given_ty_ast, en, const) ->
+  | Decl (i, Some given_ty_ast, en, const) ->
       let given_ty = convert_ty given_ty_ast in
       let te, e_ty = type_exp ~expected:given_ty tc en in
       let tc', resolved_ty =
@@ -45,15 +45,15 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
             if given_ty = e_ty then (add_local tc i given_ty, given_ty)
             else
               type_error stmt_n
-                ("Provided type " ^ Ast.show_ty given_ty_ast
+                ("Provided type " ^ show_ty given_ty_ast
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const))
-  | Ast.Assn (lhs, op, rhs) ->
+  | Assn (lhs, op, rhs) ->
       let tlhs, lhsty = type_exp tc lhs in
       let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
       (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs))
-  | Ast.Ret expr ->
+  | Ret expr ->
       let te_opt =
         match (expr, frtyp) with
         | Some e, RetVal r_ty ->
@@ -74,7 +74,8 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
         | None, RetVoid -> None
       in
       (tc, Typed_ast.Ret te_opt)
-  | Ast.SCall (en, ens) ->
+  | SCall (en, ens) ->
+    (* separate match for call of method *)
       let te, fty = type_exp tc en in
       let typed_args =
         match fty with
@@ -92,20 +93,20 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
           ens typed_args
       in
       (tc, Typed_ast.SCall (te, t_ens))
-  | Ast.If (cond, then_branch, else_branch) ->
+  | If (cond, then_branch, else_branch) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "if condition must be bool";
       let _tc_then, t_then = type_block tc frtyp then_branch in_loop in
       let _tc_else, t_else = type_block tc frtyp else_branch in_loop in
       (tc, Typed_ast.If (tcond, t_then, t_else))
-  | Ast.While (cond, body) ->
+  | While (cond, body) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "while condition must be bool";
       let _tc_while, t_body = type_block tc frtyp body true in
       (tc, Typed_ast.While (tcond, t_body))
-  | Ast.For (i_node, iter_exp, step_opt, body) ->
+  | For (i_node, iter_exp, step_opt, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
         match iter_ty with
@@ -135,16 +136,16 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       let tc_loop = add_local tc i_node.elt elem_ty in
       let _tc_body, t_body = type_block tc_loop frtyp body true in
       (tc, Typed_ast.For (i_node.elt, titer, t_step, t_body))
-  | Ast.Break ->
+  | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
       else (tc, Typed_ast.Break)
-  | Ast.Continue ->
+  | Continue ->
       if not in_loop then
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmts : Ast.stmt node list) (in_loop : bool) :
+    (stmts : stmt node list) (in_loop : bool) :
     Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
     List.fold_left
