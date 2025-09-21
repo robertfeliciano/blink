@@ -30,38 +30,46 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
                  fn.elt.fname)
         | None ->
             let func_type = get_fdecl_type fn tc in
-            let new_tc = Tctxt.add_global tc fn.elt.fname (convert_ty func_type)
+            let new_tc =
+              Tctxt.add_global tc fn.elt.fname (convert_ty func_type)
             in
             aux new_tc t)
     | [] -> tc
   in
   aux tc fns
 
-let create_class_ctxt (tc: Tctxt.t) (cns: cdecl node list) : Tctxt.t = 
+let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
   let get_method_header { fname; frtyp; args; _ } : method_header =
     ( fname,
       convert_ret_ty frtyp,
       List.map (fun (t, name) -> (convert_ty t, name)) args )
   in
-  let rec aux (tc: Tctxt.t) = function
+  let rec aux (tc : Tctxt.t) = function
     | cn :: t -> (
-      match lookup_class_option cn.elt.cname tc with 
-      | Some _ -> 
-        type_error cn ("Class with name " ^ cn.elt.cname ^ " already exists.")
-      | None -> 
-        let cname = cn.elt.cname in 
-        let fields = List.map (fun fn -> (fn.elt.fieldName, convert_ty fn.elt.ftyp)) cn.elt.fields in 
-        let method_headers = List.map (fun mn -> get_method_header mn.elt) cn.elt.methods in 
-        let new_tc = Tctxt.add_class tc cname fields method_headers in 
-        aux new_tc t)
-      | [] -> tc
-  in aux tc cns
-
+        match lookup_class_option cn.elt.cname tc with
+        | Some _ ->
+            type_error cn
+              ("Class with name " ^ cn.elt.cname ^ " already exists.")
+        | None ->
+            let cname = cn.elt.cname in
+            let fields =
+              List.map
+                (fun fn -> (fn.elt.fieldName, convert_ty fn.elt.ftyp))
+                cn.elt.fields
+            in
+            let method_headers =
+              List.map (fun mn -> get_method_header mn.elt) cn.elt.methods
+            in
+            let new_tc = Tctxt.add_class tc cname fields method_headers in
+            aux new_tc t)
+    | [] -> tc
+  in
+  aux tc cns
 
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   let (Prog (fns, cns)) = prog in
-  let cc = create_class_ctxt Tctxt.empty cns in 
+  let cc = create_class_ctxt Tctxt.empty cns in
   let fc = create_fn_ctxt cc fns in
   let fns_t = List.map (fun fn -> type_fn fc fn) fns in
   Prog (fns_t, [])

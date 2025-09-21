@@ -39,7 +39,7 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   | Ast.RString -> Typed_ast.RString
   | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int64 sz)
   | Ast.RRange (t1, t2) -> Typed_ast.RRange (convert_ty t1, convert_ty t2)
-  | Ast.RClass (cn) -> Typed_ast.RClass cn
+  | Ast.RClass cn -> Typed_ast.RClass cn
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
 

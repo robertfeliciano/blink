@@ -129,7 +129,7 @@ let rec show_ref_ty = function
   | RArray (t, sz) ->
       Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
   | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
-  | RClass (cn) -> Printf.sprintf "RClass(%s)" cn
+  | RClass cn -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in
       Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)

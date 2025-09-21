@@ -5,8 +5,8 @@ open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
 
-let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmt_n : stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
+let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
+    (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | Decl (i, None, en, const) ->
@@ -75,7 +75,6 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       in
       (tc, Typed_ast.Ret te_opt)
   | SCall (en, ens) ->
-    (* separate match for call of method *)
       let te, fty = type_exp tc en in
       let typed_args =
         match fty with
@@ -145,8 +144,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       else (tc, Typed_ast.Continue)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmts : stmt node list) (in_loop : bool) :
-    Tctxt.t * Typed_ast.stmt list =
+    (stmts : stmt node list) (in_loop : bool) : Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
     List.fold_left
       (fun (tc_acc, tstmts) s ->

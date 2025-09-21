@@ -48,8 +48,9 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   | RArray (t, sz) ->
       if Z.lt sz (Z.of_int 0) then type_error l "negative length specified"
       else typecheck_ty l tc t
-  | RClass (c) -> 
-      if None = Tctxt.lookup_class_option c tc then type_error l "class undefined"
+  | RClass c ->
+      if None = Tctxt.lookup_class_option c tc then
+        type_error l "class undefined"
   | RRange (t1, t2) ->
       typecheck_ty l tc t1;
       typecheck_ty l tc t2

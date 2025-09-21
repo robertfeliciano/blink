@@ -40,32 +40,29 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       match Tctxt.lookup_option i tc with
       | Some t -> (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
+  | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
+      let tobj, obj_ty = type_exp tc obj in
+      match obj_ty with
+      | Typed_ast.(TRef (RClass cid)) -> (
+          match Tctxt.lookup_method_option cid mth tc with
+          | Some (rt, argheaders) -> (
+              let argtypes = List.map (fun (t, _) -> t) argheaders in
+              let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
+              match type_func args temp_func true tc with
+              | Error f -> f e
+              | Ok (typed_args, RetVal rt) ->
+                  (Typed_ast.(Call (Proj(tobj, mth), typed_args, rt), rt))
+              | _ -> type_error e "unreachable state... reached?")
+          | None ->
+              type_error e ("Class " ^ cid ^ " has no member method " ^ mth))
+      | _ -> type_error e "Attempting to call method of non-class type.")
   | Call (f, args) -> (
-    (* separate match for call of method *)
       let typed_callee, typ = type_exp tc f in
-      match typ with
-      | TRef (RFun (arg_types, RetVal rt)) -> (
-          try
-            let typed_args =
-              List.map2
-                (fun aty a ->
-                  let te, ty = type_exp tc a in
-                  if equal_ty ty aty then te
-                  else
-                    let err_msg =
-                      "Invalid argument type for `" ^ show_exp a.elt
-                      ^ "`. expected " ^ Printer.show_ty aty ^ ", got "
-                      ^ Printer.show_ty ty ^ "."
-                    in
-                    type_error e err_msg)
-                arg_types args
-            in
-            (Typed_ast.Call (typed_callee, typed_args, rt), rt)
-          with Invalid_argument _ ->
-            type_error e "invalid number of arguments supplied")
-      | TRef (RFun (_, RetVoid)) ->
-          type_error e "assigning void function return type to variable."
-      | _ -> type_error e "attempted to call a non-function type.")
+      match type_func args typ true tc with
+      | Error f -> f e
+      | Ok (typed_args, RetVal rt) ->
+          (Typed_ast.Call (typed_callee, typed_args, rt), rt)
+      | _ -> type_error e "unreachable state... reached?")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
@@ -137,19 +134,50 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
         ( Typed_ast.Range (tel, ter, incl),
           Typed_ast.TRef (Typed_ast.RRange (el_ty, er_ty)) )
       else type_error e "Range must have numeric bounds..."
-  | Proj (ec, f) -> 
-      let tec, e_ty = type_exp tc ec in 
-      match e_ty with 
-      | Typed_ast.(TRef (RClass cid)) -> 
-        (match Tctxt.lookup_field_option cid f tc with 
-          | Some fty -> Typed_ast.Proj(tec, f), fty
+  | Proj (ec, f) -> (
+      let tec, e_ty = type_exp tc ec in
+      match e_ty with
+      | Typed_ast.(TRef (RClass cid)) -> (
+          match Tctxt.lookup_field_option cid f tc with
+          | Some fty -> (Typed_ast.Proj (tec, f), fty)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
-        )
-      | _ -> type_error ec "Must project field of a class."
+          )
+      | _ -> type_error ec "Must project field of a class.")
 
-(* and type_call (expected: Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
-    Typed_ast.exp * Typed_ast.ty =
-  match (en.elt, expected) with  *)
+and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
+    (tc : Tctxt.t) :
+    (Typed_ast.exp list * Typed_ast.ret_ty, exp node -> 'b) result =
+  let typecheck_args arg_types =
+    List.map2
+      (fun aty a ->
+        let te, ty = type_exp tc a in
+        if equal_ty ty aty then te
+        else
+          let err_msg =
+            "Invalid argument type for `" ^ show_exp a.elt ^ "`. expected "
+            ^ Printer.show_ty aty ^ ", got " ^ Printer.show_ty ty ^ "."
+          in
+          raise (TypeError err_msg))
+      arg_types args
+  in
+  match ftyp with
+  | TRef (RFun (arg_types, RetVal rt_ty)) -> (
+      try
+        let typed_args = typecheck_args arg_types in
+        Ok (typed_args, RetVal rt_ty)
+      with
+      | TypeError msg -> Error (fun e -> type_error e msg)
+      | Invalid_argument _ ->
+          Error (fun e -> type_error e "invalid number of arguments supplied"))
+  | TRef (RFun (arg_types, RetVoid)) ->
+      if from_exp then
+        Error
+          (fun e ->
+            type_error e "assigning void function return type to variable.")
+      else
+        let typed_args = typecheck_args arg_types in
+        Ok (typed_args, RetVoid)
+  | _ -> Error (fun e -> type_error e "attempted to call a non-function type.")
 
 and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
     Typed_ast.exp * Typed_ast.ty =
