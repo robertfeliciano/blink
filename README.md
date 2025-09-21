@@ -1,6 +1,5 @@
-# Welcome to Blink!
-
-Blink aims to be a GPU accelerated programming language focused on machine learning algorithms.
+# Blink
+And you'll miss it...
 
 ### How to build this project
 
