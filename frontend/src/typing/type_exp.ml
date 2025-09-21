@@ -41,28 +41,18 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | Some t -> (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
-      let tobj, obj_ty = type_exp tc obj in
-      match obj_ty with
-      | Typed_ast.(TRef (RClass cid)) -> (
-          match Tctxt.lookup_method_option cid mth tc with
-          | Some (rt, argheaders) -> (
-              let argtypes = List.map (fun (t, _) -> t) argheaders in
-              let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
-              match type_func args temp_func true tc with
-              | Error f -> f e
-              | Ok (typed_args, RetVal rt) ->
-                  (Typed_ast.(Call (Proj(tobj, mth), typed_args, rt), rt))
-              | _ -> type_error e "unreachable state... reached?")
-          | None ->
-              type_error e ("Class " ^ cid ^ " has no member method " ^ mth))
-      | _ -> type_error e "Attempting to call method of non-class type.")
+      match type_method (Proj (obj, mth)) args true tc with
+      | Ok (Proj (tobj, _), typed_args, RetVal rt) ->
+          Typed_ast.(Call (Proj (tobj, mth), typed_args, rt), rt)
+      | Error msg -> type_error e msg
+      | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
       let typed_callee, typ = type_exp tc f in
       match type_func args typ true tc with
-      | Error f -> f e
+      | Error msg -> type_error e msg
       | Ok (typed_args, RetVal rt) ->
           (Typed_ast.Call (typed_callee, typed_args, rt), rt)
-      | _ -> type_error e "unreachable state... reached?")
+      | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
@@ -145,8 +135,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | _ -> type_error ec "Must project field of a class.")
 
 and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
-    (tc : Tctxt.t) :
-    (Typed_ast.exp list * Typed_ast.ret_ty, exp node -> 'b) result =
+    (tc : Tctxt.t) : (Typed_ast.exp list * Typed_ast.ret_ty, string) result =
   let typecheck_args arg_types =
     List.map2
       (fun aty a ->
@@ -154,7 +143,7 @@ and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
         if equal_ty ty aty then te
         else
           let err_msg =
-            "Invalid argument type for `" ^ show_exp a.elt ^ "`. expected "
+            "Invalid argument type for `" ^ show_exp a.elt ^ "`. Expected "
             ^ Printer.show_ty aty ^ ", got " ^ Printer.show_ty ty ^ "."
           in
           raise (TypeError err_msg))
@@ -166,18 +155,34 @@ and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
         let typed_args = typecheck_args arg_types in
         Ok (typed_args, RetVal rt_ty)
       with
-      | TypeError msg -> Error (fun e -> type_error e msg)
-      | Invalid_argument _ ->
-          Error (fun e -> type_error e "invalid number of arguments supplied"))
+      | TypeError msg -> Error msg
+      | Invalid_argument _ -> Error "invalid number of arguments supplied")
   | TRef (RFun (arg_types, RetVoid)) ->
-      if from_exp then
-        Error
-          (fun e ->
-            type_error e "assigning void function return type to variable.")
+      if from_exp then Error "assigning void function return type to variable."
       else
         let typed_args = typecheck_args arg_types in
         Ok (typed_args, RetVoid)
-  | _ -> Error (fun e -> type_error e "attempted to call a non-function type.")
+  | _ -> Error "attempted to call a non-function type."
+
+and type_method (proj : exp) (args : exp node list) (from_exp : bool)
+    (tc : Tctxt.t) :
+    (Typed_ast.exp * Typed_ast.exp list * Typed_ast.ret_ty, string) result =
+  match proj with
+  | Proj (obj, mth) -> (
+      let tobj, obj_ty = type_exp tc obj in
+      match obj_ty with
+      | Typed_ast.(TRef (RClass cid)) -> (
+          match Tctxt.lookup_method_option cid mth tc with
+          | Some (rt, argheaders) -> (
+              let argtypes = List.map (fun (t, _) -> t) argheaders in
+              let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
+              match type_func args temp_func from_exp tc with
+              | Error msg -> Error msg
+              | Ok (typed_args, rt) ->
+                  Ok (Typed_ast.Proj (tobj, mth), typed_args, rt))
+          | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
+      | _ -> Error "Attempting to call method of non-class type.")
+  | _ -> Error "Attemping to call method of non-class type."
 
 and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
     Typed_ast.exp * Typed_ast.ty =

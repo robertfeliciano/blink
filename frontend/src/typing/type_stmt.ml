@@ -74,24 +74,26 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         | None, RetVoid -> None
       in
       (tc, Typed_ast.Ret te_opt)
-  | SCall (en, ens) ->
-      let te, fty = type_exp tc en in
+  | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
+      match type_method (Proj (obj, mth)) args false tc with
+      | Error msg -> type_error stmt_n msg
+      | Ok (Proj (tobj, _), typed_args, RetVal _) ->
+          type_warning stmt_n "Ignoring non-void function";
+          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)))
+      | Ok (Proj (tobj, _), typed_args, _) ->
+          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)))
+      | _ -> type_error stmt_n "Unreachable state.")
+  | SCall (f, args) ->
+      let typed_callee, typ = type_exp tc f in
       let typed_args =
-        match fty with
-        | Typed_ast.(TRef (RFun (args, RetVoid))) -> args
-        | Typed_ast.(TRef (RFun (args, _))) ->
+        match type_func args typ false tc with
+        | Error msg -> type_error stmt_n msg
+        | Ok (typed_args, RetVal _) ->
             type_warning stmt_n "Ignoring non-void function";
-            args
-        | _ ->
-            type_error stmt_n
-              "How did we manage to parse this as a function call?"
+            typed_args
+        | Ok (typed_args, _) -> typed_args
       in
-      let t_ens =
-        List.map2
-          (fun en' arg_ty -> type_exp ~expected:arg_ty tc en' |> fst)
-          ens typed_args
-      in
-      (tc, Typed_ast.SCall (te, t_ens))
+      (tc, Typed_ast.SCall (typed_callee, typed_args))
   | If (cond, then_branch, else_branch) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
