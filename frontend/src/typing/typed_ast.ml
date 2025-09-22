@@ -52,6 +52,7 @@ type exp =
   | Cast of exp * ty
   | Range of exp * exp * bool
   | Proj of exp * id
+  | ObjCons of id * exp list
 
 type vdecl = id * ty * exp * bool
 

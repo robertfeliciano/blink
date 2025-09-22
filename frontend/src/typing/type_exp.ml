@@ -134,6 +134,13 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           )
       | _ -> type_error ec "Must project field of a class.")
 
+  | ObjCons (_cname, _args) -> type_error e "object constructor not allowed yet"
+    (* lookup class
+      get constructor (just cname)
+      check constructor args against given args
+      basically same as call  
+    *)
+
 and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
     (tc : Tctxt.t) : (Typed_ast.exp list * Typed_ast.ret_ty, string) result =
   let typecheck_args arg_types =

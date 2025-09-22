@@ -280,6 +280,12 @@ primary:
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array elems }
   | LPAREN e=exp RPAREN             { e }
+  | NEW id=IDENT LPAREN args=separated_list(COMMA, exp) RPAREN
+      { 
+        let id_node = { elt = id; loc = Range.mk_lex_range $startpos(id) $endpos(id) } in
+        loc $startpos $endpos @@ ObjCons (id_node, args)
+      }
+
 
 (* postfix: left-recursive so calls & indexes chain without ambiguity *)
 postfix:
