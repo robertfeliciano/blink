@@ -69,7 +69,15 @@ let rec show_exp = function
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
   | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp e) i
-  | ObjCons _ | ObjInit _ -> Printf.sprintf "will add later"
+  | ObjCons (cn, args) ->
+      Printf.sprintf "ObjCons(%s, [%s])" cn
+        (String.concat "; " (List.map show_exp args))
+  | ObjInit (cn, fields) ->
+      Printf.sprintf "ObjInit(%s, [%s])" cn
+        (String.concat "; "
+           (List.map
+              (fun (f, e) -> Printf.sprintf "%s=%s" f (show_exp e))
+              fields))
 
 let show_vdecl (id, ty, e, is_const) =
   Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)

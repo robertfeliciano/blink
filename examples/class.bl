@@ -1,6 +1,6 @@
 class Point { 
     let x: i32;
-    let y: i32;
+    let y: bool;
 }
 
 fun main(argv: [string; 2]) => i32 {

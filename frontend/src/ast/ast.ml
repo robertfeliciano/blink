@@ -176,7 +176,16 @@ let rec show_exp = function
       Printf.sprintf "new %s(%s)"
         (show_node (fun n -> n) i)
         (String.concat "; " (List.map (show_node show_exp) args))
-  | ObjInit _ -> Printf.sprintf "obj init"
+  | ObjInit (cn, fields) ->
+      Printf.sprintf "ObjInit(%s, [%s])"
+        (show_node (fun x -> x) cn)
+        (String.concat "; "
+           (List.map
+              (fun (f, e) ->
+                Printf.sprintf "%s=%s"
+                  (show_node (fun x -> x) f)
+                  (show_node show_exp e))
+              fields))
 
 let show_vdecl (id, ty_opt, exp, is_const) =
   Printf.sprintf "{ id = %s; ty = %s; exp = %s; is_const = %b }" id

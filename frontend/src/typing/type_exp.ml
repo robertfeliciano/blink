@@ -6,6 +6,7 @@ module Printer = Pprint_typed_ast
 let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
     (e : Ast.exp node) : Typed_ast.exp * Typed_ast.ty =
   let { elt = e'; loc = _ } = e in
+  (* todo CHECK FOR EXPECTED EVERYWHERE *)
   match e' with
   | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
   | Int i -> (
