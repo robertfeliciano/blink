@@ -62,6 +62,7 @@ type exp =
   | Array of exp node list
   | Cast of exp node * ty
   | ObjCons of id node * exp node list
+  | ObjInit of id node * (id node * exp node) list
   | Range of
       exp node * exp node * bool (* includes whether right bound is inclusive *)
 
@@ -175,6 +176,7 @@ let rec show_exp = function
       Printf.sprintf "new %s(%s)"
         (show_node (fun n -> n) i)
         (String.concat "; " (List.map (show_node show_exp) args))
+  | ObjInit _ -> Printf.sprintf "obj init"
 
 let show_vdecl (id, ty_opt, exp, is_const) =
   Printf.sprintf "{ id = %s; ty = %s; exp = %s; is_const = %b }" id

@@ -69,6 +69,7 @@ let rec show_exp = function
   | Range (start, stop, incl) ->
       Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
   | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp e) i
+  | ObjCons _ | ObjInit _ -> Printf.sprintf "will add later"
 
 let show_vdecl (id, ty, e, is_const) =
   Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)

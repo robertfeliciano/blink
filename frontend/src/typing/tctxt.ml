@@ -2,7 +2,7 @@ open Typed_ast
 
 type ctxt = (id * ty) list
 type method_header = id * ret_ty * (ty * id) list
-type class_ctxt = (id * ((id * ty) list * method_header list)) list
+type class_ctxt = (id * ((id * ty * bool) list * method_header list)) list
 (* class name * fields * (method name * return type * arg list) *)
 
 type t = { locals : ctxt; globals : ctxt; classes : class_ctxt }
@@ -48,9 +48,7 @@ let lookup_field_option c_name f_name c =
   let rec lookup_field_aux f_name l =
     match l with
     | [] -> None
-    | h :: t ->
-        let field_name = fst h in
-        let ftyp = snd h in
+    | (field_name, ftyp, _) :: t ->
         if field_name = f_name then Some ftyp else lookup_field_aux f_name t
   in
   match lookup_class_option c_name c with

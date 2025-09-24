@@ -1,6 +1,7 @@
 open Ast
 open Tctxt
 open Type_stmt
+open Type_exp
 open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
@@ -54,7 +55,15 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
             let cname = cn.elt.cname in
             let fields =
               List.map
-                (fun fn -> (fn.elt.fieldName, convert_ty fn.elt.ftyp))
+                (fun fn ->
+                  match fn.elt with
+                  | { fieldName; ftyp; init = Some init } ->
+                      let _tinit, init_ty =
+                        type_exp ~expected:(convert_ty ftyp) Tctxt.empty init
+                      in
+                      (fieldName, init_ty, true)
+                  | { fieldName; ftyp; init = None } ->
+                      (fieldName, convert_ty ftyp, false))
                 cn.elt.fields
             in
             let method_headers =

@@ -146,6 +146,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       else (tc, Typed_ast.Continue)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+(* TODO figure out how to determine if function returns or not -> error on no return *)
     (stmts : stmt node list) (in_loop : bool) : Tctxt.t * Typed_ast.stmt list =
   let tc_new, rev_stmts =
     List.fold_left

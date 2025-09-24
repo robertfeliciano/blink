@@ -285,7 +285,18 @@ primary:
         let id_node = { elt = id; loc = Range.mk_lex_range $startpos(id) $endpos(id) } in
         loc $startpos $endpos @@ ObjCons (id_node, args)
       }
+  | NEW cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE 
+      { 
+        let id_node = { elt = cid; loc = Range.mk_lex_range $startpos(cid) $endpos(cid) } in
+        loc $startpos $endpos @@ ObjInit (id_node, fields)
+      }
 
+field_init:
+  | fname=IDENT EQUAL e=exp
+      {
+        let fname_node = { elt = fname; loc = Range.mk_lex_range $startpos(fname) $endpos(fname) } in
+        (fname_node, e)
+      }
 
 (* postfix: left-recursive so calls & indexes chain without ambiguity *)
 postfix:

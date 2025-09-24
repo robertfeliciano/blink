@@ -53,6 +53,7 @@ type exp =
   | Range of exp * exp * bool
   | Proj of exp * id
   | ObjCons of id * exp list
+  | ObjInit of id * (id * exp) list
 
 type vdecl = id * ty * exp * bool
 

@@ -133,13 +133,53 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-
-  | ObjCons (_cname, _args) -> type_error e "object constructor not allowed yet"
-    (* lookup class
+  | ObjCons (_cname, _args) ->
+      type_error e "object constructor not allowed yet"
+      (* lookup class
       get constructor (just cname)
       check constructor args against given args
       basically same as call  
     *)
+  | ObjInit ({ elt = cname; loc = cloc }, inits) ->
+      let cfields, _methods =
+        match Tctxt.lookup_class_option cname tc with
+        | Some c -> c
+        | None ->
+            type_error
+              { elt = cname; loc = cloc }
+              ("Class  " ^ cname ^ " not found.")
+      in
+      let initializes_field field =
+        List.exists
+          (fun ({ elt = fname; loc = _ }, _init) -> fname = field)
+          inits
+      in
+      let missing_fields =
+        List.filter (fun (fname, _, _) -> not (initializes_field fname)) cfields
+        |> List.map (fun (fname, _, _) -> fname)
+      in
+      if missing_fields <> [] then
+        type_error e
+          ("Missing fields in " ^ cname ^ ": "
+          ^ String.concat ", " missing_fields);
+      let field_set = Hashtbl.create (List.length cfields) in
+      let type_field_inits (fname_node, init) =
+        let { elt = fname; loc = _ } = fname_node in
+        if Hashtbl.mem field_set fname then
+          type_error fname_node ("Already initialized field " ^ fname);
+        Hashtbl.add field_set fname ();
+        try
+          let _, fty, _ =
+            List.find (fun (fieldName, _, _) -> fieldName = fname) cfields
+          in
+          let tinit, _init_ty = type_exp ~expected:fty tc init in
+          (fname, tinit)
+        with Not_found ->
+          type_error e
+            ("Class " ^ cname ^ " does not contain member field " ^ fname)
+      in
+      let typed_inits = List.map type_field_inits inits in
+      (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
 
 and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
     (tc : Tctxt.t) : (Typed_ast.exp list * Typed_ast.ret_ty, string) result =
