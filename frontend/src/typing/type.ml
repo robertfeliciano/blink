@@ -18,7 +18,9 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
   in
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, id) -> (convert_ty ty, id)) args in
-  let _tc_final, typed_body = type_block tc' frtyp' body false in
+  let _tc_final, typed_body, does_ret = type_block tc' frtyp' body false in
+  if frtyp' <> RetVoid && not does_ret then
+    type_error (List.nth body ((List.length body) - 1)) ("missing return statement for " ^ fname);
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =

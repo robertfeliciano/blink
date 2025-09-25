@@ -43,7 +43,7 @@ let test_simple_err _ =
 let test_stmt _ =
   let e = Bop (Add, mk_node (Int (of_int 1)), mk_node (Int (of_int 4))) in
   let s = Decl ("x", None, mk_node e, false) in
-  let _, ts = Ts.type_stmt Tc.empty RetVoid (mk_node s) false in
+  let _, ts, _ = Ts.type_stmt Tc.empty RetVoid (mk_node s) false in
   let ty_s =
     match ts with
     | Typing.Typed_ast.Decl (_, ty_s, _, _) -> ty_s

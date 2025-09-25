@@ -6,13 +6,13 @@ open Conversions
 module Printer = Pprint_typed_ast
 
 let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
-    (in_loop : bool) : Tctxt.t * Typed_ast.stmt =
+    (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | Decl (i, None, en, const) ->
       let te, e_ty = type_exp tc en in
       let tc', resolved_ty = (add_local tc i e_ty, e_ty) in
-      (tc', Typed_ast.Decl (i, resolved_ty, te, const))
+      (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Decl (i, Some given_ty_ast, en, const) ->
       let given_ty = convert_ty given_ty_ast in
       let te, e_ty = type_exp ~expected:given_ty tc en in
@@ -48,11 +48,11 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
                 ("Provided type " ^ show_ty given_ty_ast
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
-      (tc', Typed_ast.Decl (i, resolved_ty, te, const))
+      (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Assn (lhs, op, rhs) ->
       let tlhs, lhsty = type_exp tc lhs in
       let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
-      (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs))
+      (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs), false)
   | Ret expr ->
       let te_opt =
         match (expr, frtyp) with
@@ -73,15 +73,15 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
              ^ ", found void.")
         | None, RetVoid -> None
       in
-      (tc, Typed_ast.Ret te_opt)
+      (tc, Typed_ast.Ret te_opt, true)
   | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args false tc with
       | Error msg -> type_error stmt_n msg
       | Ok (Proj (tobj, _), typed_args, RetVal _) ->
           type_warning stmt_n "Ignoring non-void function";
-          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)))
+          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)), false)
       | Ok (Proj (tobj, _), typed_args, _) ->
-          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)))
+          (tc, Typed_ast.(SCall (Proj (tobj, mth), typed_args)), false)
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
       let typed_callee, typ = type_exp tc f in
@@ -93,20 +93,22 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             typed_args
         | Ok (typed_args, _) -> typed_args
       in
-      (tc, Typed_ast.SCall (typed_callee, typed_args))
+      (tc, Typed_ast.SCall (typed_callee, typed_args), false)
   | If (cond, then_branch, else_branch) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "if condition must be bool";
-      let _tc_then, t_then = type_block tc frtyp then_branch in_loop in
-      let _tc_else, t_else = type_block tc frtyp else_branch in_loop in
-      (tc, Typed_ast.If (tcond, t_then, t_else))
+      let _tc_then, t_then, if_ret = type_block tc frtyp then_branch in_loop in
+      let _tc_else, t_else, else_ret =
+        type_block tc frtyp else_branch in_loop
+      in
+      (tc, Typed_ast.If (tcond, t_then, t_else), if_ret && else_ret)
   | While (cond, body) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "while condition must be bool";
-      let _tc_while, t_body = type_block tc frtyp body true in
-      (tc, Typed_ast.While (tcond, t_body))
+      let _tc_while, t_body, while_ret = type_block tc frtyp body true in
+      (tc, Typed_ast.While (tcond, t_body), while_ret)
   | For (i_node, iter_exp, step_opt, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
@@ -135,25 +137,24 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         (* ignored *)
       in
       let tc_loop = add_local tc i_node.elt elem_ty in
-      let _tc_body, t_body = type_block tc_loop frtyp body true in
-      (tc, Typed_ast.For (i_node.elt, titer, t_step, t_body))
+      let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
+      (tc, Typed_ast.For (i_node.elt, titer, t_step, t_body), for_ret)
   | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
-      else (tc, Typed_ast.Break)
+      else (tc, Typed_ast.Break, false)
   | Continue ->
       if not in_loop then
         type_error stmt_n "continue can only be used inside loop"
-      else (tc, Typed_ast.Continue)
+      else (tc, Typed_ast.Continue, false)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (* TODO figure out how to determine if function returns or not -> error on no return *)
-      (stmts : stmt node list) (in_loop : bool) : Tctxt.t * Typed_ast.stmt list
-    =
-  let tc_new, rev_stmts =
+      (stmts : stmt node list) (in_loop : bool) :
+    Tctxt.t * Typed_ast.stmt list * bool =
+  let tc_new, rev_stmts, does_ret =
     List.fold_left
-      (fun (tc_acc, tstmts) s ->
-        let tc', tstmt = type_stmt tc_acc frtyp s in_loop in
-        (tc', tstmt :: tstmts))
-      (tc, []) stmts
+      (fun (tc_acc, tstmts, _) s ->
+        let tc', tstmt, ret = type_stmt tc_acc frtyp s in_loop in
+        (tc', tstmt :: tstmts, ret))
+      (tc, [], false) stmts
   in
-  (tc_new, List.rev rev_stmts)
+  (tc_new, List.rev rev_stmts, does_ret)

@@ -66,8 +66,6 @@ type exp =
   | Range of
       exp node * exp node * bool (* includes whether right bound is inclusive *)
 
-(* TODO add class decl to exp type*)
-
 type vdecl = id * ty option * exp node * bool
 
 type stmt =
