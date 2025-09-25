@@ -7,4 +7,5 @@ fun main(argv: [string; 2]) => i32 {
     let p = new Point { x = 2, y = -1};
     let x = p.x;
     return x;
+    //let y = p.y;
 }

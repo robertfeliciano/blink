@@ -148,11 +148,13 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       else (tc, Typed_ast.Continue, false)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-      (stmts : stmt node list) (in_loop : bool) :
+    (stmts : stmt node list) (in_loop : bool) :
     Tctxt.t * Typed_ast.stmt list * bool =
   let tc_new, rev_stmts, does_ret =
     List.fold_left
-      (fun (tc_acc, tstmts, _) s ->
+      (fun (tc_acc, tstmts, does_ret) s ->
+        if does_ret then
+          type_error s "Dead code, function already returns before this.";
         let tc', tstmt, ret = type_stmt tc_acc frtyp s in_loop in
         (tc', tstmt :: tstmts, ret))
       (tc, [], false) stmts
