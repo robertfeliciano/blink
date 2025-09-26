@@ -1,4 +1,6 @@
 (library
  (name desugaring)
  (public_name blink.desugaring)
- (libraries core ast fmt))
+ (preprocess
+  (pps ppx_deriving.show))
+ (libraries core ast util fmt zarith))
