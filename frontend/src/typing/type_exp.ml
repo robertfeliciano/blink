@@ -8,7 +8,15 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   let { elt = e'; loc = _ } = e in
   (* todo CHECK FOR EXPECTED EVERYWHERE *)
   match e' with
-  | Bool b -> (Typed_ast.Bool b, Typed_ast.TBool)
+  | Bool b ->
+      (match expected with
+      | Some t ->
+          if not (equal_ty t TBool) then
+            type_error e
+              ("Expected " ^ Printer.show_ty t ^ " but received "
+             ^ Printer.show_ty TBool)
+      | None -> ());
+      (Typed_ast.Bool b, Typed_ast.TBool)
   | Int i -> (
       match expected with
       | Some (TInt target_ty) ->
@@ -18,6 +26,10 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
             type_error e
               ("Integer literal " ^ Z.to_string i ^ " does not fit in type "
               ^ Printer.show_ty (TInt target_ty))
+      | Some t ->
+          type_error e
+            ("Expected " ^ Printer.show_ty t ^ " but received "
+            ^ Printer.show_ty (TInt (TSigned Ti32)))
       | _ ->
           let inferred_ty = infer_integer_ty i e in
           (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
@@ -36,14 +48,36 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           ^ Printer.show_ty (TFloat target_ty))
   | Str s ->
       let ty = Typed_ast.(TRef RString) in
+      let target_ty =
+        match expected with
+        | Some target -> target
+        | None -> Typed_ast.(TRef RString)
+      in
+      if not (equal_ty ty target_ty) then
+        type_error e
+          ("Expected " ^ Printer.show_ty target_ty ^ " but received type "
+         ^ Printer.show_ty ty);
       (Typed_ast.Str s, ty)
   | Id i -> (
       match Tctxt.lookup_option i tc with
-      | Some t -> (Id i, t)
+      | Some t ->
+          (match expected with
+          | Some exp when not (equal_ty exp t) ->
+              type_error e
+                ("Expected " ^ Printer.show_ty exp ^ " but identifier has type "
+               ^ Printer.show_ty t)
+          | _ -> ());
+          (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args true tc with
       | Ok (Proj (tobj, _), typed_args, RetVal rt) ->
+          (match expected with
+          | Some exp when not (equal_ty exp rt) ->
+              type_error e
+                ("Expected " ^ Printer.show_ty exp ^ " but method call returns "
+               ^ Printer.show_ty rt)
+          | _ -> ());
           Typed_ast.(Call (Proj (tobj, mth), typed_args, rt), rt)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
@@ -52,6 +86,12 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       match type_func args typ true tc with
       | Error msg -> type_error e msg
       | Ok (typed_args, RetVal rt) ->
+          (match expected with
+          | Some exp when not (equal_ty exp rt) ->
+              type_error e
+                ("Expected " ^ Printer.show_ty exp
+               ^ " but function call returns " ^ Printer.show_ty rt)
+          | _ -> ());
           (Typed_ast.Call (typed_callee, typed_args, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
