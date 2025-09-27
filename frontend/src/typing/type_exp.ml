@@ -6,16 +6,9 @@ module Printer = Pprint_typed_ast
 let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
     (e : Ast.exp node) : Typed_ast.exp * Typed_ast.ty =
   let { elt = e'; loc = _ } = e in
-  (* todo CHECK FOR EXPECTED EVERYWHERE *)
   match e' with
   | Bool b ->
-      (match expected with
-      | Some t ->
-          if not (equal_ty t TBool) then
-            type_error e
-              ("Expected " ^ Printer.show_ty t ^ " but received "
-             ^ Printer.show_ty TBool)
-      | None -> ());
+      check_expected_ty expected TBool e;
       (Typed_ast.Bool b, Typed_ast.TBool)
   | Int i -> (
       match expected with
@@ -26,10 +19,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
             type_error e
               ("Integer literal " ^ Z.to_string i ^ " does not fit in type "
               ^ Printer.show_ty (TInt target_ty))
-      | Some t ->
-          type_error e
-            ("Expected " ^ Printer.show_ty t ^ " but received "
-            ^ Printer.show_ty (TInt (TSigned Ti32)))
+      | Some t -> unexpected_ty t e "integer"
       | _ ->
           let inferred_ty = infer_integer_ty i e in
           (Typed_ast.Int (i, inferred_ty), TInt inferred_ty))
@@ -37,8 +27,8 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       let target_ty =
         match expected with
         | Some (TFloat target_ty) -> target_ty
+        | Some t -> unexpected_ty t e "float"
         | None -> Typed_ast.Tf64
-        | _ -> type_error e "Will not cast float to non-float."
       in
       if fits_in_float_ty f target_ty then
         (Float (f, target_ty), TFloat target_ty)
@@ -47,37 +37,18 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           ("Float literal " ^ Float.to_string f ^ " does not fit in type "
           ^ Printer.show_ty (TFloat target_ty))
   | Str s ->
-      let ty = Typed_ast.(TRef RString) in
-      let target_ty =
-        match expected with
-        | Some target -> target
-        | None -> Typed_ast.(TRef RString)
-      in
-      if not (equal_ty ty target_ty) then
-        type_error e
-          ("Expected " ^ Printer.show_ty target_ty ^ " but received type "
-         ^ Printer.show_ty ty);
-      (Typed_ast.Str s, ty)
+      check_expected_ty expected (TRef RString) e;
+      Typed_ast.(Str s, TRef RString)
   | Id i -> (
       match Tctxt.lookup_option i tc with
       | Some t ->
-          (match expected with
-          | Some exp when not (equal_ty exp t) ->
-              type_error e
-                ("Expected " ^ Printer.show_ty exp ^ " but identifier has type "
-               ^ Printer.show_ty t)
-          | _ -> ());
+          check_expected_ty expected t e;
           (Id i, t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args true tc with
       | Ok (Proj (tobj, _), typed_args, RetVal rt) ->
-          (match expected with
-          | Some exp when not (equal_ty exp rt) ->
-              type_error e
-                ("Expected " ^ Printer.show_ty exp ^ " but method call returns "
-               ^ Printer.show_ty rt)
-          | _ -> ());
+          check_expected_ty expected rt e;
           Typed_ast.(Call (Proj (tobj, mth), typed_args, rt), rt)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
@@ -86,19 +57,16 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       match type_func args typ true tc with
       | Error msg -> type_error e msg
       | Ok (typed_args, RetVal rt) ->
-          (match expected with
-          | Some exp when not (equal_ty exp rt) ->
-              type_error e
-                ("Expected " ^ Printer.show_ty exp
-               ^ " but function call returns " ^ Printer.show_ty rt)
-          | _ -> ());
+          check_expected_ty expected rt e;
           (Typed_ast.Call (typed_callee, typed_args, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
       match eval_const_exp e with
-      | Some ev -> (Typed_ast.Int (ev, TSigned Ti32), TInt (TSigned Ti32))
+      | Some ev -> 
+        let inferred_int_ty = infer_integer_ty ev e in 
+        (Typed_ast.Int (ev, inferred_int_ty), TInt inferred_int_ty)
       | None ->
           let binop' = convert_binop binop in
           let res_ty =
@@ -131,7 +99,8 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
                 type_error e "Cannot assign negative number to unsigned int."
             | _ -> t)
         | Not, t when t = TBool -> TBool
-        | _ -> type_error e "bad operand type"
+        | _, t ->
+            type_error e ("bad operand type, received " ^ Printer.show_ty t)
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
@@ -139,8 +108,11 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       let arr_ty =
         match iter_ty with
         | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
-        | _ -> type_error e "cannot index non-array type"
+        | t ->
+            type_error e
+              ("cannot index non-array type, recieved " ^ Printer.show_ty t)
       in
+      check_expected_ty expected arr_ty e;
       let t_idx, idx_ty = type_exp tc e_idx in
       let _ =
         match idx_ty with
@@ -152,6 +124,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   | Cast (e, t) ->
       let te, e_ty = type_exp tc e in
       let tty = convert_ty t in
+      check_expected_ty expected tty e;
       if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
       else
         type_error e
@@ -160,6 +133,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
   | Range (el, er, incl) ->
       let tel, el_ty = type_exp tc el in
       let ter, er_ty = type_exp tc er in
+      (* TODO check expected type is range class *)
       if all_numbers [ el_ty; er_ty ] then
         (* TODO figure out if we should check if bounds are mixed floats/ints or not *)
         ( Typed_ast.Range (tel, ter, incl),
@@ -170,7 +144,9 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       match e_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
           match Tctxt.lookup_field_option cid f tc with
-          | Some fty -> (Typed_ast.Proj (tec, f), fty)
+          | Some fty ->
+              check_expected_ty expected fty e;
+              (Typed_ast.Proj (tec, f), fty)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
@@ -190,6 +166,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
               { elt = cname; loc = cloc }
               ("Class  " ^ cname ^ " not found.")
       in
+      check_expected_ty expected (TRef (RClass cname)) e;
       let initializes_field field =
         List.exists
           (fun ({ elt = fname; loc = _ }, _init) -> fname = field)
@@ -284,24 +261,24 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       type_error en
         ("Expected " ^ Printer.show_ty other ^ " but got empty array.")
   | Array (h :: t), exp_opt ->
-      let exp_elt, exp_len =
+      let exp_ty, exp_len =
         match exp_opt with
-        | Some (TRef (RArray (ety, elen))) -> (Some ety, Some elen)
+        | Some (TRef (RArray (ety, elen))) ->
+            check_expected_ty expected (TRef (RArray (ety, elen))) en;
+            (Some ety, Some elen)
         | _ -> (None, None)
       in
       let th, h_ty =
-        match exp_elt with
+        match exp_ty with
         | Some ety -> type_exp ~expected:ety tc h
         | None -> type_exp tc h
       in
       let typed_elems =
         List.map
           (fun elem ->
-            let te, ty =
-              match exp_elt with
-              | Some ety -> type_exp ~expected:ety tc elem
-              | None -> type_exp tc elem
-            in
+            (* now that the head of the array has been typechecked 
+             we can just check the rest of the array must match the head's type *)
+            let te, ty = type_exp ~expected:h_ty tc elem in
             if equal_ty ty h_ty then te
             else
               type_error elem

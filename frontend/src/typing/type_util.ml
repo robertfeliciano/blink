@@ -146,6 +146,7 @@ and equal_ref_ty (r1 : Typed_ast.ref_ty) (r2 : Typed_ast.ref_ty) : bool =
       (* parameter lists must be *equal* to be equal types *)
       (* if you want exact function type equality incl. params: *)
       false
+  | RClass c1, RClass c2 -> String.equal c1 c2
   | _ -> false
 
 and equal_ret_ty (r1 : Typed_ast.ret_ty) (r2 : Typed_ast.ret_ty) : bool =
@@ -261,3 +262,15 @@ let rec eval_const_exp (e : exp node) : Z.t option =
       | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
       | _ -> None)
   | _ -> None
+
+let unexpected_ty expected e =
+ fun received ->
+  type_error e
+    ("Expteced type " ^ Printer.show_ty expected ^ ", received type " ^ received)
+
+let check_expected_ty (expected : Typed_ast.ty option) (actual : Typed_ast.ty)
+    (e : Ast.exp node) : unit =
+  match expected with
+  | Some t when not (equal_ty t actual) ->
+      unexpected_ty t e (Printer.show_ty actual)
+  | _ -> ()
