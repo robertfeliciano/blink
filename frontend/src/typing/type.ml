@@ -7,8 +7,7 @@ open Conversions
 module Printer = Pprint_typed_ast
 
 let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
-  let { elt = f; loc = _ } = fn in
-  let { frtyp; fname; args; body } = f in
+  let { elt = { frtyp; fname; args; body }; loc = _ } = fn in
   let tc' =
     List.fold_left
       (fun acc (t, a) ->
@@ -25,8 +24,28 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
       ("missing return statement for " ^ fname);
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
-(* let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =  *)
+let type_field (tc : Tctxt.t) (fn : field node) : Typed_ast.field =
+  let { elt = { fieldName; ftyp; init }; loc = _ } = fn in
+  let tinit, init_ty =
+    match init with
+    | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
+    | None -> type_error fn "bleh"
+  in
+  { fieldName; ftyp = init_ty; init = tinit }
 
+let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
+  (* 
+  typecheck fields and add to local scope of each method
+  add `this` to local scope as well
+  now typecheck method bodies with their local scopes populated above
+
+  *)
+  let { elt = { cname; impls; fields; methods }; loc = _ } = cn in
+  let tc' =
+    { tc with locals = ("this", Typed_ast.(TRef (RClass cname))) :: tc.locals }
+  in
+  let tmethods = List.map (type_fn tc') methods in
+  { cname; impls; fields = List.map (type_field tc) fields; methods = tmethods }
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) = function
