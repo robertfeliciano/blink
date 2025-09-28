@@ -25,6 +25,9 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
       ("missing return statement for " ^ fname);
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
+(* let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =  *)
+
+
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) = function
     | fn :: t -> (

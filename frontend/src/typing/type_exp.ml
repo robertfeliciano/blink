@@ -64,9 +64,9 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       let te1, lty = type_exp tc e1 in
       let te2, rty = type_exp tc e2 in
       match eval_const_exp e with
-      | Some ev -> 
-        let inferred_int_ty = infer_integer_ty ev e in 
-        (Typed_ast.Int (ev, inferred_int_ty), TInt inferred_int_ty)
+      | Some ev ->
+          let inferred_int_ty = infer_integer_ty ev e in
+          (Typed_ast.Int (ev, inferred_int_ty), TInt inferred_int_ty)
       | None ->
           let binop' = convert_binop binop in
           let res_ty =

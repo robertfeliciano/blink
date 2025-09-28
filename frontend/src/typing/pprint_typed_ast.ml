@@ -84,9 +84,9 @@ let show_vdecl (id, ty, e, is_const) =
     (show_exp e) is_const
 
 let rec show_stmt = function
-  | Assn (lhs, op, rhs) ->
-      Printf.sprintf "Assn(%s, %s, %s)" (show_exp lhs) (show_aop op)
-        (show_exp rhs)
+  | Assn (lhs, op, rhs, t) ->
+      Printf.sprintf "Assn(%s, %s, %s, %s)" (show_exp lhs) (show_aop op)
+        (show_exp rhs) (show_ty t)
   | Decl v -> show_vdecl v
   | Ret eo ->
       Printf.sprintf "Ret(%s)"

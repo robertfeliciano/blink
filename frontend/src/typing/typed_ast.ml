@@ -58,7 +58,7 @@ type exp =
 type vdecl = id * ty * exp * bool
 
 type stmt =
-  | Assn of exp * aop * exp
+  | Assn of exp * aop * exp * ty
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
   | SCall of exp * exp list

@@ -50,9 +50,12 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Assn (lhs, op, rhs) ->
+      (match lhs.elt with
+      | Id _ -> ()
+      | _ -> type_error lhs "cannot assign to this expression");
       let tlhs, lhsty = type_exp tc lhs in
       let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
-      (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs), false)
+      (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs, lhsty), false)
   | Ret expr ->
       let te_opt =
         match (expr, frtyp) with
