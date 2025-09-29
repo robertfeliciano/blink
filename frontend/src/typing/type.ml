@@ -29,23 +29,26 @@ let type_field (tc : Tctxt.t) (fn : field node) : Typed_ast.field =
   let tinit, init_ty =
     match init with
     | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
-    | None -> type_error fn "bleh"
+    | None -> type_error fn "deafult initializers not yet allowed."
+    (* going to have to use some kind of null value for classes and defaults for primitives *)
   in
   { fieldName; ftyp = init_ty; init = tinit }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
-  (* 
-  typecheck fields and add to local scope of each method
-  add `this` to local scope as well
-  now typecheck method bodies with their local scopes populated above
-
-  *)
   let { elt = { cname; impls; fields; methods }; loc = _ } = cn in
+  let tfields = List.map (type_field tc) fields in
+  let globals' =
+    List.map (fun (f : Typed_ast.field) -> (f.fieldName, f.ftyp)) tfields
+  in
   let tc' =
-    { tc with locals = ("this", Typed_ast.(TRef (RClass cname))) :: tc.locals }
+    {
+      tc with
+      locals = ("this", Typed_ast.(TRef (RClass cname))) :: tc.locals;
+      globals = globals' @ tc.globals;
+    }
   in
   let tmethods = List.map (type_fn tc') methods in
-  { cname; impls; fields = List.map (type_field tc) fields; methods = tmethods }
+  { cname; impls; fields = tfields; methods = tmethods }
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) = function
@@ -106,8 +109,9 @@ let type_program (prog : Ast.program) : Typed_ast.program =
   let (Prog (fns, cns)) = prog in
   let cc = create_class_ctxt Tctxt.empty cns in
   let fc = create_fn_ctxt cc fns in
-  let fns_t = List.map (fun fn -> type_fn fc fn) fns in
-  Prog (fns_t, [])
+  let typed_classes = List.map (fun cn -> type_class fc cn) cns in
+  let typed_funs = List.map (fun fn -> type_fn fc fn) fns in
+  Prog (typed_funs, typed_classes)
 
 let type_prog (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
   try Ok (type_program prog)
