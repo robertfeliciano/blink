@@ -30,7 +30,6 @@ let type_field (tc : Tctxt.t) (fn : field node) : Typed_ast.field =
     match init with
     | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
     | None -> type_error fn "deafult initializers not yet allowed."
-    (* going to have to use some kind of null value for classes and defaults for primitives *)
   in
   { fieldName; ftyp = init_ty; init = tinit }
 

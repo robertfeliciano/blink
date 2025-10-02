@@ -104,18 +104,18 @@ type program = Prog of fdecl node list * cdecl node list [@@boxed]
 external convert_caml_ast : program -> unit = "convert_caml_ast"
 
 let show_sint = function
-  | Ti8 -> "Ti8"
-  | Ti16 -> "Ti16"
-  | Ti32 -> "Ti32"
-  | Ti64 -> "Ti64"
-  | Ti128 -> "Ti128"
+  | Ti8 -> "i8"
+  | Ti16 -> "i16"
+  | Ti32 -> "i32"
+  | Ti64 -> "i64"
+  | Ti128 -> "i128"
 
 let show_uint = function
-  | Tu8 -> "Tu8"
-  | Tu16 -> "Tu16"
-  | Tu32 -> "Tu32"
-  | Tu64 -> "Tu64"
-  | Tu128 -> "Tu128"
+  | Tu8 -> "u8"
+  | Tu16 -> "u16"
+  | Tu32 -> "u32"
+  | Tu64 -> "u64"
+  | Tu128 -> "u128"
 
 let show_float_ty = function Tf32 -> "Tf32" | Tf64 -> "Tf64"
 

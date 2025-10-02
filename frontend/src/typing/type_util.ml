@@ -274,3 +274,43 @@ let check_expected_ty (expected : Typed_ast.ty option) (actual : Typed_ast.ty)
   | Some t when not (equal_ty t actual) ->
       unexpected_ty t e (Printer.show_ty actual)
   | _ -> ()
+
+(* let mangle_int = function
+  | TSigned s -> show_sint s
+  | TUnsigned u -> show_uint u
+
+let mangle_float = function Tf32 -> "f32" | Tf64 -> "f64"
+
+let mangle_name ?(enclosing_class : id option) (fname : id) (tys : ty list) : id
+    =
+  let len_and_name e = Printf.sprintf "%d%s" (String.length e) e in
+  let base = "_Z" in
+  let mangled_class =
+    match enclosing_class with
+    | Some cname -> "N" ^ len_and_name cname
+    | None -> ""
+  in
+  let mangled_fun = len_and_name fname in
+  let base = base ^ mangled_class ^ mangled_fun in
+  let base = if Option.is_some enclosing_class then base ^ "E" else base in
+  match tys with
+  | [] -> base ^ "v"
+  | _ ->
+      base
+      ^ String.concat ""
+          (List.map
+             (fun t ->
+               let mangled_ty =
+                 match t with
+                 | TBool -> "b"
+                 | TInt i -> mangle_int i
+                 | TFloat f -> mangle_float f
+                 | TRef (RClass cname) -> len_and_name cname
+                 | TRef RString -> "str"
+                 | TRef (RArray (_, _))
+                 | TRef (RFun (_, _)) 
+                 | TRef (RRange (_, _)) ->
+                  failwith "this type not supported yet"
+               in
+               mangled_ty)
+             tys) *)

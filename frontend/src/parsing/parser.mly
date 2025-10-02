@@ -305,7 +305,7 @@ postfix:
       { loc $startpos $endpos @@ Index (p, i) }
   | p=postfix LPAREN args=separated_list(COMMA, exp) RPAREN
       { loc $startpos $endpos @@ Call (p, args) }
-  | p=postfix AS t=ty_spec
+  | p=postfix AS t=ty
       { loc $startpos $endpos @@ Cast (p, t) }
   | p=postfix DOT i=IDENT
       { loc $startpos $endpos @@ Proj (p, i) }
