@@ -13,6 +13,7 @@ let base_op = function
 
 let rec desugar_stmt (stmt : stmt) : stmt =
   match stmt with
+  (* dont forget to desugar all exps *)
   | Assn (lhs, op, rhs, t) when op <> Eq ->
       let op' = base_op op in
       let rhs' = Bop (op', lhs, rhs, t) in
@@ -24,4 +25,6 @@ let rec desugar_stmt (stmt : stmt) : stmt =
   | While (cond, body) ->
       let desugared_body = List.map desugar_stmt body in
       While (cond, desugared_body)
+  | SCall (Proj(inst, mname), arglist) -> 
+      SCall (Id mname, inst::arglist)
   | _ -> stmt
