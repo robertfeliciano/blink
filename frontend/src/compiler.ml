@@ -1,12 +1,13 @@
 open Core
 open Parsing.Parse
 open Typing.Type
+open Desugaring.Desugar
 open Typing.Pprint_typed_ast
 
 let ( >>= ) r f = match r with Ok v -> f v | Error _ as e -> e
 
 let compile ?(print_ast = false) (lexbuf : Lexing.lexbuf) =
-  match parse_prog lexbuf >>= type_prog with
+  match parse_prog lexbuf >>= type_prog >>= desugar_prog with
   | Ok prog ->
       if print_ast then printf "%s\n" (show_typed_program prog)
       else printf "Done!\n"

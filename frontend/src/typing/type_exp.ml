@@ -82,7 +82,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
                 else type_error e "&& or || used on non-bool arguments"
             | At -> type_error e "@ not yet supported."
             | _ ->
-              (* TODO think about casting constants if possible *)
+                (* TODO think about casting constants if possible *)
                 let args_valid = all_numbers [ lty; rty ] && equal_ty rty lty in
                 if not args_valid then
                   type_error e "using binary operator on non-number types"
