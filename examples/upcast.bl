@@ -2,8 +2,8 @@ fun main(args: [string; 2]) => u16 {
     let x: u8 = 0;
     
     let y = 12;
-    let f:f64 = y;
+    let f:f64 = y as f64;
 
 
-    return x;
+    return x as u16;
 }
