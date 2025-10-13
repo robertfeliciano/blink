@@ -1,5 +1,13 @@
 (test
  (name frontend_tests)
  (modules frontend_tests test_typing test_parsing test_desugaring e2e util)
- (libraries blink.parsing blink.desugaring blink.typing blink.ast ounit2 zarith core)
- (preprocess (pps ppx_jane)))
+ (libraries
+  blink.parsing
+  blink.desugaring
+  blink.typing
+  blink.ast
+  ounit2
+  zarith
+  core)
+ (preprocess
+  (pps ppx_jane)))

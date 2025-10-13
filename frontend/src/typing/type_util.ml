@@ -275,6 +275,13 @@ let check_expected_ty (expected : Typed_ast.ty option) (actual : Typed_ast.ty)
       unexpected_ty t e (Printer.show_ty actual)
   | _ -> ()
 
+let is_hardcoded = function Typed_ast.(Int _ | Float _) -> true | _ -> false
+
+let default_of_ty = function
+  | Typed_ast.(TInt _) -> Ok (TInt (TSigned Ti32))
+  | Typed_ast.(TFloat _) -> Ok (TFloat Tf64)
+  | _ -> Error (fun e -> type_error e "impossible state")
+
 (* let mangle_int = function
   | TSigned s -> show_sint s
   | TUnsigned u -> show_uint u

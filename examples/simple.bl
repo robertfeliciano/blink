@@ -10,10 +10,10 @@ fun main(argv: [string; 2]) => i32 {
         x += i;
     }
     */
-    while i < right_bound(x) {
-        x = x + i;
+    let i: u8 = 0;
+    while i < right_bound(x as u8) {
+        x = x + i as u32;
         i = i + 2;
     }
-    print(x);
     return 0;
 }

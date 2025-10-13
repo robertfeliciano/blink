@@ -211,6 +211,7 @@ ret_ty_spec:
 
 ref_ty:
   | TSTRING { RString }
+  | cname=IDENT { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
   | tl=ty RANGE tr=ty { RRange (tl, tr) }
 

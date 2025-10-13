@@ -1,21 +1,29 @@
 fun main(argv: [string; 2]) => u64 {
     let x: u8 = otherFunc(42, "somestring", nestedBrah(17));
-    let y: u8 = x / 2;
-    continue; 
-    break;
-    if (x < 3) {
+    let y: u8 = x / 2 as u8;
+    let a = x as i32;
+    if (a< 3) {
         return 3;
-    } else if (x > 6) {
+    } else if (a > 6) {
         return 9;
     } else {
         return 4;
     }
-
-    
-    while (i < 10) {
-        let x: u32 = 99;
-    }
-    
-    //let a: i8 = 1 + 2 - 3 * 4 / x @ 5 % y ** 6 == 7 != 8 < 9 <= 10 > 11 >= 12 and 13 or 14;
-    return 1+2*2;
 }
+
+fun nestedBrah(x: i32) => i32 { 
+    return x * 2;
+}
+
+/*
+one day we will print!
+*/
+fun printf(s: string) => void {
+    return;
+}
+
+fun otherFunc(a: i32, s: string, b: i32) => u8 { 
+    printf(s);
+    return (a+b) as u8;
+}
+

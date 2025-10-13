@@ -79,13 +79,18 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
             | And | Or ->
                 if lty = Typed_ast.TBool && rty = Typed_ast.TBool then
                   Typed_ast.TBool
-                else type_error e "&& or || used on non-bool arguments"
+                else type_error e "boolean operator used on non-bool arguments"
             | At -> type_error e "@ not yet supported."
             | _ ->
-                (* TODO think about casting constants if possible *)
-                let args_valid = all_numbers [ lty; rty ] && equal_ty rty lty in
+                let args_valid = all_numbers [ lty; rty ] in
                 if not args_valid then
                   type_error e "using binary operator on non-number types"
+                else if is_hardcoded te1 || is_hardcoded te2 then
+                  meet_number e (lty, rty)
+                else if not (equal_ty lty rty) then
+                  type_error e
+                    ("no operator between " ^ Printer.show_ty lty ^ " and "
+                   ^ Printer.show_ty rty)
                 else meet_number e (lty, rty)
           in
           (Typed_ast.Bop (binop', te1, te2, res_ty), res_ty))

@@ -1,4 +1,4 @@
 fun main(argv: [string; 2]) => u64 {
     const x: u16 = 5+3*4;
-    return x;
+    return x as u64;
 }

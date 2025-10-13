@@ -1,11 +1,14 @@
 class Point { 
-    let x: i8 = 0;
-    let y: bool = false;
+    let x: i32 = 0;
+    let y: i32 = 0;
+
+    fun distance_squared(other: Point) => i32 {
+        return (this.x - other.x)**2 - (this.y - other.y)**2;
+    }
 }
 
 fun main(argv: [string; 2]) => i32 {
-    let p = new Point { x = 2, y = true};
-    let x = p.x + (9 as i8);
-    return (x + 14 as i8) as i32;
-    //let y = p.y;
+    let p = new Point { x = 2, y = 4 };
+    let p2 = new Point { x = 4, y = 9 };
+    return p.distance_squared(p2);
 }

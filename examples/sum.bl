@@ -5,14 +5,17 @@ fun summation(start: i8, end: i8) => i8 {
         s += n;
     }
     */
+    let start = 0;
+    let end = 10;
+    let n: u8 = 2;
     while (start <= end) {
         s = s + n;
     }
-    return s;
+    return s as i8;
 }
 
 fun main(argv: [string; 2]) => i32 {
-    let sum: i8 = summation(0, argv[1]);
+    let sum: i8 = summation(0 as i8, argv[1] as i8); //this cast should fail
     if (sum < 100) {
         print("hi");
     } else {

@@ -79,14 +79,16 @@ let test_array_and_index _ =
 let test_range _ =
   let r = Range (mk_node (Int (of_int 1)), mk_node (Int (of_int 5)), true) in
   let _, ty = Te.type_exp Tc.empty (mk_node r) in
-  (match ty with
+  match ty with
   | Typing.Typed_ast.TRef (Typing.Typed_ast.RRange (t1, t2)) ->
       assert_bool "bounds are numbers" (Tu.all_numbers [ t1; t2 ])
-  | _ -> assert_failure "expected range type")
+  | _ -> assert_failure "expected range type"
 
 let test_fn_call_ok _ =
   let open Typing.Typed_ast in
-  let fn_ty = TRef (RFun ([ TInt (TSigned Ti32) ], RetVal (TInt (TSigned Ti32)))) in
+  let fn_ty =
+    TRef (RFun ([ TInt (TSigned Ti32) ], RetVal (TInt (TSigned Ti32))))
+  in
   let tc = Tc.add_global Tc.empty "f" fn_ty in
   let call = Ast.(Call (mk_node (Id "f"), [ mk_node (Int (of_int 42)) ])) in
   let _, ty = Te.type_exp tc (mk_node call) in
@@ -100,10 +102,15 @@ let test_fn_call_err _ =
 let test_method_call_ok _ =
   let open Typing.Typed_ast in
   (* create class C with method m(x:i32) -> i32 *)
-  let method_hdr = ("m", RetVal (TInt (TSigned Ti32)), [ (TInt (TSigned Ti32), "x") ]) in
+  let method_hdr =
+    ("m", RetVal (TInt (TSigned Ti32)), [ (TInt (TSigned Ti32), "x") ])
+  in
   let tc1 = Tc.add_class Tc.empty "C" [] [ method_hdr ] in
   let tc2 = Tc.add_global tc1 "c" (TRef (RClass "C")) in
-  let call = Ast.(Call (mk_node (Proj (mk_node (Id "c"), "m")), [ mk_node (Int (of_int 7)) ])) in
+  let call =
+    Ast.(
+      Call (mk_node (Proj (mk_node (Id "c"), "m")), [ mk_node (Int (of_int 7)) ]))
+  in
   let _, ty = Te.type_exp tc2 (mk_node call) in
   assert_equal ty (TInt (TSigned Ti32))
 

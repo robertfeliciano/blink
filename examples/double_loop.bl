@@ -15,7 +15,7 @@ fun main(argv: [string; 2]) => i32 {
 */
 
 fun main(argv: [[string; 2]; 2]) => i32 {
-    let i: u8 = 0;
+    let i = 0;
     while i < 10 {
         let j: i32 = i;
         while j <= 10 {
