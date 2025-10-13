@@ -91,7 +91,6 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token QMARK     /* ? */
 %token AS
 
-%right POW
 %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
 %left AND
@@ -99,6 +98,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left LT LTE GT GTE
 %left PLUS MINUS
 %left MULT DIV MOD
+%right POW
 %left AT
 %left DOT
 %left RANGE RANGE_INCL
