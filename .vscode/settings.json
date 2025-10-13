@@ -89,7 +89,8 @@
         "*.ipp": "cpp",
         "__node_handle": "cpp",
         "forward_list": "cpp",
-        "__hash_table": "cpp"
+        "__hash_table": "cpp",
+        "__tree": "cpp"
     },
     "github.copilot.enable": {
         "*": false,
