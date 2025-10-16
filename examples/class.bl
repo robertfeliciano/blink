@@ -8,6 +8,8 @@ class Point {
 }
 
 fun main(argv: [string; 2]) => i32 {
+    let x = 10;
+    x += 5;
     let p = new Point { x = 2, y = 4 };
     let p2 = new Point { x = 4, y = 9 };
     return p.distance_squared(p2);
