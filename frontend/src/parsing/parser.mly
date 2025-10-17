@@ -213,7 +213,6 @@ ref_ty:
   | TSTRING { RString }
   | cname=IDENT { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
-  | tl=ty RANGE tr=ty { RRange (tl, tr) }
 
 %inline bop:
   | PLUS  { Add }
@@ -281,11 +280,6 @@ primary:
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array elems }
   | LPAREN e=exp RPAREN             { e }
-  | NEW id=IDENT LPAREN args=separated_list(COMMA, exp) RPAREN
-      { 
-        let id_node = { elt = id; loc = Range.mk_lex_range $startpos(id) $endpos(id) } in
-        loc $startpos $endpos @@ ObjCons (id_node, args)
-      }
   | NEW cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE 
       { 
         let id_node = { elt = cid; loc = Range.mk_lex_range $startpos(cid) $endpos(cid) } in

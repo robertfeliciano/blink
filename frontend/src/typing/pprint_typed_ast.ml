@@ -66,12 +66,7 @@ let rec show_exp = function
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty) sz
   | Cast (e, t) -> Printf.sprintf "Cast(%s, %s)" (show_exp e) (show_ty t)
-  | Range (start, stop, incl) ->
-      Printf.sprintf "Range(%s, %s, %b)" (show_exp start) (show_exp stop) incl
   | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp e) i
-  | ObjCons (cn, args) ->
-      Printf.sprintf "ObjCons(%s, [%s])" cn
-        (String.concat "; " (List.map show_exp args))
   | ObjInit (cn, fields) ->
       Printf.sprintf "ObjInit(%s, [%s])" cn
         (String.concat "; "

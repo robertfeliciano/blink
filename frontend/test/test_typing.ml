@@ -76,14 +76,6 @@ let test_array_and_index _ =
   let _, ity = Te.type_exp Tc.empty (mk_node idx) in
   assert_equal ity Typing.Typed_ast.(TInt (TSigned Ti32))
 
-let test_range _ =
-  let r = Range (mk_node (Int (of_int 1)), mk_node (Int (of_int 5)), true) in
-  let _, ty = Te.type_exp Tc.empty (mk_node r) in
-  match ty with
-  | Typing.Typed_ast.TRef (Typing.Typed_ast.RRange (t1, t2)) ->
-      assert_bool "bounds are numbers" (Tu.all_numbers [ t1; t2 ])
-  | _ -> assert_failure "expected range type"
-
 let test_fn_call_ok _ =
   let open Typing.Typed_ast in
   let fn_ty =
@@ -130,7 +122,6 @@ let suite =
          "cast ok" >:: test_cast_ok;
          "cast err" >:: test_cast_err;
          "array and index" >:: test_array_and_index;
-         "range" >:: test_range;
          "fn call ok" >:: test_fn_call_ok;
          "fn call err" >:: test_fn_call_err;
          "method call ok" >:: test_method_call_ok;

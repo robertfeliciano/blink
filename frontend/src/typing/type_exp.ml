@@ -136,15 +136,6 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
         type_error e
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
          ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
-  | Range (el, er, incl) ->
-      let tel, el_ty = type_exp tc el in
-      let ter, er_ty = type_exp tc er in
-      (* TODO check expected type is range class *)
-      if all_numbers [ el_ty; er_ty ] then
-        (* TODO figure out if we should check if bounds are mixed floats/ints or not *)
-        ( Typed_ast.Range (tel, ter, incl),
-          Typed_ast.TRef (Typed_ast.RRange (el_ty, er_ty)) )
-      else type_error e "Range must have numeric bounds..."
   | Proj (ec, f) -> (
       let tec, e_ty = type_exp tc ec in
       match e_ty with
@@ -156,13 +147,6 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-  | ObjCons (_cname, _args) ->
-      type_error e "object constructor not allowed yet"
-      (* lookup class
-      get constructor (just cname)
-      check constructor args against given args
-      basically same as call  
-    *)
   | ObjInit ({ elt = cname; loc = cloc }, inits) ->
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with

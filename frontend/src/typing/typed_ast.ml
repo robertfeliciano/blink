@@ -50,9 +50,7 @@ type exp =
   | Index of exp * exp * ty
   | Array of exp list * ty * int64
   | Cast of exp * ty
-  | Range of exp * exp * bool
   | Proj of exp * id
-  | ObjCons of id * exp list
   | ObjInit of id * (id * exp) list
 
 type vdecl = id * ty * exp * bool
