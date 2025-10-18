@@ -112,34 +112,34 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         type_error cond "while condition must be bool";
       let _tc_while, t_body, while_ret = type_block tc frtyp body true in
       (tc, Typed_ast.While (tcond, t_body), while_ret)
-  | For (_i_node, (_from, _fin, _incl), _step_opt, _body) -> 
+  | For (_i_node, (_start, _fin, _incl), _step_opt, _body) -> 
     failwith "not yet"
   | ForEach (i_node, iter_exp, step_opt, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
         match iter_ty with
+        | Typed_ast.(TRef (RClass cls)) -> (
+          let lookup mthd = Tctxt.lookup_method_option cls mthd tc in 
+          match lookup "__iter__", lookup "__hasNext__" with 
+          | Some (RetVal r, _), Some (RetVal b, _) when b = TBool -> r
+          | _ -> type_error iter_exp ("Class " ^ cls ^ " must implement __iter__ and __hasNext__.")
+        )
         | Typed_ast.(TRef (RArray (t, _))) -> t
         | Typed_ast.(TRef RString) -> Typed_ast.(TInt (TSigned Ti8))
-        | Typed_ast.(TRef (RRange (t1, _t2))) -> t1
         | _ ->
             type_error iter_exp
-              "for loop must iterate over an array, string, or range"
+              "For-loop must iterate over an array, string, or iterable class."
       in
       let t_step =
-        match (iter_ty, step_opt) with
-        | Typed_ast.(TRef (RRange _)), Some step_exp ->
-            let ts, step_ty = type_exp tc step_exp in
-            if is_number step_ty then ts
-            else type_error step_exp "for loop step must be an integer"
-        | Typed_ast.(TRef (RRange _)), None ->
+        match step_opt with
+        | Some s ->
+          let ts, s_ty = type_exp tc s in 
+          (match s_ty with 
+          | TInt _ -> ts 
+          | _ -> type_error s "Step must be integer.")
+        | None ->
+          (* default step size is 1 *)
             Typed_ast.(Int (Z.of_int 1, TSigned Ti32))
-        | _, Some _ ->
-            type_error iter_exp
-              "step is only allowed when iterating over ranges"
-        | _, None ->
-            (* no step needed for strings/arrays *)
-            Typed_ast.(Int (Z.of_int 1, TSigned Ti32))
-        (* ignored *)
       in
       let tc_loop = add_local tc i_node.elt elem_ty in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in

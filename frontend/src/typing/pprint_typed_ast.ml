@@ -26,7 +26,6 @@ let show_int_ty = function
 let rec show_ref_ty = function
   | RString -> "RString"
   | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
-  | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
   | RClass cn -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in

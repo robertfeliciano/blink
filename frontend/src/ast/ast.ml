@@ -19,7 +19,6 @@ type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
 and ref_ty =
   | RString
   | RArray of ty * Z.t
-  | RRange of ty * ty
   | RClass of id
   | RFun of ty list * ret_ty
 
@@ -126,7 +125,6 @@ let rec show_ref_ty = function
   | RString -> "RString"
   | RArray (t, sz) ->
       Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
-  | RRange (t1, t2) -> Printf.sprintf "RRange(%s, %s)" (show_ty t1) (show_ty t2)
   | RClass cn -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in

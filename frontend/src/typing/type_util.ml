@@ -51,9 +51,6 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   | RClass c ->
       if None = Tctxt.lookup_class_option c tc then
         type_error l "class undefined"
-  | RRange (t1, t2) ->
-      typecheck_ty l tc t1;
-      typecheck_ty l tc t2
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt

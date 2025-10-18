@@ -1,0 +1,14 @@
+fun printf(s: string) => void {
+    return;
+}
+
+fun main(argc: i32, argv: [string; 2]) => i32 {
+    for x in 0..12 by 2 {
+        printf("hi");
+    }
+    let arr = [1,2,3,4];
+    for elem in arr {
+        printf("heh");
+    }
+    return 0;
+}
