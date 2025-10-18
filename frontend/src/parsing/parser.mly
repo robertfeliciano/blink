@@ -347,11 +347,20 @@ stmt:
   | WHILE e=exp b=block
       { loc $startpos $endpos @@ While(e, b) }
   | FOR iter=iterator IN iterable=exp step=by_step b=block
-      { loc $startpos $endpos @@ For(iter, iterable, step, b) }
+      { loc $startpos $endpos @@ ForEach(iter, iterable, step, b) }
+  | FOR iter=iterator IN over=range step=by_step b=block 
+      { loc $startpos $endpos @@ For(iter, over, step, b) }
   | CONT SEMI
       { loc $startpos $endpos @@ Continue }
   | BREAK SEMI
       { loc $startpos $endpos @@ Break }
+
+range: 
+  | start=exp RANGE fin=exp
+    { (start, fin, false) }
+  | start=exp RANGE_INCL fin=exp 
+    { (start, fin, true) }
+
 
 (* call as a statement; we parse it separately to produce an SCall node.
    Because Calls are handled by postfix, we accept: postfix LPAREN args RPAREN SEMI  *)

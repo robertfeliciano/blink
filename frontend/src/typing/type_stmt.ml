@@ -112,7 +112,9 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         type_error cond "while condition must be bool";
       let _tc_while, t_body, while_ret = type_block tc frtyp body true in
       (tc, Typed_ast.While (tcond, t_body), while_ret)
-  | For (i_node, iter_exp, step_opt, body) ->
+  | For (_i_node, (_from, _fin, _incl), _step_opt, _body) -> 
+    failwith "not yet"
+  | ForEach (i_node, iter_exp, step_opt, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
         match iter_ty with
