@@ -92,8 +92,12 @@ let rec show_stmt = function
       Printf.sprintf "If(%s, [%s], [%s])" (show_exp cond)
         (String.concat "; " (List.map show_stmt tblock))
         (String.concat "; " (List.map show_stmt eblock))
-  | For (id, start, stop, body) ->
-      Printf.sprintf "For(%s, %s, %s, [%s])" id (show_exp start) (show_exp stop)
+  | ForEach (id, iter, step, body) ->
+      Printf.sprintf "For(%s, %s, %s, [%s])" id (show_exp iter) (show_exp step)
+        (String.concat "; " (List.map show_stmt body))
+  | For (id, start, stop, incl, step, body) ->
+      Printf.sprintf "For(%s, %s, %s, %b, step=%s, [%s])" id (show_exp start)
+        (show_exp stop) incl (show_exp step)
         (String.concat "; " (List.map show_stmt body))
   | While (cond, body) ->
       Printf.sprintf "While(%s, [%s])" (show_exp cond)

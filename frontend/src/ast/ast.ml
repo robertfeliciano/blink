@@ -71,7 +71,11 @@ type stmt =
   | SCall of exp node * exp node list
   | If of exp node * block * block
   | ForEach of id node * exp node * exp node option * block
-  | For of id node * (exp node * exp node * bool) * exp node option * block
+  | For of
+      id node
+      * (exp node * exp node * bool)
+      * exp node option
+      * block (* iterator, start, stop, incl, step, body *)
   | While of exp node * block
   | Break
   | Continue
@@ -207,9 +211,7 @@ let rec show_stmt = function
   | For (id, (start, fin, incl), step_opt, body) ->
       Printf.sprintf "For(%s from %s to %s, incl=%b, step=%s, [%s])"
         (show_node (fun x -> x) id)
-        (show_node show_exp start)
-        (show_node show_exp fin)
-        incl
+        (show_node show_exp start) (show_node show_exp fin) incl
         (match step_opt with Some s -> show_node show_exp s | None -> "None")
         (String.concat "; " (List.map show_node_stmt body))
   | While (cond, body) ->

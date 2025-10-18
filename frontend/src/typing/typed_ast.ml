@@ -60,7 +60,14 @@ type stmt =
   | Ret of exp option
   | SCall of exp * exp list
   | If of exp * block * block
-  | For of id * exp * exp * block
+  | For of
+      id
+      * exp
+      * exp
+      * bool
+      * exp
+      * block (* iterator, start, stop, incl, step, body *)
+  | ForEach of id * exp * exp * block
   | While of exp * block
   | Break
   | Continue

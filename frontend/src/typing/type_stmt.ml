@@ -112,18 +112,45 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         type_error cond "while condition must be bool";
       let _tc_while, t_body, while_ret = type_block tc frtyp body true in
       (tc, Typed_ast.While (tcond, t_body), while_ret)
-  | For (_i_node, (_start, _fin, _incl), _step_opt, _body) -> 
-    failwith "not yet"
+  | For (i_node, (start, fin, incl), step_opt, body) ->
+      let tstart, start_ty = type_exp tc start in
+      let tfin, fin_ty = type_exp tc fin in
+      if not (is_number start_ty) then
+        type_error start "Expected number type for left bound.";
+      if not (is_number fin_ty) then
+        type_error fin "Expected number type for right bound.";
+      if not (equal_ty start_ty fin_ty) then
+        type_error fin
+          ("Expected right bound to have type " ^ Printer.show_ty start_ty
+         ^ " so as to match left bound.");
+      let t_step =
+        match step_opt with
+        | Some s ->
+            let ts, s_ty = type_exp tc s in
+            if not (equal_ty s_ty start_ty) then
+              type_error s
+                ("Expected type " ^ Printer.show_ty start_ty
+               ^ " so as to match bounds.");
+            ts
+        | None -> default_step start_ty stmt_n
+      in
+      let tc_loop = add_local tc i_node.elt start_ty in
+      let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
+      ( tc,
+        Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, t_body),
+        for_ret )
   | ForEach (i_node, iter_exp, step_opt, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
         match iter_ty with
         | Typed_ast.(TRef (RClass cls)) -> (
-          let lookup mthd = Tctxt.lookup_method_option cls mthd tc in 
-          match lookup "__iter__", lookup "__hasNext__" with 
-          | Some (RetVal r, _), Some (RetVal b, _) when b = TBool -> r
-          | _ -> type_error iter_exp ("Class " ^ cls ^ " must implement __iter__ and __hasNext__.")
-        )
+            let lookup mthd = Tctxt.lookup_method_option cls mthd tc in
+            match (lookup "__iter__", lookup "__hasNext__") with
+            | Some (RetVal r, _), Some (RetVal b, _) when b = TBool -> r
+            | _ ->
+                type_error iter_exp
+                  ("Class " ^ cls ^ " must implement __iter__ and __hasNext__.")
+            )
         | Typed_ast.(TRef (RArray (t, _))) -> t
         | Typed_ast.(TRef RString) -> Typed_ast.(TInt (TSigned Ti8))
         | _ ->
@@ -132,18 +159,18 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       let t_step =
         match step_opt with
-        | Some s ->
-          let ts, s_ty = type_exp tc s in 
-          (match s_ty with 
-          | TInt _ -> ts 
-          | _ -> type_error s "Step must be integer.")
+        | Some s -> (
+            let ts, s_ty = type_exp tc s in
+            match s_ty with
+            | TInt _ -> ts
+            | _ -> type_error s "Step must be integer.")
         | None ->
-          (* default step size is 1 *)
+            (* default step size is 1 *)
             Typed_ast.(Int (Z.of_int 1, TSigned Ti32))
       in
       let tc_loop = add_local tc i_node.elt elem_ty in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
-      (tc, Typed_ast.For (i_node.elt, titer, t_step, t_body), for_ret)
+      (tc, Typed_ast.ForEach (i_node.elt, titer, t_step, t_body), for_ret)
   | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
       else (tc, Typed_ast.Break, false)

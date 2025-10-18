@@ -279,6 +279,12 @@ let default_of_ty = function
   | Typed_ast.(TFloat _) -> Ok (TFloat Tf64)
   | _ -> Error (fun e -> type_error e "impossible state")
 
+let default_step t enode =
+  match t with
+  | Typed_ast.(TInt int_ty) -> Typed_ast.Int (Z.of_int 1, int_ty)
+  | Typed_ast.(TFloat float_ty) -> Typed_ast.Float (1.0, float_ty)
+  | _ -> type_error enode "impossible state"
+
 (* let mangle_int = function
   | TSigned s -> show_sint s
   | TUnsigned u -> show_uint u
