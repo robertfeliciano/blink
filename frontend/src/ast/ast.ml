@@ -70,7 +70,7 @@ type stmt =
   | Ret of exp node option
   | SCall of exp node * exp node list
   | If of exp node * block * block
-  | ForEach of id node * exp node * exp node option * block
+  | ForEach of id node * exp node * block (* no step in for-each *)
   | For of
       id node
       * (exp node * exp node * bool)
@@ -200,13 +200,10 @@ let rec show_stmt = function
       Printf.sprintf "If(%s, [%s], [%s])" (show_node show_exp cond)
         (String.concat "; " (List.map show_node_stmt then_block))
         (String.concat "; " (List.map show_node_stmt else_block))
-  | ForEach (id, start, stop_opt, body) ->
-      Printf.sprintf "For(%s in %s, %s, [%s])"
+  | ForEach (id, start, body) ->
+      Printf.sprintf "For(%s in %s, [%s])"
         (show_node (fun x -> x) id)
         (show_node show_exp start)
-        (match stop_opt with
-        | Some stop -> show_node show_exp stop
-        | None -> "None")
         (String.concat "; " (List.map show_node_stmt body))
   | For (id, (start, fin, incl), step_opt, body) ->
       Printf.sprintf "For(%s from %s to %s, incl=%b, step=%s, [%s])"

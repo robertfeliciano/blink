@@ -4,6 +4,7 @@ open Type_exp
 open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
+module Methods = Util.Constants.Methods
 
 let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
     (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
@@ -139,38 +140,27 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       ( tc,
         Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, t_body),
         for_ret )
-  | ForEach (i_node, iter_exp, step_opt, body) ->
+  | ForEach (i_node, iter_exp, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
       let elem_ty =
         match iter_ty with
         | Typed_ast.(TRef (RClass cls)) -> (
             let lookup mthd = Tctxt.lookup_method_option cls mthd tc in
-            match (lookup "__iter__", lookup "__hasNext__") with
+            match (lookup Methods.iterate, lookup Methods.hasNext) with
             | Some (RetVal r, _), Some (RetVal b, _) when b = TBool -> r
             | _ ->
                 type_error iter_exp
-                  ("Class " ^ cls ^ " must implement __iter__ and __hasNext__.")
-            )
+                  ("Class " ^ cls ^ " must implement " ^ Methods.iterate
+                 ^ " and " ^ Methods.hasNext ^ "."))
         | Typed_ast.(TRef (RArray (t, _))) -> t
         | Typed_ast.(TRef RString) -> Typed_ast.(TInt (TSigned Ti8))
         | _ ->
             type_error iter_exp
               "For-loop must iterate over an array, string, or iterable class."
       in
-      let t_step =
-        match step_opt with
-        | Some s -> (
-            let ts, s_ty = type_exp tc s in
-            match s_ty with
-            | TInt _ -> ts
-            | _ -> type_error s "Step must be integer.")
-        | None ->
-            (* default step size is 1 *)
-            Typed_ast.(Int (Z.of_int 1, TSigned Ti32))
-      in
       let tc_loop = add_local tc i_node.elt elem_ty in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
-      (tc, Typed_ast.ForEach (i_node.elt, titer, t_step, t_body), for_ret)
+      (tc, Typed_ast.ForEach (i_node.elt, titer, t_body), for_ret)
   | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
       else (tc, Typed_ast.Break, false)

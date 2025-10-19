@@ -1,5 +1,6 @@
 open Ast
 module Printer = Pprint_typed_ast
+module Math = Util.Constants.Math
 
 exception TypeError of string
 
@@ -189,7 +190,7 @@ let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
     TSigned Ti32
   else if geq n (of_int64 Int64.min_int) && leq n (of_int64 Int64.max_int) then
     TSigned Ti64
-  else if geq n zero && leq n (Z.of_string "18446744073709551615") then
+  else if geq n zero && leq n (Z.of_string Math.max128) then
     (* max uint64*)
     TUnsigned Tu64
   else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")

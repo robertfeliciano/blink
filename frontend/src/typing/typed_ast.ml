@@ -67,7 +67,7 @@ type stmt =
       * bool
       * exp
       * block (* iterator, start, stop, incl, step, body *)
-  | ForEach of id * exp * exp * block
+  | ForEach of id * exp * block (* TODO add type of collection to this *)
   | While of exp * block
   | Break
   | Continue

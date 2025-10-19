@@ -346,8 +346,8 @@ stmt:
       { loc $startpos $endpos @@ Ret(e) }
   | WHILE e=exp b=block
       { loc $startpos $endpos @@ While(e, b) }
-  | FOR iter=iterator IN iterable=exp step=by_step b=block
-      { loc $startpos $endpos @@ ForEach(iter, iterable, step, b) }
+  | FOR iter=iterator IN iterable=exp b=block
+      { loc $startpos $endpos @@ ForEach(iter, iterable, b) }
   | FOR iter=iterator IN over=range step=by_step b=block 
       { loc $startpos $endpos @@ For(iter, over, step, b) }
   | CONT SEMI
