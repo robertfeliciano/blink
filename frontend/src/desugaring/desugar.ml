@@ -4,7 +4,7 @@ open Desugar_class
 module Typed = Typing.Typed_ast
 
 let desugar_fn (fn : Typed.fdecl) =
-  let body = List.map desugar_stmt fn.body in
+  let body = List.map desugar_stmt fn.body |> List.flatten in
   { fn with body }
 
 let desugar_program (prog : Typed.program) : Typed.program =

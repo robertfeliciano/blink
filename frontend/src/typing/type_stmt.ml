@@ -124,7 +124,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         type_error fin
           ("Expected right bound to have type " ^ Printer.show_ty start_ty
          ^ " so as to match left bound.");
-      let t_step =
+      let t_step, s_ty =
         match step_opt with
         | Some s ->
             let ts, s_ty = type_exp tc s in
@@ -132,13 +132,13 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
               type_error s
                 ("Expected type " ^ Printer.show_ty start_ty
                ^ " so as to match bounds.");
-            ts
-        | None -> default_step start_ty stmt_n
+            (ts, s_ty)
+        | None -> (default_step start_ty stmt_n, Typed_ast.TInt (TSigned Ti32))
       in
       let tc_loop = add_local tc i_node.elt start_ty in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
       ( tc,
-        Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, t_body),
+        Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, s_ty, t_body),
         for_ret )
   | ForEach (i_node, iter_exp, body) ->
       let titer, iter_ty = type_exp tc iter_exp in
@@ -160,7 +160,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       let tc_loop = add_local tc i_node.elt elem_ty in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
-      (tc, Typed_ast.ForEach (i_node.elt, titer, t_body), for_ret)
+      (tc, Typed_ast.ForEach (i_node.elt, titer, iter_ty, t_body), for_ret)
   | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
       else (tc, Typed_ast.Break, false)
