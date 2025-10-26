@@ -1,8 +1,6 @@
 open Desugared_ast
 module PT = Typing.Pprint_typed_ast
 
-let show_field = PT.show_field
-
 let show_cdecl { cname; fields } =
   Printf.sprintf "cdecl{name=%s; fields=[\n%s\n]}"
     cname
