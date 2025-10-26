@@ -228,9 +228,20 @@ let show_fdecl { frtyp; fname; args; body } =
           args))
     (String.concat "" (List.map show_node_stmt body))
 
+let show_field { fieldName; ftyp; init } =
+  Printf.sprintf "%s: %s = %s" fieldName (show_ty ftyp)
+    (match init with Some exp -> show_node show_exp exp | None -> "None")
+
+let show_cdecl { elt = { cname; impls; fields; methods }; loc = _ } =
+  Printf.sprintf "cdecl{name=%s; impls=%s;\nfields=%s;\nmethods=%s}" cname
+    (String.concat ", " impls)
+    (String.concat "\n" (List.map (show_node show_field) fields))
+    (String.concat "\n" (List.map (fun m -> show_fdecl m.elt) methods))
+
 let show_decl d = show_fdecl d.elt
 
 let show_prog (p : program) =
-  let (Prog (fns, _cns)) = p in
-  let aux fn s = s ^ show_decl fn ^ "\n" in
-  List.fold_right aux fns "\n"
+  let (Prog (fns, cns)) = p in
+  let auxf fn s = s ^ show_decl fn ^ "\n" in
+  let auxc cn s = s ^ show_cdecl cn ^ "\n" in
+  List.fold_right auxc cns "\n" ^ List.fold_right auxf fns "\n"

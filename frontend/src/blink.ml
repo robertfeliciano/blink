@@ -23,11 +23,15 @@ let command =
     Command.Let_syntax.(
       let%map_open print_ast =
         flag "-print-ast" no_arg ~doc:"Pretty print the initial AST"
+      and print_tast =
+        flag "-print-typed-ast" no_arg ~doc:"Pretty print the typed AST"
+      and print_dast = 
+        flag "-print-desugared-ast" no_arg ~doc:"Pretty print the desugared AST"
       and filename = anon (maybe_with_default "-" ("filename" %: blink_file)) in
       fun () ->
         In_channel.with_file filename ~f:(fun ic ->
             let lexbuf = Lexing.from_channel ic in
             lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-            compile ~print_ast lexbuf))
+            compile ~print_ast ~print_tast ~print_dast lexbuf))
 
 let () = Command_unix.run ~version:"1.0" ~build_info:"RWO" command

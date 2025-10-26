@@ -117,5 +117,15 @@ let show_fdecl { frtyp; fname; args; body } =
           args))
     (show_block body)
 
-let show_typed_program (Prog (fns, _)) =
-  String.concat "\n" (List.map show_fdecl fns)
+let show_field { fieldName; ftyp; init } =
+  Printf.sprintf "%s: %s = %s" fieldName (show_ty ftyp) (show_exp init)
+
+let show_cdecl { cname; impls; fields; methods } =
+  Printf.sprintf "cdecl{name=%s; impls=%s;\nfields=%s;\nmethods=%s}" cname
+    (String.concat ", " impls)
+    (String.concat "\n" (List.map show_field fields))
+    (String.concat "\n" (List.map show_fdecl methods))
+
+let show_typed_program (Prog (fns, cns)) =
+  String.concat "\n" (List.map show_cdecl cns)
+  ^ String.concat "\n" (List.map show_fdecl fns)

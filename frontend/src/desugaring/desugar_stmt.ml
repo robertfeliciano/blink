@@ -13,7 +13,7 @@ let base_op = function
   | ModEq -> Mod
   | Eq -> desugar_error "unreachable state"
 
-let rec desugar_stmt (stmt : stmt) : stmt list =
+let rec desugar_stmt (stmt : stmt) : Desugared_ast.stmt list =
   match stmt with
   | Assn (lhs, op, rhs, t) when op <> Eq ->
       let op' = base_op op in
@@ -25,8 +25,9 @@ let rec desugar_stmt (stmt : stmt) : stmt list =
       [ If (desugar_exp cond, desugared_then, desugared_else) ]
   | For (iter, start, fin, incl, step, ty, body) ->
       let step_ = Id "%step" in
+      let iter_ = Id iter in
       let step_assn = Assn (step_, Eq, step, ty) in
-      let iter_assn = Assn (Id iter, Eq, start, ty) in
+      let iter_assn = Assn (iter_, Eq, start, ty) in
       let zero = get_zero ty in
       let up_to = if incl then Lte else Lt in
       let down_to = if incl then Gte else Gt in
@@ -40,7 +41,7 @@ let rec desugar_stmt (stmt : stmt) : stmt list =
               While
                 ( create_cond down_to,
                   desugared_body
-                  @ [ Assn (Id iter, Eq, Bop (Sub, Id iter, step, ty), ty) ] );
+                  @ [ Assn (iter_, Eq, Bop (Sub, iter_, step_, ty), ty) ] );
             ],
             [] )
       in
@@ -51,7 +52,7 @@ let rec desugar_stmt (stmt : stmt) : stmt list =
               While
                 ( create_cond up_to,
                   desugared_body
-                  @ [ Assn (Id iter, Eq, Bop (Add, Id iter, step, ty), ty) ] );
+                  @ [ Assn (iter_, Eq, Bop (Add, iter_, step_, ty), ty) ] );
             ],
             [ step_dec ] )
         (* else if, decrement *)
