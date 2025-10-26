@@ -1,13 +1,8 @@
 open Desugared_ast
 module PT = Typing.Pprint_typed_ast
 
-(* Since most types in desugared_ast alias Typed_ast,
-   we can reuse the Pprint_typed_ast show functions directly. *)
-
-let show_fdecl = PT.show_fdecl
 let show_field = PT.show_field
 
-(* The only structure that differs is cdecl (simplified) and program. *)
 let show_cdecl { cname; fields } =
   Printf.sprintf "cdecl{name=%s; fields=[\n%s\n]}"
     cname
