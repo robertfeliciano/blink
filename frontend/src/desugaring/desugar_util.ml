@@ -1,4 +1,4 @@
-open Typing.Typed_ast
+open Desugared_ast
 
 exception DesugarError of string
 
