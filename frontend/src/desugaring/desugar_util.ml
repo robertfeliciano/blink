@@ -1,7 +1,6 @@
 open Desugared_ast
 open Pprint_desugared_ast
 
-
 exception DesugarError of string
 
 let desugar_error err = raise (DesugarError err)
@@ -14,7 +13,6 @@ let get_zero ty =
       desugar_error
         "this should have ben caught earlier, but we expect numbers in the \
          bounds and step of a loop"
-
 
 let mangle_int = function
   | TSigned s -> show_sint s
@@ -40,17 +38,13 @@ let mangle_name ?(enclosing_class : id option) (fname : id) (tys : ty list) : id
       base
       ^ String.concat ""
           (List.map
-             (fun t ->
-               let mangled_ty =
-                 match t with
-                 | TBool -> "b"
-                 | TInt i -> mangle_int i
-                 | TFloat f -> mangle_float f
-                 | TRef (RClass cname) -> len_and_name cname
-                 | TRef RString -> "str"
-                 | TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ (Int64.to_string sz)
-                 | TRef (RFun (_, _)) ->
-                  failwith "passing lambda functions not supported yet"
-               in
-               mangled_ty)
+             (function
+               | TBool -> "b"
+               | TInt i -> mangle_int i
+               | TFloat f -> mangle_float f
+               | TRef (RClass cname) -> len_and_name cname
+               | TRef RString -> "str"
+               | TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
+               | TRef (RFun (_, _)) ->
+                   failwith "passing lambda functions not supported yet")
              tys)

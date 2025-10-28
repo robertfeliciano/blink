@@ -25,7 +25,7 @@ let command =
         flag "-print-ast" no_arg ~doc:"Pretty print the initial AST"
       and print_tast =
         flag "-print-typed-ast" no_arg ~doc:"Pretty print the typed AST"
-      and print_dast = 
+      and print_dast =
         flag "-print-desugared-ast" no_arg ~doc:"Pretty print the desugared AST"
       and filename = anon (maybe_with_default "-" ("filename" %: blink_file)) in
       fun () ->

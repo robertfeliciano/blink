@@ -73,38 +73,44 @@ let rec show_exp ?(lvl = 0) = function
   | Id id -> Printf.sprintf "Id(%s)" id
   | Call (fn, args, ty) ->
       let args_s =
-        String.concat ", "
-          (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
+        String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
       in
-      Printf.sprintf "Call(%s, [%s], %s)" (show_exp ~lvl:(lvl + 1) fn) args_s
-        (show_ty ty)
+      Printf.sprintf "Call(%s, [%s], %s)"
+        (show_exp ~lvl:(lvl + 1) fn)
+        args_s (show_ty ty)
   | Bop (op, lhs, rhs, ty) ->
       Printf.sprintf "Bop(%s,\n%s%s,\n%s%s,\n%s%s)" (show_binop op)
-        (indent (lvl + 1)) (show_exp ~lvl:(lvl + 1) lhs)
-        (indent (lvl + 1)) (show_exp ~lvl:(lvl + 1) rhs)
-        (indent (lvl + 1)) (show_ty ty)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) lhs)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) rhs)
+        (indent (lvl + 1))
+        (show_ty ty)
   | Uop (op, e, ty) ->
       Printf.sprintf "Uop(%s, %s, %s)" (show_unop op)
-        (show_exp ~lvl:(lvl + 1) e) (show_ty ty)
+        (show_exp ~lvl:(lvl + 1) e)
+        (show_ty ty)
   | Index (arr, idx, ty) ->
-      Printf.sprintf "Index(%s, %s, %s)" (show_exp ~lvl:(lvl + 1) arr)
-        (show_exp ~lvl:(lvl + 1) idx) (show_ty ty)
+      Printf.sprintf "Index(%s, %s, %s)"
+        (show_exp ~lvl:(lvl + 1) arr)
+        (show_exp ~lvl:(lvl + 1) idx)
+        (show_ty ty)
   | Array (elems, ty, sz) ->
       let elems_s =
-        String.concat ", "
-          (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)
+        String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)
       in
       Printf.sprintf "Array([%s], %s; %Ld)" elems_s (show_ty ty) sz
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
-  | Proj (e, i) ->
-      Printf.sprintf "Proj(%s, %s)" (show_exp ~lvl:(lvl + 1) e) i
+  | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp ~lvl:(lvl + 1) e) i
   | ObjInit (cn, fields) ->
       let fs =
         String.concat ";\n"
           (List.map
              (fun (f, e) ->
-               Printf.sprintf "%s%s=%s" (indent (lvl + 1)) f
+               Printf.sprintf "%s%s=%s"
+                 (indent (lvl + 1))
+                 f
                  (show_exp ~lvl:(lvl + 2) e))
              fields)
       in
@@ -113,7 +119,9 @@ let rec show_exp ?(lvl = 0) = function
 (* Declarations *)
 let show_vdecl ?(lvl = 0) (id, ty, e, is_const) =
   Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
-    (show_ty ty) is_const (indent (lvl + 1)) (show_exp ~lvl:(lvl + 1) e)
+    (show_ty ty) is_const
+    (indent (lvl + 1))
+    (show_exp ~lvl:(lvl + 1) e)
 
 (* Statements *)
 let rec show_stmt ?(lvl = 0) = function
@@ -128,21 +136,21 @@ let rec show_stmt ?(lvl = 0) = function
   | Decl v -> show_vdecl ~lvl v
   | Ret eo ->
       let e_s =
-        match eo with
-        | None -> "None"
-        | Some e -> show_exp ~lvl:(lvl + 1) e
+        match eo with None -> "None" | Some e -> show_exp ~lvl:(lvl + 1) e
       in
       Printf.sprintf "%sRet(%s)" (indent lvl) e_s
   | SCall (fn, args) ->
       let args_s =
-        String.concat ", "
-          (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
+        String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
       in
       Printf.sprintf "%sSCall(%s, [%s])" (indent lvl)
-        (show_exp ~lvl:(lvl + 1) fn) args_s
+        (show_exp ~lvl:(lvl + 1) fn)
+        args_s
   | If (cond, tblock, eblock) ->
       Printf.sprintf "%sIf(\n%scond=%s,\n%sthen=[\n%s\n%s],\n%selse=[\n%s\n%s])"
-        (indent lvl) (indent (lvl + 1)) (show_exp ~lvl:(lvl + 1) cond)
+        (indent lvl)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) cond)
         (indent (lvl + 1))
         (String.concat ";\n"
            (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) tblock))
@@ -153,15 +161,19 @@ let rec show_stmt ?(lvl = 0) = function
         (indent lvl)
   | ForEach (id, iter, iter_ty, body) ->
       Printf.sprintf "%sForEach(%s in %s : %s [\n%s\n%s])" (indent lvl) id
-        (show_exp ~lvl:(lvl + 1) iter) (show_ty iter_ty)
+        (show_exp ~lvl:(lvl + 1) iter)
+        (show_ty iter_ty)
         (String.concat ";\n"
            (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
         (indent lvl)
   | For (id, start, stop, incl, step, step_ty, body) ->
-      Printf.sprintf
-        "%sFor(%s = %s to %s incl=%b step=%s : %s [\n%s\n%s])" (indent lvl) id
-        (show_exp ~lvl:(lvl + 1) start) (show_exp ~lvl:(lvl + 1) stop) incl
-        (show_exp ~lvl:(lvl + 1) step) (show_ty step_ty)
+      Printf.sprintf "%sFor(%s = %s to %s incl=%b step=%s : %s [\n%s\n%s])"
+        (indent lvl) id
+        (show_exp ~lvl:(lvl + 1) start)
+        (show_exp ~lvl:(lvl + 1) stop)
+        incl
+        (show_exp ~lvl:(lvl + 1) step)
+        (show_ty step_ty)
         (String.concat ";\n"
            (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
         (indent lvl)
@@ -186,9 +198,10 @@ let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
          (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
          args)
   in
-  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}" 
+  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
     (indent lvl) fname (show_ret_ty frtyp) args_s
-    (show_block ~lvl:(lvl + 1) body) (indent lvl)
+    (show_block ~lvl:(lvl + 1) body)
+    (indent lvl)
 
 let show_field ?(lvl = 0) { fieldName; ftyp; init } =
   Printf.sprintf "%s%s: %s = %s" (indent lvl) fieldName (show_ty ftyp)
@@ -199,7 +212,9 @@ let show_cdecl ?(lvl = 0) { cname; fields } =
     String.concat ";\n" (List.map (fun f -> show_field ~lvl:(lvl + 1) f) fields)
   in
   Printf.sprintf "%scdecl{name=%s; \n%sfields=[\n%s];\n}"
-    (indent (lvl + 1)) cname fields_s (indent (lvl + 1))
+    (indent (lvl + 1))
+    cname fields_s
+    (indent (lvl + 1))
 
 let show_desugared_program (Prog (fns, cns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:0) cns) in

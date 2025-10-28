@@ -285,4 +285,3 @@ let default_step t enode =
   | Typed_ast.(TInt int_ty) -> Typed_ast.Int (Z.of_int 1, int_ty)
   | Typed_ast.(TFloat float_ty) -> Typed_ast.Float (1.0, float_ty)
   | _ -> type_error enode "impossible state"
-

@@ -10,7 +10,7 @@ let base_op = function
   | Typed.MinEq -> D.Sub
   | Typed.TimEq -> D.Mul
   | Typed.DivEq -> D.Div
-  | Typed.AtEq  -> D.At
+  | Typed.AtEq -> D.At
   | Typed.PowEq -> D.Pow
   | Typed.ModEq -> D.Mod
   | Typed.Eq -> desugar_error "unreachable state"
@@ -26,7 +26,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let t' = convert_ty t in
       let rhs' = D.Bop (op', lhs', desugar_exp rhs, t') in
       [ Assn (lhs', rhs', t') ]
-  | Assn (lhs, _eq, rhs, t) -> 
+  | Assn (lhs, _eq, rhs, t) ->
       let lhs' = desugar_exp lhs in
       let t' = convert_ty t in
       let rhs' = desugar_exp rhs in
@@ -36,12 +36,12 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let desugared_else = desugar_block b2 in
       [ D.If (desugar_exp cond, desugared_then, desugared_else) ]
   | For (iter, start, fin, incl, step, ty, body) ->
-      let step = desugar_exp step in 
+      let step = desugar_exp step in
       let start = desugar_exp start in
-      let fin = desugar_exp fin in 
+      let fin = desugar_exp fin in
       let step_ = D.Id "%step" in
       let iter_ = D.Id iter in
-      let ty = convert_ty ty in 
+      let ty = convert_ty ty in
       let step_assn = D.Assn (step_, step, ty) in
       let iter_assn = D.Assn (iter_, start, ty) in
       let zero = get_zero ty in
@@ -89,7 +89,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
     *)
       [ step_assn; iter_assn; zero_check ]
   | ForEach (iter, collection, of_ty, body) ->
-    let coll = desugar_exp collection in 
+      let coll = desugar_exp collection in
       let cond = D.Call (Proj (coll, Methods.hasNext), [], TBool) in
       let set_iter =
         D.Assn
@@ -97,9 +97,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
             Call (Proj (coll, Methods.iterate), [], convert_ty of_ty),
             TBool )
       in
-      let desugared_body =
-        set_iter :: (desugar_block body)
-      in
+      let desugared_body = set_iter :: desugar_block body in
       [ While (cond, desugared_body) ]
   | While (cond, body) ->
       let desugared_body = desugar_block body in
@@ -108,11 +106,11 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let inst' = desugar_exp inst in
       let args' = List.map desugar_exp args in
       [ SCall (Id pname, inst' :: args') ]
-  | Decl v -> [D.Decl (desugar_vdecl v)]
-  | Ret eo ->
-      [D.Ret (Option.map desugar_exp eo)]
-  | Break -> [D.Break]
-  | Continue -> [D.Continue]
-  | SCall (fn, args) ->
-   [ D.SCall (desugar_exp fn, List.map desugar_exp args)]
-and desugar_block (b : Typed.block) : D.block = List.map desugar_stmt b |> List.flatten
+  | Decl v -> [ D.Decl (desugar_vdecl v) ]
+  | Ret eo -> [ D.Ret (Option.map desugar_exp eo) ]
+  | Break -> [ D.Break ]
+  | Continue -> [ D.Continue ]
+  | SCall (fn, args) -> [ D.SCall (desugar_exp fn, List.map desugar_exp args) ]
+
+and desugar_block (b : Typed.block) : D.block =
+  List.map desugar_stmt b |> List.flatten
