@@ -194,18 +194,12 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
   Printf.sprintf "%s%s: %s = %s" (indent lvl) fieldName (show_ty ftyp)
     (show_exp ~lvl:(lvl + 1) init)
 
-let show_cdecl ?(lvl = 0) { cname; impls; fields; methods } =
-  let impls_s = String.concat ", " impls in
+let show_cdecl ?(lvl = 0) { cname; fields } =
   let fields_s =
     String.concat ";\n" (List.map (fun f -> show_field ~lvl:(lvl + 1) f) fields)
   in
-  let methods_s =
-    String.concat ";\n" (List.map (fun f -> show_fdecl ~lvl:(lvl + 1) f) methods)
-  in
-  Printf.sprintf "%scdecl{name=%s; impls=[%s];\n%sfields=[\n%s\n%s];\n%smethods=[\n%s\n%s]}"
-    (indent lvl) cname impls_s
-    (indent (lvl + 1)) fields_s (indent (lvl + 1))
-    (indent (lvl + 1)) methods_s (indent lvl)
+  Printf.sprintf "%scdecl{name=%s; \n%sfields=[\n%s];\n}"
+    (indent (lvl + 1)) cname fields_s (indent (lvl + 1))
 
 let show_desugared_program (Prog (fns, cns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:0) cns) in

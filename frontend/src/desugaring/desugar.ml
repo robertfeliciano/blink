@@ -2,11 +2,12 @@ open Desugar_util
 open Desugar_stmt
 open Desugar_class
 open Desugared_ast
+open Conversions
 module Typed = Typing.Typed_ast
 
 let desugar_fn (fn : Typed.fdecl) : fdecl =
-  let body = List.map desugar_stmt fn.body |> List.flatten in
-  { fn with body }
+  let body = desugar_block fn.body in
+  { frtyp = convert_ret_ty fn.frtyp ; fname = fn.fname ; args = List.map (fun (t,i) -> (convert_ty t, i)) fn.args ; body }
 
 let desugar_program (prog : Typed.program) : program =
   let (Prog (fns, cns)) = prog in
