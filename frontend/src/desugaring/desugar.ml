@@ -7,9 +7,12 @@ module Typed = Typing.Typed_ast
 
 let desugar_fn (fn : Typed.fdecl) : fdecl =
   let body = desugar_block fn.body in
+  let mangled_name =
+    mangle_name fn.fname (List.map (fun (t, _) -> t) fn.args)
+  in
   {
     frtyp = convert_ret_ty fn.frtyp;
-    fname = fn.fname;
+    fname = mangled_name;
     args = List.map (fun (t, i) -> (convert_ty t, i)) fn.args;
     body;
   }

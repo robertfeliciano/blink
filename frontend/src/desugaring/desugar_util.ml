@@ -1,11 +1,12 @@
-open Desugared_ast
-open Pprint_desugared_ast
+open Typing.Pprint_typed_ast
+module T = Typing.Typed_ast
+module D = Desugared_ast
 
 exception DesugarError of string
 
 let desugar_error err = raise (DesugarError err)
 
-let get_zero ty =
+let get_zero (ty : D.ty) : D.exp =
   match ty with
   | TInt some_int_ty -> Int (Z.of_int 0, some_int_ty)
   | TFloat some_float_ty -> Float (0.0, some_float_ty)
@@ -15,13 +16,13 @@ let get_zero ty =
          bounds and step of a loop"
 
 let mangle_int = function
-  | TSigned s -> show_sint s
-  | TUnsigned u -> show_uint u
+  | T.TSigned s -> show_sint s
+  | T.TUnsigned u -> show_uint u
 
-let mangle_float = function Tf32 -> "f32" | Tf64 -> "f64"
+let mangle_float = function T.Tf32 -> "f32" | Tf64 -> "f64"
 
-let mangle_name ?(enclosing_class : id option) (fname : id) (tys : ty list) : id
-    =
+let mangle_name ?(enclosing_class : T.id option) (fname : T.id)
+    (tys : T.ty list) : T.id =
   let len_and_name e = Printf.sprintf "%d%s" (String.length e) e in
   let base = "_Z" in
   let mangled_class =
@@ -39,12 +40,12 @@ let mangle_name ?(enclosing_class : id option) (fname : id) (tys : ty list) : id
       ^ String.concat ""
           (List.map
              (function
-               | TBool -> "b"
-               | TInt i -> mangle_int i
-               | TFloat f -> mangle_float f
-               | TRef (RClass cname) -> len_and_name cname
-               | TRef RString -> "str"
-               | TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
-               | TRef (RFun (_, _)) ->
+               | T.TBool -> "b"
+               | T.TInt i -> mangle_int i
+               | T.TFloat f -> mangle_float f
+               | T.TRef (RClass cname) -> len_and_name cname
+               | T.TRef RString -> "str"
+               | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
+               | T.TRef (RFun (_, _)) ->
                    failwith "passing lambda functions not supported yet")
              tys)

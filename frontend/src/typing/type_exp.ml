@@ -47,18 +47,19 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args true tc with
-      | Ok (Proj (tobj, _), typed_args, RetVal rt) ->
+      | Ok (Proj (tobj, _, cname), arg_types, typed_args, RetVal rt) ->
           check_expected_ty expected rt e;
-          Typed_ast.(Call (Proj (tobj, mth), typed_args, rt), rt)
+          Typed_ast.
+            (Call (Proj (tobj, mth, cname), typed_args, arg_types, rt), rt)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
       let typed_callee, typ = type_exp tc f in
       match type_func args typ true tc with
       | Error msg -> type_error e msg
-      | Ok (typed_args, RetVal rt) ->
+      | Ok (arg_types, typed_args, RetVal rt) ->
           check_expected_ty expected rt e;
-          (Typed_ast.Call (typed_callee, typed_args, rt), rt)
+          (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 in
@@ -143,7 +144,7 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
           match Tctxt.lookup_field_option cid f tc with
           | Some fty ->
               check_expected_ty expected fty e;
-              (Typed_ast.Proj (tec, f), fty)
+              (Typed_ast.Proj (tec, f, cid), fty)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
@@ -190,38 +191,42 @@ let rec type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t)
       (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
 
 and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
-    (tc : Tctxt.t) : (Typed_ast.exp list * Typed_ast.ret_ty, string) result =
+    (tc : Tctxt.t) :
+    (Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty, string) result =
   let typecheck_args arg_types =
-    List.map2
-      (fun aty a ->
-        let te, ty = type_exp tc a in
-        if equal_ty ty aty then te
-        else
-          let err_msg =
-            "Invalid argument type for `" ^ show_exp a.elt ^ "`. Expected "
-            ^ Printer.show_ty aty ^ ", got " ^ Printer.show_ty ty ^ "."
-          in
-          raise (TypeError err_msg))
-      arg_types args
+    ( arg_types,
+      List.map2
+        (fun aty a ->
+          let te, ty = type_exp tc a in
+          if equal_ty ty aty then te
+          else
+            let err_msg =
+              "Invalid argument type for `" ^ show_exp a.elt ^ "`. Expected "
+              ^ Printer.show_ty aty ^ ", got " ^ Printer.show_ty ty ^ "."
+            in
+            raise (TypeError err_msg))
+        arg_types args )
   in
   match ftyp with
   | TRef (RFun (arg_types, RetVal rt_ty)) -> (
       try
-        let typed_args = typecheck_args arg_types in
-        Ok (typed_args, RetVal rt_ty)
+        let arg_types, typed_args = typecheck_args arg_types in
+        Ok (arg_types, typed_args, RetVal rt_ty)
       with
       | TypeError msg -> Error msg
       | Invalid_argument _ -> Error "invalid number of arguments supplied")
   | TRef (RFun (arg_types, RetVoid)) ->
       if from_exp then Error "assigning void function return type to variable."
       else
-        let typed_args = typecheck_args arg_types in
-        Ok (typed_args, RetVoid)
+        let arg_types, typed_args = typecheck_args arg_types in
+        Ok (arg_types, typed_args, RetVoid)
   | _ -> Error "attempted to call a non-function type."
 
 and type_method (proj : exp) (args : exp node list) (from_exp : bool)
     (tc : Tctxt.t) :
-    (Typed_ast.exp * Typed_ast.exp list * Typed_ast.ret_ty, string) result =
+    ( Typed_ast.exp * Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty,
+      string )
+    result =
   match proj with
   | Proj (obj, mth) -> (
       let tobj, obj_ty = type_exp tc obj in
@@ -233,8 +238,9 @@ and type_method (proj : exp) (args : exp node list) (from_exp : bool)
               let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
               match type_func args temp_func from_exp tc with
               | Error msg -> Error msg
-              | Ok (typed_args, rt) ->
-                  Ok (Typed_ast.Proj (tobj, mth), typed_args, rt))
+              | Ok (arg_types, typed_args, rt) ->
+                  Ok (Typed_ast.Proj (tobj, mth, cid), arg_types, typed_args, rt)
+              )
           | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."

@@ -43,13 +43,13 @@ type exp =
   | Float of float * float_ty
   | Str of string
   | Id of id
-  | Call of exp * exp list * ty
+  | Call of exp * exp list * ty list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
   | Array of exp list * ty * int64
   | Cast of exp * ty
-  | Proj of exp * id
+  | Proj of exp * id * id (* x.y -> Proj(x, "y", type of x) *)
   | ObjInit of id * (id * exp) list
 
 type vdecl = id * ty * exp * bool
@@ -58,7 +58,7 @@ type stmt =
   | Assn of exp * aop * exp * ty
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list
+  | SCall of exp * exp list * ty list
   | If of exp * block * block
   | For of
       id

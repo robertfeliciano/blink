@@ -16,7 +16,7 @@ val type_func :
   Typed_ast.ty ->
   bool ->
   Tctxt.t ->
-  (Typed_ast.exp list * Typed_ast.ret_ty, string) result
+  (Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty, string) result
 (** Typecheck a function call.
     @param args list of argument expression nodes
     @param ftyp the function type (must be TRef (RFun ...))
@@ -31,7 +31,9 @@ val type_method :
   Ast.exp Ast.node list ->
   bool ->
   Tctxt.t ->
-  (Typed_ast.exp * Typed_ast.exp list * Typed_ast.ret_ty, string) result
+  ( Typed_ast.exp * Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty,
+    string )
+  result
 (** Typecheck a method call.
     @param proj the projected expression (object and method name)
     @param args the argument expression nodes

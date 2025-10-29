@@ -1,5 +1,6 @@
 open Typing.Typed_ast
 open Conversions
+open Desugar_util
 module D = Desugared_ast
 
 let rec desugar_exp (e : exp) : D.exp =
@@ -17,13 +18,15 @@ let rec desugar_exp (e : exp) : D.exp =
   | Array (elems, ty, sz) ->
       D.Array (List.map desugar_exp elems, convert_ty ty, sz)
   | Cast (e, ty) -> D.Cast (desugar_exp e, convert_ty ty)
-  | Proj (inst, field) -> D.Proj (desugar_exp inst, field)
+  | Proj (inst, field, _cname) -> D.Proj (desugar_exp inst, field)
   | ObjInit (cn, fields) ->
       D.ObjInit (cn, List.map (fun (fid, e) -> (fid, desugar_exp e)) fields)
-  | Call (Proj (inst, pname), args, ty) ->
-      (* desugar instance method call: inst.meth(a,b) → meth(inst,a,b) *)
+  | Call (Proj (inst, pname, cname), args, types, ty) ->
+      (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let inst' = desugar_exp inst in
       let args' = List.map desugar_exp args in
-      D.Call (D.Id pname, inst' :: args', convert_ty ty)
-  | Call (fn, args, ty) ->
+      let mangled_name = mangle_name ~enclosing_class:cname pname types in
+      D.Call (D.Id mangled_name, inst' :: args', convert_ty ty)
+  | Call (fn, args, _types, ty) ->
+      (* TODO get function name out of fn exp *)
       D.Call (desugar_exp fn, List.map desugar_exp args, convert_ty ty)

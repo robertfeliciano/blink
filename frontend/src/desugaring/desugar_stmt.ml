@@ -102,15 +102,21 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | While (cond, body) ->
       let desugared_body = desugar_block body in
       [ While (desugar_exp cond, desugared_body) ]
-  | SCall (Proj (inst, pname), args) ->
+  | SCall (Proj (inst, pname, cname), args, types) ->
       let inst' = desugar_exp inst in
       let args' = List.map desugar_exp args in
-      [ SCall (Id pname, inst' :: args') ]
+      let mangled_name = mangle_name ~enclosing_class:cname pname types in
+      [ SCall (Id mangled_name, inst' :: args') ]
   | Decl v -> [ D.Decl (desugar_vdecl v) ]
   | Ret eo -> [ D.Ret (Option.map desugar_exp eo) ]
   | Break -> [ D.Break ]
   | Continue -> [ D.Continue ]
-  | SCall (fn, args) -> [ D.SCall (desugar_exp fn, List.map desugar_exp args) ]
+  | SCall (fn, args, _types) ->
+      let desugared_fn = desugar_exp fn in
+      (* TODO get function name out of fn exp *)
+      (*  probably will need desugar_exp to return a list of stmts as well to store temp functions *)
+      (* let mangled_name = mangle_name fn types in *)
+      [ D.SCall (desugared_fn, List.map desugar_exp args) ]
 
 and desugar_block (b : Typed.block) : D.block =
   List.map desugar_stmt b |> List.flatten

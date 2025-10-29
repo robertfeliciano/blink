@@ -2,6 +2,7 @@ open Typing.Typed_ast
 open Desugar_exp
 open Desugar_stmt
 open Conversions
+open Desugar_util
 module D = Desugared_ast
 
 let desugar_method (m : fdecl) (cname : id) : D.fdecl =
@@ -10,9 +11,13 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
     (D.TRef (RClass cname), "this")
     :: List.map (fun (t, i) -> (convert_ty t, i)) m.args
   in
+  let mangled_name =
+    mangle_name ~enclosing_class:cname m.fname
+      (List.map (fun (t, _) -> t) m.args)
+  in
   {
     frtyp = convert_ret_ty m.frtyp;
-    fname = m.fname;
+    fname = mangled_name;
     args = desugared_args;
     body = desugared_body;
   }

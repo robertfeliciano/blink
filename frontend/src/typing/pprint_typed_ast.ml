@@ -48,9 +48,12 @@ let rec show_exp = function
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
-  | Call (fn, args, ty) ->
+  | Call (fn, args, arg_types, ty) ->
       Printf.sprintf "Call(%s, [%s], %s)" (show_exp fn)
-        (String.concat "; " (List.map show_exp args))
+        (String.concat "; "
+           (List.map2
+              (fun a t -> show_exp a ^ " : " ^ show_ty t)
+              args arg_types))
         (show_ty ty)
   | Bop (op, lhs, rhs, ty) ->
       Printf.sprintf "Bop(%s, %s, %s, %s)" (show_binop op) (show_exp lhs)
@@ -65,7 +68,8 @@ let rec show_exp = function
         (String.concat "; " (List.map show_exp elems))
         (show_ty ty) sz
   | Cast (e, t) -> Printf.sprintf "Cast(%s, %s)" (show_exp e) (show_ty t)
-  | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp e) i
+  | Proj (e, i, cname) ->
+      Printf.sprintf "Proj(%s : %s, %s)" (show_exp e) cname i
   | ObjInit (cn, fields) ->
       Printf.sprintf "ObjInit(%s, [%s])" cn
         (String.concat "; "
@@ -85,9 +89,12 @@ let rec show_stmt = function
   | Ret eo ->
       Printf.sprintf "Ret(%s)"
         (match eo with None -> "None" | Some e -> show_exp e)
-  | SCall (fn, args) ->
+  | SCall (fn, args, arg_types) ->
       Printf.sprintf "SCall(%s, [%s])" (show_exp fn)
-        (String.concat "; " (List.map show_exp args))
+        (String.concat "; "
+           (List.map2
+              (fun a t -> show_exp a ^ " : " ^ show_ty t)
+              args arg_types))
   | If (cond, tblock, eblock) ->
       Printf.sprintf "If(%s, [%s], [%s])" (show_exp cond)
         (String.concat "; " (List.map show_stmt tblock))
