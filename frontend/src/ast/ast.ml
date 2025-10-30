@@ -61,10 +61,12 @@ type exp =
   | Array of exp node list
   | Cast of exp node * ty
   | ObjInit of id node * (id node * exp node) list
+  (* | Lambda of id list * block
+  | TypedLambda of (id * ty) list * ret_ty * block *)
 
-type vdecl = id * ty option * exp node * bool
+and vdecl = id * ty option * exp node * bool
 
-type stmt =
+and stmt =
   | Assn of exp node * aop * exp node
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp node option
@@ -166,6 +168,7 @@ let rec show_exp = function
         (String.concat "; " (List.map (show_node show_exp) elems))
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_node show_exp e) (show_ty t)
+  (* | Lambda _ | TypedLambda _ -> failwith "lambdas not printable yet" *)
   | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_node show_exp e) i
   | ObjInit (cn, fields) ->
       Printf.sprintf "ObjInit(%s, [%s])"

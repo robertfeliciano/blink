@@ -1,7 +1,8 @@
-(* open OUnit2
+open OUnit2
 open Typing.Typed_ast
 open Util
 module D = Desugaring.Desugar
+module DP = Desugaring.Pprint_desugared_ast
 
 let mk_int i = Int (Z.of_int i, TSigned Ti32)
 let mk_id s = Id s
@@ -17,7 +18,7 @@ let test_compound_assignment _ =
       match fns with
       | fn' :: _ -> (
           match fn'.body with
-          | [ Assn (_lhs', Eq, Bop (Add, _, _, _), _) ] -> ()
+          | [ Assn (_lhs', Bop (Add, _, _, _), _) ] -> ()
           | _ -> assert_failure "compound assignment not desugared")
       | _ -> assert_failure "no functions")
   | Error e -> assert_failure (Core.Error.to_string_hum e)
@@ -27,29 +28,31 @@ let test_desugar_call_proj _ =
   o.m(2) -> m(o, 2)
   *)
   let arg = Int (Z.of_int 2, TSigned Ti32) in
-  let call = SCall (Proj (Id "o", "m"), [ arg ]) in
+  let call = SCall (Proj (Id "o", "m", "clazz"), [ arg ], [TInt (TSigned Ti32)]) in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
   let prog = Prog ([ fn ], []) in
   match D.desugar_prog prog with
   | Ok (Prog (fns, _)) -> (
       match fns with
       | fn' :: _ -> (
-          match fn'.body with
-          | [ SCall (Id "m", [ Id "o"; _ ]) ] -> ()
-          | _ -> assert_failure "proj call not desugared")
+          match List.hd fn'.body with
+          | SCall (Id _, [ Id "o"; _ ]) -> ()
+          | bad -> assert_failure ("proj call not desugared: \n" ^ DP.show_stmt bad) )
       | _ -> assert_failure "no functions")
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
 let test_desugar_call_nested _ =
   let inner =
     Call
-      ( Proj (Id "o", "m"),
+      ( Proj (Id "o", "m", "clazz"),
         [ Int (Z.of_int 1, TSigned Ti32) ],
-        TInt (TSigned Ti32) )
+        [TInt (TSigned Ti32)],
+        TInt (TSigned Ti32)
+        )
   in
-  let outer = Call (Id "g", [ inner ], TInt (TSigned Ti32)) in
+  let outer = Call (Id "g", [ inner ], [TInt (TSigned Ti32)], TInt (TSigned Ti32)) in
   let fn =
-    { frtyp = RetVoid; fname = "f"; args = []; body = [ SCall (outer, []) ] }
+    { frtyp = RetVoid; fname = "f"; args = []; body = [ SCall (outer, [], []) ] }
   in
   let prog = Prog ([ fn ], []) in
   match D.desugar_prog prog with
@@ -187,4 +190,4 @@ let suite =
          "method extraction" >:: test_desugar_method_extraction;
        ]
 
-let () = run_test_tt_main suite *)
+let () = run_test_tt_main suite
