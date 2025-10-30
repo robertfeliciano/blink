@@ -204,7 +204,8 @@ let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
     (indent lvl)
 
 let show_field ?(lvl = 0) { prelude; fieldName; ftyp; init } =
-  Printf.sprintf "%s\n%s%s: %s = %s" (indent lvl) (show_block ~lvl:lvl prelude) fieldName (show_ty ftyp)
+  Printf.sprintf "%s\n%s%s: %s = %s" (indent lvl) (show_block ~lvl prelude)
+    fieldName (show_ty ftyp)
     (show_exp ~lvl:(lvl + 1) init)
 
 let show_cdecl ?(lvl = 0) { cname; fields } =

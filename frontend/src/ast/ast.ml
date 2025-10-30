@@ -62,22 +62,26 @@ type exp =
   | Cast of exp node * ty
   | ObjInit of id node * (id node * exp node) list
   | Lambda of id list * block
-  | TypedLambda of (id * ty) list * ret_ty * block 
+  | TypedLambda of (id * ty) list * ret_ty * block
 
 and vdecl = id * ty option * exp node * bool
 
+and ldecl = id * ty option * exp node
+
 and stmt =
   | Assn of exp node * aop * exp node
+  | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp node option
   | SCall of exp node * exp node list
   | If of exp node * block * block
   | ForEach of id node * exp node * block (* no step in for-each *)
   | For of
+      (* iterator, start, stop, incl, step, body *)
       id node
       * (exp node * exp node * bool)
       * exp node option
-      * block (* iterator, start, stop, incl, step, body *)
+      * block
   | While of exp node * block
   | Break
   | Continue
@@ -106,6 +110,11 @@ type program = Prog of fdecl node list * cdecl node list [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"
 
+(* Utility for indentation *)
+let indent n = String.make (n * 2) ' '
+
+(* Base show functions *)
+
 let show_sint = function
   | Ti8 -> "i8"
   | Ti16 -> "i16"
@@ -126,125 +135,239 @@ let show_int_ty = function
   | TSigned s -> Printf.sprintf "TSigned(%s)" (show_sint s)
   | TUnsigned u -> Printf.sprintf "TUnsigned(%s)" (show_uint u)
 
-(* Manual show for ref_ty *)
-let rec show_ref_ty = function
+(* Type printers *)
+
+let rec show_ref_ty ?(lvl = 0) = function
   | RString -> "RString"
   | RArray (t, sz) ->
-      Printf.sprintf "RArray(%s, %s)" (show_ty t) (Z.to_string sz)
+      Printf.sprintf "RArray(%s, %s)"
+        (show_ty ~lvl:(lvl + 1) t)
+        (Z.to_string sz)
   | RClass cn -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
-      let args_s = String.concat "; " (List.map show_ty args) in
-      Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
+      let args_s =
+        String.concat "; " (List.map (fun a -> show_ty ~lvl:(lvl + 1) a) args)
+      in
+      Printf.sprintf "RFun([\n%s%s\n%s], %s)"
+        (indent (lvl + 1))
+        args_s (indent lvl)
+        (show_ret_ty ~lvl:(lvl + 1) ret)
 
-and show_ret_ty = function
+and show_ret_ty ?(lvl = 0) = function
   | RetVoid -> "RetVoid"
-  | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty t)
+  | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty ~lvl:(lvl + 1) t)
 
-and show_ty = function
+and show_ty ?(lvl = 0) = function
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
-  | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
+  | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty ~lvl:(lvl + 1) rt)
 
-let rec show_exp = function
+let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int i -> Printf.sprintf "Int(%s)" (Z.to_string i)
   | Float f -> Printf.sprintf "Float(%f)" f
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
   | Call (fn, args) ->
-      Printf.sprintf "Call(%s, [%s])" (show_node show_exp fn)
-        (String.concat "; " (List.map (show_node show_exp) args))
+      let args_s =
+        String.concat ";\n"
+          (List.map
+             (fun a ->
+               Printf.sprintf "%s%s" (indent (lvl + 2)) (show_node show_exp a))
+             args)
+      in
+      Printf.sprintf "%sCall(\n%s%s,\n%s[\n%s\n%s])" (indent lvl)
+        (indent (lvl + 1))
+        (show_node show_exp fn)
+        (indent (lvl + 1))
+        args_s (indent lvl)
   | Bop (op, lhs, rhs) ->
-      Printf.sprintf "Bop(%s, %s, %s)" (show_binop op) (show_node show_exp lhs)
+      Printf.sprintf "%sBop(%s,\n%s%s,\n%s%s)" (indent lvl) (show_binop op)
+        (indent (lvl + 1))
+        (show_node show_exp lhs)
+        (indent (lvl + 1))
         (show_node show_exp rhs)
   | Uop (op, e) ->
-      Printf.sprintf "Uop(%s, %s)" (show_unop op) (show_node show_exp e)
+      Printf.sprintf "%sUop(%s, %s)" (indent lvl) (show_unop op)
+        (show_node show_exp e)
   | Index (arr, idx) ->
-      Printf.sprintf "Index(%s, %s)" (show_node show_exp arr)
+      Printf.sprintf "%sIndex(%s, %s)" (indent lvl) (show_node show_exp arr)
         (show_node show_exp idx)
   | Array elems ->
-      Printf.sprintf "Array([%s])"
-        (String.concat "; " (List.map (show_node show_exp) elems))
+      let elems_s =
+        String.concat ";\n"
+          (List.map
+             (fun e ->
+               Printf.sprintf "%s%s" (indent (lvl + 2)) (show_node show_exp e))
+             elems)
+      in
+      Printf.sprintf "%sArray([\n%s\n%s])" (indent lvl) elems_s (indent lvl)
   | Cast (e, t) ->
-      Printf.sprintf "Cast(%s, %s)" (show_node show_exp e) (show_ty t)
-  | Lambda _ | TypedLambda _ -> failwith "lambdas not printable yet"
-  | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_node show_exp e) i
+      Printf.sprintf "%sCast(%s, %s)" (indent lvl) (show_node show_exp e)
+        (show_ty ~lvl:(lvl + 1) t)
+  | Proj (e, i) ->
+      Printf.sprintf "%sProj(%s, %s)" (indent lvl) (show_node show_exp e) i
   | ObjInit (cn, fields) ->
-      Printf.sprintf "ObjInit(%s, [%s])"
+      let fields_s =
+        String.concat ";\n"
+          (List.map
+             (fun (f, e) ->
+               Printf.sprintf "%s%s = %s"
+                 (indent (lvl + 2))
+                 (show_node (fun x -> x) f)
+                 (show_node show_exp e))
+             fields)
+      in
+      Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
         (show_node (fun x -> x) cn)
-        (String.concat "; "
-           (List.map
-              (fun (f, e) ->
-                Printf.sprintf "%s=%s"
-                  (show_node (fun x -> x) f)
-                  (show_node show_exp e))
-              fields))
+        fields_s (indent lvl)
+  | Lambda (params, body) ->
+      let params_s = String.concat ", " params in
+      let body_s =
+        String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
+      in
+      Printf.sprintf "%sLambda(params=[%s], body=[\n%s\n%s])" (indent lvl)
+        params_s body_s (indent lvl)
+  | TypedLambda (params, ret_ty, body) ->
+      let params_s =
+        String.concat "; "
+          (List.map
+             (fun (id, ty) -> Printf.sprintf "(%s : %s)" id (show_ty ty))
+             params)
+      in
+      let body_s =
+        String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
+      in
+      Printf.sprintf "%sTypedLambda(params=[%s]; ret=%s; body=[\n%s\n%s])"
+        (indent lvl) params_s
+        (show_ret_ty ~lvl:(lvl + 1) ret_ty)
+        body_s (indent lvl)
 
-let show_vdecl (id, ty_opt, exp, is_const) =
-  Printf.sprintf "{ id = %s; ty = %s; exp = %s; is_const = %b }" id
-    (match ty_opt with Some ty -> show_ty ty | None -> "None")
-    (show_node show_exp exp) is_const
+(* Variable declarations *)
 
-let rec show_stmt = function
+and show_vdecl ?(lvl = 0) (id, ty_opt, exp, is_const) =
+  Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
+    (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
+    is_const
+    (indent (lvl + 1))
+    (show_node show_exp exp)
+
+and show_ldecl ?(lvl = 0) (id, ty_opt, exp) = 
+  Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl) id
+    (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
+    (indent (lvl + 1))
+    (show_node show_exp exp)
+(* Statements *)
+
+and show_stmt ?(lvl = 0) = function
   | Assn (lhs, op, rhs) ->
-      Printf.sprintf "Assn(%s, %s, %s)" (show_node show_exp lhs) (show_aop op)
+      Printf.sprintf "%sAssn(\n%s%s,\n%s%s,\n%s%s)" (indent lvl)
+        (indent (lvl + 1))
+        (show_node show_exp lhs)
+        (indent (lvl + 1))
+        (show_aop op)
+        (indent (lvl + 1))
         (show_node show_exp rhs)
-  | Decl v -> show_vdecl v
+  | Decl v -> show_vdecl ~lvl v
+  | LambdaDecl l -> show_ldecl ~lvl l
   | Ret exp_opt ->
-      Printf.sprintf "Ret(%s)"
-        (match exp_opt with
-        | Some exp -> show_node show_exp exp
-        | None -> "None")
+      let e_s =
+        match exp_opt with Some e -> show_node show_exp e | None -> "None"
+      in
+      Printf.sprintf "%sRet(%s)" (indent lvl) e_s
   | SCall (fn, args) ->
-      Printf.sprintf "SCall(%s, [%s])" (show_node show_exp fn)
-        (String.concat "; " (List.map (show_node show_exp) args))
+      let args_s =
+        String.concat ";\n"
+          (List.map
+             (fun a ->
+               Printf.sprintf "%s%s" (indent (lvl + 2)) (show_node show_exp a))
+             args)
+      in
+      Printf.sprintf "%sSCall(%s, [\n%s\n%s])" (indent lvl)
+        (show_node show_exp fn) args_s (indent lvl)
   | If (cond, then_block, else_block) ->
-      Printf.sprintf "If(%s, [%s], [%s])" (show_node show_exp cond)
-        (String.concat "; " (List.map show_node_stmt then_block))
-        (String.concat "; " (List.map show_node_stmt else_block))
+      Printf.sprintf "%sIf(\n%scond=%s,\n%sthen=[\n%s\n%s],\n%selse=[\n%s\n%s])"
+        (indent lvl)
+        (indent (lvl + 1))
+        (show_node show_exp cond)
+        (indent (lvl + 1))
+        (String.concat ";\n"
+           (List.map (show_node_stmt ~lvl:(lvl + 2)) then_block))
+        (indent (lvl + 1))
+        (indent (lvl + 1))
+        (String.concat ";\n"
+           (List.map (show_node_stmt ~lvl:(lvl + 2)) else_block))
+        (indent lvl)
   | ForEach (id, start, body) ->
-      Printf.sprintf "For(%s in %s, [%s])"
+      Printf.sprintf "%sForEach(%s in %s) [\n%s\n%s]" (indent lvl)
         (show_node (fun x -> x) id)
         (show_node show_exp start)
-        (String.concat "; " (List.map show_node_stmt body))
+        (String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body))
+        (indent lvl)
   | For (id, (start, fin, incl), step_opt, body) ->
-      Printf.sprintf "For(%s from %s to %s, incl=%b, step=%s, [%s])"
+      Printf.sprintf "%sFor(%s from %s to %s incl=%b step=%s) [\n%s\n%s]"
+        (indent lvl)
         (show_node (fun x -> x) id)
         (show_node show_exp start) (show_node show_exp fin) incl
         (match step_opt with Some s -> show_node show_exp s | None -> "None")
-        (String.concat "; " (List.map show_node_stmt body))
+        (String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body))
+        (indent lvl)
   | While (cond, body) ->
-      Printf.sprintf "While(%s, [%s])" (show_node show_exp cond)
-        (String.concat "; " (List.map show_node_stmt body))
-  | Break -> "Break"
-  | Continue -> "Continue"
+      Printf.sprintf "%sWhile(%s) [\n%s\n%s]" (indent lvl)
+        (show_node show_exp cond)
+        (String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body))
+        (indent lvl)
+  | Break -> Printf.sprintf "%sBreak" (indent lvl)
+  | Continue -> Printf.sprintf "%sContinue" (indent lvl)
 
-and show_node_stmt stmt_node = show_node show_stmt stmt_node ^ ";\n"
+and show_node_stmt ?(lvl = 0) stmt_node =
+  Printf.sprintf "%s;\n" (show_node (show_stmt ~lvl) stmt_node)
 
-let show_fdecl { frtyp; fname; args; body } =
-  Printf.sprintf "{ frtyp = %s; fname = %s; args = [%s]; body = [\n%s] }\n"
-    (show_ret_ty frtyp) fname
-    (String.concat "; "
-       (List.map
-          (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
-          args))
-    (String.concat "" (List.map show_node_stmt body))
+(* Function declarations *)
 
-let show_field { fieldName; ftyp; init } =
-  Printf.sprintf "%s: %s = %s" fieldName (show_ty ftyp)
-    (match init with Some exp -> show_node show_exp exp | None -> "None")
+let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
+  let args_s =
+    String.concat "; "
+      (List.map
+         (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
+         args)
+  in
+  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+    (indent lvl) fname
+    (show_ret_ty ~lvl:(lvl + 1) frtyp)
+    args_s
+    (String.concat "" (List.map (show_node_stmt ~lvl:(lvl + 1)) body))
+    (indent lvl)
 
-let show_cdecl { elt = { cname; impls; fields; methods }; loc = _ } =
-  Printf.sprintf "cdecl{name=%s; impls=%s;\nfields=%s;\nmethods=%s}" cname
-    (String.concat ", " impls)
-    (String.concat "\n" (List.map (show_node show_field) fields))
-    (String.concat "\n" (List.map (fun m -> show_fdecl m.elt) methods))
+(* Class and program printers *)
 
-let show_decl d = show_fdecl d.elt
+let show_field ?(lvl = 0) { fieldName; ftyp; init } =
+  Printf.sprintf "%s%s: %s = %s" (indent lvl) fieldName
+    (show_ty ~lvl:(lvl + 1) ftyp)
+    (match init with Some e -> show_node show_exp e | None -> "None")
 
-let show_prog (p : program) =
-  let (Prog (fns, cns)) = p in
-  let auxf fn s = s ^ show_decl fn ^ "\n" in
-  let auxc cn s = s ^ show_cdecl cn ^ "\n" in
-  List.fold_right auxc cns "\n" ^ List.fold_right auxf fns "\n"
+let show_cdecl ?(lvl = 0) { elt = { cname; impls; fields; methods }; loc = _ } =
+  let fields_s =
+    String.concat ";\n"
+      (List.map (show_node (show_field ~lvl:(lvl + 2))) fields)
+  in
+  let methods_s =
+    String.concat "\n"
+      (List.map (fun m -> show_fdecl ~lvl:(lvl + 2) m.elt) methods)
+  in
+  Printf.sprintf
+    "%scdecl{name=%s; impls=[%s];\n%sfields=[\n%s\n%s];\n%smethods=[\n%s\n%s]}"
+    (indent lvl) cname (String.concat ", " impls)
+    (indent (lvl + 1))
+    fields_s
+    (indent (lvl + 1))
+    (indent (lvl + 1))
+    methods_s (indent lvl)
+
+let show_decl ?(lvl = 0) d = show_fdecl ~lvl d.elt
+
+let show_prog (Prog (fns, cns)) =
+  let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
+  let fns_s = String.concat "\n" (List.map (show_decl ~lvl:1) fns) in
+  Printf.sprintf "Program{\n%s\n%s\n}" cns_s fns_s

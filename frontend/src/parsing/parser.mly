@@ -92,6 +92,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token QMARK     /* ? */
 %token AS        /* as */
 %token BAR       /* | */
+%token FN        /* fn */
 
 %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
@@ -312,13 +313,16 @@ postfix:
       { loc $startpos $endpos @@ Cast (p, t) }
   | p=postfix DOT i=IDENT
       { loc $startpos $endpos @@ Proj (p, i) }
+  | l=lambda { l }
+
+lambda: 
   | BAR args=untyped_lambda_args BAR LBRACE stmts=block RBRACE
       { loc $startpos $endpos @@ Lambda (args, stmts) }
   | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty LBRACE stmts=block RBRACE
       { loc $startpos $endpos @@ TypedLambda (args, rty, stmts) }
 
 untyped_lambda_arg:
-  | i=IDENT { (i) }
+  | i=IDENT { i }
 
 untyped_lambda_args:
   | l=separated_list(COMMA, untyped_lambda_arg) { l }
@@ -346,6 +350,10 @@ vdecl:
   | CONST id=IDENT t=ty_spec? EQUAL init=exp
       { (id, t, init, true) }
 
+ldecl: 
+  | FN id=IDENT t=fun_ty? EQUAL l=lambda
+      { (id, (match t with Some ty -> Some (TRef ty) | None -> None), l) }
+
 (* -----------------------
    for-loop step (optional)
    ----------------------- *)
@@ -360,6 +368,8 @@ by_step:
 stmt:
   | d=vdecl SEMI
       { loc $startpos $endpos @@ Decl(d) }
+  | l=ldecl SEMI
+      { loc $startpos $endpos @@ LambdaDecl(l) }
   | p=lhs a=aop e=exp SEMI
       { loc $startpos $endpos @@ Assn(p,a,e) }
   | cs=call_stmt

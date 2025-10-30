@@ -28,7 +28,9 @@ let test_desugar_call_proj _ =
   o.m(2) -> m(o, 2)
   *)
   let arg = Int (Z.of_int 2, TSigned Ti32) in
-  let call = SCall (Proj (Id "o", "m", "clazz"), [ arg ], [TInt (TSigned Ti32)]) in
+  let call =
+    SCall (Proj (Id "o", "m", "clazz"), [ arg ], [ TInt (TSigned Ti32) ])
+  in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
   let prog = Prog ([ fn ], []) in
   match D.desugar_prog prog with
@@ -37,7 +39,8 @@ let test_desugar_call_proj _ =
       | fn' :: _ -> (
           match List.hd fn'.body with
           | SCall (Id _, [ Id "o"; _ ]) -> ()
-          | bad -> assert_failure ("proj call not desugared: \n" ^ DP.show_stmt bad) )
+          | bad ->
+              assert_failure ("proj call not desugared: \n" ^ DP.show_stmt bad))
       | _ -> assert_failure "no functions")
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
@@ -46,13 +49,19 @@ let test_desugar_call_nested _ =
     Call
       ( Proj (Id "o", "m", "clazz"),
         [ Int (Z.of_int 1, TSigned Ti32) ],
-        [TInt (TSigned Ti32)],
-        TInt (TSigned Ti32)
-        )
+        [ TInt (TSigned Ti32) ],
+        TInt (TSigned Ti32) )
   in
-  let outer = Call (Id "g", [ inner ], [TInt (TSigned Ti32)], TInt (TSigned Ti32)) in
+  let outer =
+    Call (Id "g", [ inner ], [ TInt (TSigned Ti32) ], TInt (TSigned Ti32))
+  in
   let fn =
-    { frtyp = RetVoid; fname = "f"; args = []; body = [ SCall (outer, [], []) ] }
+    {
+      frtyp = RetVoid;
+      fname = "f";
+      args = [];
+      body = [ SCall (outer, [], []) ];
+    }
   in
   let prog = Prog ([ fn ], []) in
   match D.desugar_prog prog with

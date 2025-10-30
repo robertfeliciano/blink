@@ -50,6 +50,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
+  | LambdaDecl _ -> type_error stmt_n "not support yet"
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
       | Id _ -> ()

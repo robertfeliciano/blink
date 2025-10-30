@@ -25,8 +25,8 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
 let desugar_fields fs : D.field list =
   List.map
     (fun { fieldName; ftyp; init } ->
-      let stmts, init' = desugar_exp init in 
-      D.{ prelude=stmts; fieldName; ftyp = convert_ty ftyp; init = init'; })
+      let stmts, init' = desugar_exp init in
+      D.{ prelude = stmts; fieldName; ftyp = convert_ty ftyp; init = init' })
     fs
 
 let desugar_class (c : cdecl) : D.fdecl list * D.cdecl =
