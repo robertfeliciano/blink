@@ -6,6 +6,17 @@ exception DesugarError of string
 
 let desugar_error err = raise (DesugarError err)
 
+let flatten pairs =
+  let stmts, exps = List.split pairs in
+  (List.flatten stmts, exps)
+
+let counter = ref 0
+
+let gensym sfx =
+  let n = !counter in
+  incr counter;
+  "%tmp" ^ sfx ^ Int.to_string n
+
 let get_zero (ty : D.ty) : D.exp =
   match ty with
   | TInt some_int_ty -> Int (Z.of_int 0, some_int_ty)
