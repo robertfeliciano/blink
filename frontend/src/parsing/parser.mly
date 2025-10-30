@@ -90,7 +90,8 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token IMPLS     /* impls */
 %token GLOBAL    /* global */
 %token QMARK     /* ? */
-%token AS
+%token AS        /* as */
+%token BAR       /* | */
 
 %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
@@ -185,7 +186,7 @@ ty:
   | r=ref_ty { TRef r } %prec LOW
   | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
-  // | LPAREN t=ty RPAREN { t }
+  | LPAREN t=ty RPAREN { t }
 
 int_ty:
   | Ti8 { TSigned Ti8 }
@@ -209,7 +210,7 @@ ret_ty:
 
 ret_ty_spec:
   | ARROW frtyp=ret_ty { frtyp }
-  | { RetVoid }  (* allow omitted return type to default to void if you prefer *)
+  | { RetVoid }
 
 ref_ty:
   | TSTRING { RString }
@@ -218,7 +219,7 @@ ref_ty:
   | fun_ty=fun_ty { fun_ty }
 
 fun_ty:
-  | LPAREN arg_tys=separated_nonempty_list(COMMA, ty) RPAREN THIN_ARROW rty=ret_ty 
+  | LBRACKET arg_tys=separated_list(COMMA, ty) RBRACKET THIN_ARROW rty=ret_ty 
     { RFun (arg_tys, rty) }
 
 %inline bop:
@@ -311,6 +312,22 @@ postfix:
       { loc $startpos $endpos @@ Cast (p, t) }
   | p=postfix DOT i=IDENT
       { loc $startpos $endpos @@ Proj (p, i) }
+  | BAR args=untyped_lambda_args BAR LBRACE stmts=block RBRACE
+      { loc $startpos $endpos @@ Lambda (args, stmts) }
+  | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty LBRACE stmts=block RBRACE
+      { loc $startpos $endpos @@ TypedLambda (args, rty, stmts) }
+
+untyped_lambda_arg:
+  | i=IDENT { (i) }
+
+untyped_lambda_args:
+  | l=separated_list(COMMA, untyped_lambda_arg) { l }
+
+typed_lambda_arg:
+  | i=IDENT t=ty_spec { (i, t) }
+
+typed_lambda_args:
+  | l=separated_list(COMMA, typed_lambda_arg) { l }
 
 (* -----------------------
    LHS (for assignments)

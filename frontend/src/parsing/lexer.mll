@@ -105,6 +105,7 @@ rule read = parse
   | "global" { GLOBAL }
   | "?" { QMARK }
   | "as" { AS }
+  | "|"  { BAR } 
   | "//" { read_single_line_comment lexbuf }
   | "/*" { read_multi_line_comment lexbuf } 
   | id { IDENT (Lexing.lexeme lexbuf) }
