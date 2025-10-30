@@ -28,6 +28,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token SEMI      /* ; */
 %token EQUAL     /* = */
 %token ARROW     /* => */
+%token THIN_ARROW/* -> */
 %token PLUS      /* + */
 %token MINUS     /* - */
 %token MULT      /* * */
@@ -102,6 +103,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left AT
 %left DOT
 %left RANGE RANGE_INCL
+%right THIN_ARROW
 %nonassoc LOW
 %nonassoc QMARK
 %nonassoc NOT
@@ -183,7 +185,7 @@ ty:
   | r=ref_ty { TRef r } %prec LOW
   | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
-  | LPAREN t=ty RPAREN { t }
+  // | LPAREN t=ty RPAREN { t }
 
 int_ty:
   | Ti8 { TSigned Ti8 }
@@ -213,6 +215,11 @@ ref_ty:
   | TSTRING { RString }
   | cname=IDENT { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
+  | fun_ty=fun_ty { fun_ty }
+
+fun_ty:
+  | LPAREN arg_tys=separated_nonempty_list(COMMA, ty) RPAREN THIN_ARROW rty=ret_ty 
+    { RFun (arg_tys, rty) }
 
 %inline bop:
   | PLUS  { Add }

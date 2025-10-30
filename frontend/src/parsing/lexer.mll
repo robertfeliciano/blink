@@ -44,6 +44,7 @@ rule read = parse
   | ";" { SEMI }
   | "=" { EQUAL }
   | "=>" { ARROW }
+  | "->" { THIN_ARROW }
   | "+" { PLUS }
   | "-" { MINUS }
   | "*" { MULT } 
