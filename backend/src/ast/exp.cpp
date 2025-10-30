@@ -3,6 +3,7 @@
 
 #include <caml/mlvalues.h>
 
+#include <ast/stmt.h>
 #include <ast/exp.h>
 
 
@@ -208,6 +209,9 @@ struct ExpToStringVisitor {
     }
     std::string operator()(const ERange& e) const {
         return expToString(e.start->elt) + " .. " + (e.inclusive ? "=" : "") + expToString(e.end->elt);
+    }
+    std::string operator()(const ELambda& e) const {
+        return "nothing yet";
     }
 };
 

@@ -40,7 +40,7 @@ void Generator::optimize() {
 
     llvm::FunctionPassManager fpm;
 
-    fpm.addPass(llvm::InlinerPass());
+    // fpm.addPass(llvm::InlinerPass());
     fpm.addPass(llvm::PromotePass());
     fpm.addPass(llvm::InstCombinePass());
     fpm.addPass(llvm::ReassociatePass());

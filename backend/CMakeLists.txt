@@ -29,7 +29,7 @@ include_directories(
 
 file(GLOB_RECURSE SOURCES
     src/ast/*.cpp
-    src/codegen/*.cpp
+    # src/codegen/*.cpp
     main.cpp
 )
 

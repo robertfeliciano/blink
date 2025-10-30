@@ -10,6 +10,8 @@
 
 #include <ast/node.h>
 
+struct Stmt;
+
 struct Exp;
 
 enum class UnOp {
@@ -65,6 +67,9 @@ struct ERange {
     std::unique_ptr<Node<Exp>> end;
     bool inclusive;
 };
+struct ELambda { 
+    std::vector<std::unique_ptr<Stmt>> body;
+};
 
 using ExpVariant = std::variant<
     EInt, 
@@ -77,6 +82,7 @@ using ExpVariant = std::variant<
     EUop,
     EIndex,
     EArray,
+    ELambda,
     ERange>;
 
 struct Exp {
