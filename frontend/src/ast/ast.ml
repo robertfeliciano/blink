@@ -65,7 +65,6 @@ type exp =
   | TypedLambda of (id * ty) list * ret_ty * block
 
 and vdecl = id * ty option * exp node * bool
-
 and ldecl = id * ty option * exp node
 
 and stmt =
@@ -253,7 +252,7 @@ and show_vdecl ?(lvl = 0) (id, ty_opt, exp, is_const) =
     (indent (lvl + 1))
     (show_node show_exp exp)
 
-and show_ldecl ?(lvl = 0) (id, ty_opt, exp) = 
+and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl) id
     (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
     (indent (lvl + 1))
