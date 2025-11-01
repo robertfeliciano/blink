@@ -76,6 +76,7 @@ let rec show_exp = function
            (List.map
               (fun (f, e) -> Printf.sprintf "%s=%s" f (show_exp e))
               fields))
+  | _ -> "todo lambda exp"
 
 let show_vdecl (id, ty, e, is_const) =
   Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)
@@ -112,6 +113,7 @@ let rec show_stmt = function
         (String.concat "; " (List.map show_stmt body))
   | Break -> "Break"
   | Continue -> "Continue"
+  | LambdaDecl _ -> "todo lambdadecl"
 
 let show_block b = String.concat ";\n" (List.map show_stmt b)
 

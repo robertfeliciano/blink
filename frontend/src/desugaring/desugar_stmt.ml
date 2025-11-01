@@ -126,5 +126,6 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
           estmts @ [ Ret (Some e') ])
   | Break -> [ Break ]
   | Continue -> [ Continue ]
+  | _ -> desugar_error "todo lambdadecl"
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

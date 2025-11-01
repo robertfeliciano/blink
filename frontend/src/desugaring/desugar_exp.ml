@@ -81,3 +81,4 @@ let rec desugar_exp (e : exp) : D.stmt list * D.exp =
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
           (sf @ [ tmp_decl ] @ sa, D.Call (Id fn_store, args', ty')))
+  | _ -> desugar_error "todo lambda exp"

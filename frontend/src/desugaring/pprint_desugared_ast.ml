@@ -218,6 +218,6 @@ let show_cdecl ?(lvl = 0) { cname; fields } =
     (indent (lvl + 1))
 
 let show_desugared_program (Prog (fns, cns)) =
-  let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:0) cns) in
-  let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:0) fns) in
-  Printf.sprintf "Program{\nClasses:\n%s\nFunctions:\n%s\n}" cns_s fns_s
+  let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
+  let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
+  Printf.sprintf "Program{\nClasses{\n%s\n}\nFunctions{\n%s\n}}" cns_s fns_s

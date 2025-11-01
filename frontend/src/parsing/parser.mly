@@ -315,6 +315,24 @@ postfix:
       { loc $startpos $endpos @@ Proj (p, i) }
   | l=lambda { l }
 
+(* -----------------------
+   LHS (for assignments)
+   ----------------------- *)
+lhs:
+  | id=IDENT                        { loc $startpos $endpos @@ Id id }
+  | e=postfix LBRACKET i=exp RBRACKET
+      { loc $startpos $endpos @@ Index (e, i) }
+
+(* -----------------------
+   variable decls / vdecl
+   ----------------------- *)
+vdecl:
+  | LET id=IDENT t=ty_spec? EQUAL init=exp
+      { (id, t, init, false) }
+  | CONST id=IDENT t=ty_spec? EQUAL init=exp
+      { (id, t, init, true) }
+
+
 lambda: 
   | BAR args=untyped_lambda_args BAR LBRACE stmts=block RBRACE
       { loc $startpos $endpos @@ Lambda (args, stmts) }
@@ -333,26 +351,14 @@ typed_lambda_arg:
 typed_lambda_args:
   | l=separated_list(COMMA, typed_lambda_arg) { l }
 
-(* -----------------------
-   LHS (for assignments)
-   ----------------------- *)
-lhs:
-  | id=IDENT                        { loc $startpos $endpos @@ Id id }
-  | e=postfix LBRACKET i=exp RBRACKET
-      { loc $startpos $endpos @@ Index (e, i) }
-
-(* -----------------------
-   variable decls / vdecl
-   ----------------------- *)
-vdecl:
-  | LET id=IDENT t=ty_spec? EQUAL init=exp
-      { (id, t, init, false) }
-  | CONST id=IDENT t=ty_spec? EQUAL init=exp
-      { (id, t, init, true) }
-
 ldecl: 
   | FN id=IDENT t=fun_ty? EQUAL l=lambda
-      { (id, (match t with Some ty -> Some (TRef ty) | None -> None), l) }
+      { 
+        let i_start = $startpos(id) in 
+        let i_end   = $endpos(id) in 
+        let id_node = loc i_start i_end @@ id in
+        (id_node, (match t with Some ty -> Some ty | None -> None), l) 
+      }
 
 (* -----------------------
    for-loop step (optional)

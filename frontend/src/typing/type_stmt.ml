@@ -352,7 +352,7 @@ and type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  | LambdaDecl _ -> type_error stmt_n "not support yet"
+  | LambdaDecl _ -> type_lambda tc stmt_n
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
       | Id _ -> ()
@@ -475,6 +475,66 @@ and type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       if not in_loop then
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue, false)
+
+and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
+  let { elt = stmt; loc = _ } = stmt_n in
+  match stmt with
+  | LambdaDecl (lname, None, { elt = Lambda _; _ }) ->
+      type_error lname "Must include type defn of lambda on either LHS or RHS."
+  | LambdaDecl (lname, Some t, { elt = TypedLambda (args, ret, body); loc }) ->
+      let arg_types, ret_typ =
+        match t with
+        | RFun (arg_types, ret_typ) -> (arg_types, ret_typ)
+        | _ -> type_error lname "Must specify function type for untyped lambda."
+      in
+      let all_types_match =
+        List.for_all2
+          (fun ltyp (_, rtyp) -> equal_ty (convert_ty ltyp) (convert_ty rtyp))
+          arg_types args
+        && equal_ret_ty (convert_ret_ty ret_typ) (convert_ret_ty ret)
+      in
+      if not all_types_match then
+        type_error lname "Given LHS and RHS lambda types do not match."
+      else
+        type_lambda tc
+          {
+            elt =
+              LambdaDecl
+                (lname, None, { elt = TypedLambda (args, ret, body); loc });
+            loc = stmt_n.loc;
+          }
+  | LambdaDecl (lname, Some t, { elt = Lambda (arg_ids, body); loc }) ->
+      let arg_types, ret =
+        match t with
+        | RFun (arg_types, ret_typ) -> (arg_types, ret_typ)
+        | _ -> type_error lname "Must specify function type for lambda."
+      in
+      let new_args = List.combine arg_ids arg_types in
+      type_lambda tc
+        {
+          elt =
+            LambdaDecl
+              (lname, None, { elt = TypedLambda (new_args, ret, body); loc });
+          loc = stmt_n.loc;
+        }
+  | LambdaDecl (lname, None, { elt = TypedLambda (args, ret, body); _ }) ->
+      let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
+      let converted_ret = convert_ret_ty ret in
+      let lambda_tc =
+        List.fold_left
+          (fun tc' (i, t) -> Tctxt.add_local tc' i t)
+          tc converted_args
+      in
+      let _, typed_body, _ = type_block lambda_tc converted_ret body false in
+      let lambda_type =
+        Typed_ast.RFun (List.map snd converted_args, converted_ret)
+      in
+      let typed_lambda =
+        Typed_ast.Lambda (converted_args, converted_ret, typed_body)
+      in
+      let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type) in
+      (tc', Typed_ast.LambdaDecl (lname.elt, lambda_type, typed_lambda), false)
+  | _ -> type_error stmt_n "Even more impossible state"
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
     (stmts : stmt node list) (in_loop : bool) :

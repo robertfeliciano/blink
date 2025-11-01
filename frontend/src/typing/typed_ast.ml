@@ -51,11 +51,14 @@ type exp =
   | Cast of exp * ty
   | Proj of exp * id * id (* x.y -> Proj(x, "y", type of x) *)
   | ObjInit of id * (id * exp) list
+  | Lambda of (id * ty) list * ret_ty * block
 
-type vdecl = id * ty * exp * bool
+and vdecl = id * ty * exp * bool
+and ldecl = id * ref_ty * exp
 
-type stmt =
+and stmt =
   | Assn of exp * aop * exp * ty
+  | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
   | SCall of exp * exp list * ty list
