@@ -27,22 +27,25 @@ let show_int_ty = function
 
 (* Manual show for ref_ty *)
 let rec show_ref_ty = function
-  | RString -> "RString"
-  | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
-  | RClass cn -> Printf.sprintf "RClass(%s)" cn
-  | RFun (args, ret) ->
-      let args_s = String.concat "; " (List.map show_ty args) in
-      Printf.sprintf "RFun([%s]->%s)" args_s (show_ret_ty ret)
+  | RString -> "string"
+  | RArray (t, sz) -> Printf.sprintf "%s_x_%Ld" (show_ty t) sz
+  | RClass cn -> Printf.sprintf "%s" cn
+  | RFun (tys, r) -> (
+      String.concat "_" (List.map show_ty tys)
+      ^
+      match r with
+      | RetVoid -> "__void"
+      | RetVal t -> Printf.sprintf "__%s" (show_ty t))
 
 and show_ret_ty = function
-  | RetVoid -> "void"
+  | RetVoid -> "RetVoid"
   | RetVal t -> Printf.sprintf "%s" (show_ty t)
 
 and show_ty = function
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "%s" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
-  | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
+  | TRef rt -> Printf.sprintf "%s" (show_ref_ty rt)
 
 let show_unop = function Neg -> "Neg" | Not -> "Not"
 

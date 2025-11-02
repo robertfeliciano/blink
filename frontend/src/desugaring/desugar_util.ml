@@ -31,10 +31,24 @@ let mangle_int = function
   | T.TUnsigned u -> show_uint u
 
 let mangle_float = function T.Tf32 -> "f32" | Tf64 -> "f64"
+let len_and_name e = Printf.sprintf "%d%s" (String.length e) e
+
+let rec mangle_ty = function
+  | T.TBool -> "b"
+  | T.TInt i -> mangle_int i
+  | T.TFloat f -> mangle_float f
+  | T.TRef (RClass cname) -> len_and_name cname
+  | T.TRef RString -> "str"
+  | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
+  | T.TRef (RFun (tys, r)) -> (
+      String.concat "_" (List.map mangle_ty tys)
+      ^
+      match r with
+      | RetVoid -> "__void"
+      | RetVal t -> Printf.sprintf "__%s" (show_ty t))
 
 let mangle_name ?(enclosing_class : T.id option) (fname : T.id)
-    (tys : T.ty list) : T.id =
-  let len_and_name e = Printf.sprintf "%d%s" (String.length e) e in
+    (tys : T.ty list) (rtyp : T.ret_ty) : T.id =
   let base = "_Z" in
   let mangled_class =
     match enclosing_class with
@@ -44,19 +58,9 @@ let mangle_name ?(enclosing_class : T.id option) (fname : T.id)
   let mangled_fun = len_and_name fname in
   let base = base ^ mangled_class ^ mangled_fun in
   let base = if Option.is_some enclosing_class then base ^ "E" else base in
-  match tys with
-  | [] -> base ^ "v"
-  | _ ->
-      base
-      ^ String.concat ""
-          (List.map
-             (function
-               | T.TBool -> "b"
-               | T.TInt i -> mangle_int i
-               | T.TFloat f -> mangle_float f
-               | T.TRef (RClass cname) -> len_and_name cname
-               | T.TRef RString -> "str"
-               | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
-               | T.TRef (RFun (_, _)) ->
-                   failwith "passing lambda functions not supported yet")
-             tys)
+  let base =
+    match tys with
+    | [] -> base ^ "v"
+    | _ -> base ^ String.concat "" (List.map mangle_ty tys)
+  in
+  base ^ match rtyp with RetVoid -> "__void" | RetVal t -> mangle_ty t

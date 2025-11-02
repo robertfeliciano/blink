@@ -61,7 +61,11 @@ and stmt =
   | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list * ty list
+  | SCall of
+      exp
+      * exp list
+      * ty list
+      * ret_ty (* includes return type of function just for mangling purposes *)
   | If of exp * block * block
   | For of
       id

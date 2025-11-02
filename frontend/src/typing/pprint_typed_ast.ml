@@ -6,43 +6,46 @@ let indent n = String.make (n * 2) ' '
 (* Show functions for basic types *)
 
 let show_sint = function
-  | Ti8 -> "Ti8"
-  | Ti16 -> "Ti16"
-  | Ti32 -> "Ti32"
-  | Ti64 -> "Ti64"
-  | Ti128 -> "Ti128"
+  | Ti8 -> "i8"
+  | Ti16 -> "i16"
+  | Ti32 -> "i32"
+  | Ti64 -> "i64"
+  | Ti128 -> "i128"
 
 let show_uint = function
-  | Tu8 -> "Tu8"
-  | Tu16 -> "Tu16"
-  | Tu32 -> "Tu32"
-  | Tu64 -> "Tu64"
-  | Tu128 -> "Tu128"
+  | Tu8 -> "u8"
+  | Tu16 -> "u16"
+  | Tu32 -> "u32"
+  | Tu64 -> "u64"
+  | Tu128 -> "u128"
 
-let show_float_ty = function Tf32 -> "Tf32" | Tf64 -> "Tf64"
+let show_float_ty = function Tf32 -> "f32" | Tf64 -> "f64"
 
 let show_int_ty = function
-  | TSigned s -> Printf.sprintf "TSigned(%s)" (show_sint s)
-  | TUnsigned u -> Printf.sprintf "TUnsigned(%s)" (show_uint u)
+  | TSigned s -> Printf.sprintf "%s" (show_sint s)
+  | TUnsigned u -> Printf.sprintf "%s" (show_uint u)
 
 (* Manual show for ref_ty *)
 let rec show_ref_ty = function
-  | RString -> "RString"
-  | RArray (t, sz) -> Printf.sprintf "RArray(%s, %Ld)" (show_ty t) sz
-  | RClass cn -> Printf.sprintf "RClass(%s)" cn
-  | RFun (args, ret) ->
-      let args_s = String.concat "; " (List.map show_ty args) in
-      Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
+  | RString -> "string"
+  | RArray (t, sz) -> Printf.sprintf "%s_x_%Ld" (show_ty t) sz
+  | RClass cn -> Printf.sprintf "%s" cn
+  | RFun (tys, r) -> (
+      String.concat "_" (List.map show_ty tys)
+      ^
+      match r with
+      | RetVoid -> "__void"
+      | RetVal t -> Printf.sprintf "__%s" (show_ty t))
 
 and show_ret_ty = function
   | RetVoid -> "RetVoid"
-  | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty t)
+  | RetVal t -> Printf.sprintf "%s" (show_ty t)
 
 and show_ty = function
   | TBool -> "TBool"
-  | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
-  | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
-  | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
+  | TInt it -> Printf.sprintf "%s" (show_int_ty it)
+  | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
+  | TRef rt -> Printf.sprintf "%s" (show_ref_ty rt)
 
 (* Unary and binary operators *)
 let show_unop = function Neg -> "Neg" | Not -> "Not"
@@ -181,7 +184,7 @@ and show_stmt ?(lvl = 0) = function
         match eo with None -> "None" | Some e -> show_exp ~lvl:(lvl + 1) e
       in
       Printf.sprintf "%sRet(%s)" (indent lvl) e_s
-  | SCall (fn, args, arg_types) ->
+  | SCall (fn, args, arg_types, t) ->
       let args_s =
         String.concat ";\n"
           (List.map2
@@ -192,9 +195,9 @@ and show_stmt ?(lvl = 0) = function
                  (show_ty t))
              args arg_types)
       in
-      Printf.sprintf "%sSCall(%s, [\n%s\n%s])" (indent lvl)
+      Printf.sprintf "%sSCall(%s, [\n%s\n%s])->%s" (indent lvl)
         (show_exp ~lvl:(lvl + 1) fn)
-        args_s (indent lvl)
+        args_s (indent lvl) (show_ret_ty t)
   | If (cond, tblock, eblock) ->
       Printf.sprintf "%sIf(\n%scond=%s,\n%sthen=[\n%s\n%s],\n%selse=[\n%s\n%s])"
         (indent lvl)

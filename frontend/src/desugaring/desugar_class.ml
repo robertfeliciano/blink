@@ -13,6 +13,7 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
   let mangled_name =
     mangle_name ~enclosing_class:cname m.fname
       (List.map (fun (t, _) -> t) m.args)
+      m.frtyp
   in
   {
     frtyp = convert_ret_ty m.frtyp;

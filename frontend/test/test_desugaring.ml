@@ -29,7 +29,8 @@ let test_desugar_call_proj _ =
   *)
   let arg = Int (Z.of_int 2, TSigned Ti32) in
   let call =
-    SCall (Proj (Id "o", "m", "clazz"), [ arg ], [ TInt (TSigned Ti32) ])
+    SCall
+      (Proj (Id "o", "m", "clazz"), [ arg ], [ TInt (TSigned Ti32) ], RetVoid)
   in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
   let prog = Prog ([ fn ], []) in
@@ -60,7 +61,7 @@ let test_desugar_call_nested _ =
       frtyp = RetVoid;
       fname = "f";
       args = [];
-      body = [ SCall (outer, [], []) ];
+      body = [ SCall (outer, [], [], RetVoid) ];
     }
   in
   let prog = Prog ([ fn ], []) in

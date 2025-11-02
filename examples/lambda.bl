@@ -1,3 +1,8 @@
+fun takesLambda(f: [i32, i32] -> f64, x: u8) => u64 {
+    return f(2, 3) as u64;
+}
+
+
 fun main(args: [string; 2]) => u64 {
     /*
     fn lambda: [i32, i32] -> f64 = |a, b| {
@@ -25,7 +30,7 @@ fun main(args: [string; 2]) => u64 {
         let y = b;
         return (x+y) as f64;
     };
-
     */
-    return lambda(2, 3) as u64;
+
+    return takesLambda(lambda, 2 as u8);
 }

@@ -86,27 +86,30 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
   | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args false tc with
       | Error msg -> type_error stmt_n msg
-      | Ok (Proj (tobj, _, cname), arg_types, typed_args, RetVal _) ->
+      | Ok (Proj (tobj, _, cname), arg_types, typed_args, RetVoid) ->
+          ( tc,
+            Typed_ast.(
+              SCall (Proj (tobj, mth, cname), typed_args, arg_types, RetVoid)),
+            false )
+      | Ok (Proj (tobj, _, cname), arg_types, typed_args, t) ->
           type_warning stmt_n "Ignoring non-void function";
           ( tc,
-            Typed_ast.(SCall (Proj (tobj, mth, cname), typed_args, arg_types)),
-            false )
-      | Ok (Proj (tobj, _, cname), arg_types, typed_args, _) ->
-          ( tc,
-            Typed_ast.(SCall (Proj (tobj, mth, cname), typed_args, arg_types)),
+            Typed_ast.(
+              SCall (Proj (tobj, mth, cname), typed_args, arg_types, t)),
             false )
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
       let typed_callee, typ = type_exp tc f in
-      let arg_types, typed_args =
+      let arg_types, typed_args, ret =
         match type_func args typ false tc with
         | Error msg -> type_error stmt_n msg
-        | Ok (arg_types, typed_args, RetVal _) ->
+        | Ok (arg_types, typed_args, RetVoid) ->
+            (arg_types, typed_args, Typed_ast.RetVoid)
+        | Ok (arg_types, typed_args, t) ->
             type_warning stmt_n "Ignoring non-void function";
-            (arg_types, typed_args)
-        | Ok (arg_types, typed_args, _) -> (arg_types, typed_args)
+            (arg_types, typed_args, t)
       in
-      (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types), false)
+      (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types, ret), false)
   | If (cond, then_branch, else_branch) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
