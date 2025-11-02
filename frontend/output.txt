@@ -1,0 +1,24 @@
+Program{
+Classes{
+
+}
+Functions{
+  fdecl{name=_Z11takesLambdai32_i32__f64u8u64; ret=u64; args=[(i32_i32__f64, _Z1fi32i32f64); (u8, x)]; body=[
+    Ret(Cast(Call(Id(_Z1fi32i32f64), [Int(2, i32), Int(3, i32)], f64), u64))
+  ]}
+  fdecl{name=_Z4mainstringx2u64; ret=u64; args=[(string_x_2, args)]; body=[
+    Lambda(_Z6lambdai32i32f64: i32_i32__f64) = 
+    {      ((a: i32), (b: i32)) -> f64 {
+              Decl{id=x; ty=i32; const=false;
+          init=Id(a)};
+        Decl{id=y; ty=i32; const=false;
+          init=Id(b)};
+        Ret(Cast(Bop(Add,
+              Id(x),
+              Id(y),
+              i32), f64))
+      }    };
+    Ret(Call(Id(_Z11takesLambdai32_i32__f64u8u64), [Id(lambda), Cast(Int(2, i32), u8)], u64))
+  ]}
+}}
+Done!
