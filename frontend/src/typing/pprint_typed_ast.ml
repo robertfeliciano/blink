@@ -1,5 +1,8 @@
 open Typed_ast
 
+(* Utility for indentation *)
+let indent n = String.make (n * 2) ' '
+
 (* Show functions for basic types *)
 
 let show_sint = function
@@ -41,7 +44,38 @@ and show_ty = function
   | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
   | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
 
-let rec show_exp = function
+(* Unary and binary operators *)
+let show_unop = function Neg -> "Neg" | Not -> "Not"
+
+let show_binop = function
+  | Add -> "Add"
+  | Sub -> "Sub"
+  | Mul -> "Mul"
+  | Div -> "Div"
+  | At -> "At"
+  | Mod -> "Mod"
+  | Pow -> "Pow"
+  | Eqeq -> "Eqeq"
+  | Neq -> "Neq"
+  | Lt -> "Lt"
+  | Lte -> "Lte"
+  | Gt -> "Gt"
+  | Gte -> "Gte"
+  | And -> "And"
+  | Or -> "Or"
+
+let show_aop = function
+  | Eq -> "Eq"
+  | PluEq -> "PluEq"
+  | MinEq -> "MinEq"
+  | TimEq -> "TimEq"
+  | DivEq -> "DivEq"
+  | AtEq -> "AtEq"
+  | PowEq -> "PowEq"
+  | ModEq -> "ModEq"
+
+(* Expressions *)
+let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) ->
       Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
@@ -49,92 +83,197 @@ let rec show_exp = function
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
   | Call (fn, args, arg_types, ty) ->
-      Printf.sprintf "Call(%s, [%s], %s)" (show_exp fn)
-        (String.concat "; "
-           (List.map2
-              (fun a t -> show_exp a ^ " : " ^ show_ty t)
-              args arg_types))
+      let args_s =
+        String.concat ";\n"
+          (List.map2
+             (fun a t ->
+               Printf.sprintf "%s%s : %s"
+                 (indent (lvl + 2))
+                 (show_exp ~lvl:(lvl + 2) a)
+                 (show_ty t))
+             args arg_types)
+      in
+      Printf.sprintf "Call(\n%sfn=%s;\n%sargs=[\n%s\n%s];\n%sret_ty=%s)"
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) fn)
+        (indent (lvl + 1))
+        args_s
+        (indent (lvl + 1))
+        (indent (lvl + 1))
         (show_ty ty)
   | Bop (op, lhs, rhs, ty) ->
-      Printf.sprintf "Bop(%s, %s, %s, %s)" (show_binop op) (show_exp lhs)
-        (show_exp rhs) (show_ty ty)
+      Printf.sprintf "Bop(%s,\n%s%s,\n%s%s,\n%s%s)" (show_binop op)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) lhs)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) rhs)
+        (indent (lvl + 1))
+        (show_ty ty)
   | Uop (op, e, ty) ->
-      Printf.sprintf "Uop(%s, %s, %s)" (show_unop op) (show_exp e) (show_ty ty)
+      Printf.sprintf "Uop(%s, %s, %s)" (show_unop op)
+        (show_exp ~lvl:(lvl + 1) e)
+        (show_ty ty)
   | Index (arr, idx, ty) ->
-      Printf.sprintf "Index(%s, %s, %s)" (show_exp arr) (show_exp idx)
+      Printf.sprintf "Index(%s, %s, %s)"
+        (show_exp ~lvl:(lvl + 1) arr)
+        (show_exp ~lvl:(lvl + 1) idx)
         (show_ty ty)
   | Array (elems, ty, sz) ->
-      Printf.sprintf "Array([%s], %s;%Ld)"
-        (String.concat "; " (List.map show_exp elems))
-        (show_ty ty) sz
-  | Cast (e, t) -> Printf.sprintf "Cast(%s, %s)" (show_exp e) (show_ty t)
+      let elems_s =
+        String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)
+      in
+      Printf.sprintf "Array([%s], %s; %Ld)" elems_s (show_ty ty) sz
+  | Cast (e, t) ->
+      Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
   | Proj (e, i, cname) ->
-      Printf.sprintf "Proj(%s : %s, %s)" (show_exp e) cname i
+      Printf.sprintf "Proj(%s : %s, %s)" (show_exp ~lvl:(lvl + 1) e) cname i
   | ObjInit (cn, fields) ->
-      Printf.sprintf "ObjInit(%s, [%s])" cn
-        (String.concat "; "
-           (List.map
-              (fun (f, e) -> Printf.sprintf "%s=%s" f (show_exp e))
-              fields))
-  | _ -> "todo lambda exp"
+      let fs =
+        String.concat ";\n"
+          (List.map
+             (fun (f, e) ->
+               Printf.sprintf "%s%s=%s"
+                 (indent (lvl + 1))
+                 f
+                 (show_exp ~lvl:(lvl + 2) e))
+             fields)
+      in
+      Printf.sprintf "ObjInit(%s, [\n%s\n%s])" cn fs (indent lvl)
+  | Lambda (args, ret_ty, body) ->
+      let args_s =
+        String.concat "; "
+          (List.map
+             (fun (id, ty) -> Printf.sprintf "(%s : %s)" id (show_ty ty))
+             args)
+      in
+      Printf.sprintf "Lambda(args=[%s]; ret=%s; body=[\n%s\n%s])" args_s
+        (show_ret_ty ret_ty)
+        (show_block ~lvl:(lvl + 1) body)
+        (indent lvl)
 
-let show_vdecl (id, ty, e, is_const) =
-  Printf.sprintf "Decl{id=%s; ty=%s; exp=%s; const=%b}" id (show_ty ty)
-    (show_exp e) is_const
+(* Declarations *)
+and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =
+  Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
+    (show_ty ty) is_const
+    (indent (lvl + 1))
+    (show_exp ~lvl:(lvl + 1) e)
 
-let rec show_stmt = function
+(* Statements *)
+and show_stmt ?(lvl = 0) = function
   | Assn (lhs, op, rhs, t) ->
-      Printf.sprintf "Assn(%s, %s, %s, %s)" (show_exp lhs) (show_aop op)
-        (show_exp rhs) (show_ty t)
-  | Decl v -> show_vdecl v
+      Printf.sprintf "%sAssn(\n%s%s,\n%s%s,\n%s%s,\n%s%s)" (indent lvl)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) lhs)
+        (indent (lvl + 1))
+        (show_aop op)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) rhs)
+        (indent (lvl + 1))
+        (show_ty t)
+  | Decl v -> show_vdecl ~lvl v
+  | LambdaDecl (id, ref_ty, defn) ->
+      Printf.sprintf "%sLambdaDecl(%s : %s => [\n%s\n%s])" (indent lvl) id
+        (show_ref_ty ref_ty)
+        (show_exp ~lvl:(lvl + 1) defn)
+        (indent lvl)
   | Ret eo ->
-      Printf.sprintf "Ret(%s)"
-        (match eo with None -> "None" | Some e -> show_exp e)
+      let e_s =
+        match eo with None -> "None" | Some e -> show_exp ~lvl:(lvl + 1) e
+      in
+      Printf.sprintf "%sRet(%s)" (indent lvl) e_s
   | SCall (fn, args, arg_types) ->
-      Printf.sprintf "SCall(%s, [%s])" (show_exp fn)
-        (String.concat "; "
-           (List.map2
-              (fun a t -> show_exp a ^ " : " ^ show_ty t)
-              args arg_types))
+      let args_s =
+        String.concat ";\n"
+          (List.map2
+             (fun a t ->
+               Printf.sprintf "%s%s : %s"
+                 (indent (lvl + 2))
+                 (show_exp ~lvl:(lvl + 2) a)
+                 (show_ty t))
+             args arg_types)
+      in
+      Printf.sprintf "%sSCall(%s, [\n%s\n%s])" (indent lvl)
+        (show_exp ~lvl:(lvl + 1) fn)
+        args_s (indent lvl)
   | If (cond, tblock, eblock) ->
-      Printf.sprintf "If(%s, [%s], [%s])" (show_exp cond)
-        (String.concat "; " (List.map show_stmt tblock))
-        (String.concat "; " (List.map show_stmt eblock))
+      Printf.sprintf "%sIf(\n%scond=%s,\n%sthen=[\n%s\n%s],\n%selse=[\n%s\n%s])"
+        (indent lvl)
+        (indent (lvl + 1))
+        (show_exp ~lvl:(lvl + 1) cond)
+        (indent (lvl + 1))
+        (String.concat ";\n"
+           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) tblock))
+        (indent (lvl + 1))
+        (indent (lvl + 1))
+        (String.concat ";\n"
+           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) eblock))
+        (indent lvl)
   | ForEach (id, iter, iter_ty, body) ->
-      Printf.sprintf "For(%s, %s of %s, [%s])" id (show_exp iter)
+      Printf.sprintf "%sForEach(%s in %s : %s [\n%s\n%s])" (indent lvl) id
+        (show_exp ~lvl:(lvl + 1) iter)
         (show_ty iter_ty)
-        (String.concat "; " (List.map show_stmt body))
+        (String.concat ";\n"
+           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
+        (indent lvl)
   | For (id, start, stop, incl, step, step_ty, body) ->
-      Printf.sprintf "For(%s, %s, %s, %b, step=%s of %s, [%s])" id
-        (show_exp start) (show_exp stop) incl (show_exp step) (show_ty step_ty)
-        (String.concat "; " (List.map show_stmt body))
+      Printf.sprintf "%sFor(%s = %s to %s incl=%b step=%s : %s [\n%s\n%s])"
+        (indent lvl) id
+        (show_exp ~lvl:(lvl + 1) start)
+        (show_exp ~lvl:(lvl + 1) stop)
+        incl
+        (show_exp ~lvl:(lvl + 1) step)
+        (show_ty step_ty)
+        (String.concat ";\n"
+           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
+        (indent lvl)
   | While (cond, body) ->
-      Printf.sprintf "While(%s, [%s])" (show_exp cond)
-        (String.concat "; " (List.map show_stmt body))
-  | Break -> "Break"
-  | Continue -> "Continue"
-  | LambdaDecl _ -> "todo lambdadecl"
+      Printf.sprintf "%sWhile(%s) [\n%s\n%s]" (indent lvl)
+        (show_exp ~lvl:(lvl + 1) cond)
+        (String.concat ";\n"
+           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
+        (indent lvl)
+  | Break -> Printf.sprintf "%sBreak" (indent lvl)
+  | Continue -> Printf.sprintf "%sContinue" (indent lvl)
 
-let show_block b = String.concat ";\n" (List.map show_stmt b)
+and show_block ?(lvl = 0) b =
+  String.concat ";\n" (List.map (fun s -> show_stmt ~lvl s) b)
 
-let show_fdecl { frtyp; fname; args; body } =
-  Printf.sprintf "fdecl{ret=%s; name=%s; args=[%s]; body=[\n%s\n]}"
-    (show_ret_ty frtyp) fname
-    (String.concat "; "
-       (List.map
-          (fun (ty, id) -> Printf.sprintf "(%s,%s)" (show_ty ty) id)
-          args))
-    (show_block body)
+(* Function, class, and program printers *)
 
-let show_field { fieldName; ftyp; init } =
-  Printf.sprintf "%s: %s = %s" fieldName (show_ty ftyp) (show_exp init)
+let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
+  let args_s =
+    String.concat "; "
+      (List.map
+         (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
+         args)
+  in
+  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+    (indent lvl) fname (show_ret_ty frtyp) args_s
+    (show_block ~lvl:(lvl + 1) body)
+    (indent lvl)
 
-let show_cdecl { cname; impls; fields; methods } =
-  Printf.sprintf "cdecl{name=%s; impls=%s;\nfields=%s;\nmethods=%s}" cname
-    (String.concat ", " impls)
-    (String.concat "\n" (List.map show_field fields))
-    (String.concat "\n" (List.map show_fdecl methods))
+let show_field ?(lvl = 0) { fieldName; ftyp; init } =
+  Printf.sprintf "%s%s: %s = %s" (indent lvl) fieldName (show_ty ftyp)
+    (show_exp ~lvl:(lvl + 1) init)
+
+let show_cdecl ?(lvl = 0) { cname; impls; fields; methods } =
+  let fields_s =
+    String.concat ";\n" (List.map (show_field ~lvl:(lvl + 1)) fields)
+  in
+  let methods_s =
+    String.concat ";\n" (List.map (show_fdecl ~lvl:(lvl + 1)) methods)
+  in
+  Printf.sprintf
+    "%scdecl{name=%s; impls=[%s];\n%sfields=[\n%s\n%s];\n%smethods=[\n%s\n%s];}"
+    (indent lvl) cname (String.concat ", " impls)
+    (indent (lvl + 1))
+    fields_s
+    (indent (lvl + 1))
+    (indent (lvl + 1))
+    methods_s
+    (indent (lvl + 1))
 
 let show_typed_program (Prog (fns, cns)) =
-  String.concat "\n" (List.map show_cdecl cns)
-  ^ String.concat "\n" (List.map show_fdecl fns)
+  let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
+  let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
+  Printf.sprintf "Program{\nClasses{\n%s\n}\nFunctions{\n%s\n}}" cns_s fns_s

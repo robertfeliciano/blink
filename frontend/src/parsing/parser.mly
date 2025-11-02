@@ -334,9 +334,9 @@ vdecl:
 
 
 lambda: 
-  | BAR args=untyped_lambda_args BAR LBRACE stmts=block RBRACE
+  | BAR args=untyped_lambda_args BAR stmts=block
       { loc $startpos $endpos @@ Lambda (args, stmts) }
-  | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty LBRACE stmts=block RBRACE
+  | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty stmts=block
       { loc $startpos $endpos @@ TypedLambda (args, rty, stmts) }
 
 untyped_lambda_arg:
@@ -351,8 +351,11 @@ typed_lambda_arg:
 typed_lambda_args:
   | l=separated_list(COMMA, typed_lambda_arg) { l }
 
+lambda_fun_ty_spec: 
+  | COLON t=fun_ty  { t }
+
 ldecl: 
-  | FN id=IDENT t=fun_ty? EQUAL l=lambda
+  | FN id=IDENT t=lambda_fun_ty_spec? EQUAL l=lambda
       { 
         let i_start = $startpos(id) in 
         let i_end   = $endpos(id) in 

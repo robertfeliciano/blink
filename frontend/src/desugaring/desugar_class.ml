@@ -1,5 +1,4 @@
 open Typing.Typed_ast
-open Desugar_exp
 open Desugar_stmt
 open Conversions
 open Desugar_util

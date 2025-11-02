@@ -1,0 +1,31 @@
+fun main(args: [string; 2]) => u64 {
+    /*
+    fn lambda: [i32, i32] -> f64 = |a, b| {
+        let x = a;
+        let y = b;
+        return (x+y) as f64;
+    };
+    
+    fn lambda = (a: i32, b: i32) -> f64 {
+        let x = a;
+        let y = b;
+        return (x+y) as f64;
+    };
+    */
+
+    fn lambda: [i32, i32] -> f64 = (a: i32, b: i32) -> f64 {
+        let x = a;
+        let y = b;
+        return (x+y) as f64;
+    };
+    
+    /*
+    fn lambda = |a,b| {
+        let x = a;
+        let y = b;
+        return (x+y) as f64;
+    };
+
+    */
+    return lambda(2, 3) as u64;
+}

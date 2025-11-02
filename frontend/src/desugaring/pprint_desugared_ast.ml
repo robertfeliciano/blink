@@ -6,24 +6,24 @@ let indent n = String.make (n * 2) ' '
 (* Show functions for basic types *)
 
 let show_sint = function
-  | Ti8 -> "Ti8"
-  | Ti16 -> "Ti16"
-  | Ti32 -> "Ti32"
-  | Ti64 -> "Ti64"
-  | Ti128 -> "Ti128"
+  | Ti8 -> "i8"
+  | Ti16 -> "i16"
+  | Ti32 -> "i32"
+  | Ti64 -> "i64"
+  | Ti128 -> "i128"
 
 let show_uint = function
-  | Tu8 -> "Tu8"
-  | Tu16 -> "Tu16"
-  | Tu32 -> "Tu32"
-  | Tu64 -> "Tu64"
-  | Tu128 -> "Tu128"
+  | Tu8 -> "u8"
+  | Tu16 -> "u16"
+  | Tu32 -> "u32"
+  | Tu64 -> "u64"
+  | Tu128 -> "u128"
 
-let show_float_ty = function Tf32 -> "Tf32" | Tf64 -> "Tf64"
+let show_float_ty = function Tf32 -> "f32" | Tf64 -> "f64"
 
 let show_int_ty = function
-  | TSigned s -> Printf.sprintf "TSigned(%s)" (show_sint s)
-  | TUnsigned u -> Printf.sprintf "TUnsigned(%s)" (show_uint u)
+  | TSigned s -> Printf.sprintf "%s" (show_sint s)
+  | TUnsigned u -> Printf.sprintf "%s" (show_uint u)
 
 (* Manual show for ref_ty *)
 let rec show_ref_ty = function
@@ -32,16 +32,16 @@ let rec show_ref_ty = function
   | RClass cn -> Printf.sprintf "RClass(%s)" cn
   | RFun (args, ret) ->
       let args_s = String.concat "; " (List.map show_ty args) in
-      Printf.sprintf "RFun([%s], %s)" args_s (show_ret_ty ret)
+      Printf.sprintf "RFun([%s]->%s)" args_s (show_ret_ty ret)
 
 and show_ret_ty = function
-  | RetVoid -> "RetVoid"
-  | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty t)
+  | RetVoid -> "void"
+  | RetVal t -> Printf.sprintf "%s" (show_ty t)
 
 and show_ty = function
   | TBool -> "TBool"
-  | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
-  | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
+  | TInt it -> Printf.sprintf "%s" (show_int_ty it)
+  | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
   | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty rt)
 
 let show_unop = function Neg -> "Neg" | Not -> "Not"
@@ -103,6 +103,17 @@ let rec show_exp ?(lvl = 0) = function
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
   | Proj (e, i) -> Printf.sprintf "Proj(%s, %s)" (show_exp ~lvl:(lvl + 1) e) i
+  | Lambda (args, ret, body) ->
+      let args_s =
+        String.concat ", "
+          (List.map
+             (fun (id, ty) -> Printf.sprintf "(%s: %s)" id (show_ty ty))
+             args)
+      in
+      Printf.sprintf "%s(%s) -> %s {\n%s%s\n%s}" (indent lvl) args_s
+        (show_ret_ty ret) (indent lvl)
+        (show_block ~lvl:(lvl + 1) body)
+        (indent lvl)
   | ObjInit (cn, fields) ->
       let fs =
         String.concat ";\n"
@@ -117,14 +128,14 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "ObjInit(%s, [\n%s\n%s])" cn fs (indent lvl)
 
 (* Declarations *)
-let show_vdecl ?(lvl = 0) (id, ty, e, is_const) =
+and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =
   Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
     (show_ty ty) is_const
     (indent (lvl + 1))
     (show_exp ~lvl:(lvl + 1) e)
 
 (* Statements *)
-let rec show_stmt ?(lvl = 0) = function
+and show_stmt ?(lvl = 0) = function
   | Assn (lhs, rhs, t) ->
       Printf.sprintf "%sAssn(\n%s%s,\n%s%s,\n%s%s)" (indent lvl)
         (indent (lvl + 1))
@@ -185,8 +196,13 @@ let rec show_stmt ?(lvl = 0) = function
         (indent lvl)
   | Break -> Printf.sprintf "%sBreak" (indent lvl)
   | Continue -> Printf.sprintf "%sContinue" (indent lvl)
+  | LambdaDecl (lname, ltyp, defn) ->
+      Printf.sprintf "%sLambda(%s: %s) = \n%s{%s%s}" (indent lvl) lname
+        (show_ref_ty ltyp) (indent lvl)
+        (show_exp ~lvl:(lvl + 1) defn)
+        (indent lvl)
 
-let show_block ?(lvl = 0) b =
+and show_block ?(lvl = 0) b =
   String.concat ";\n" (List.map (fun s -> show_stmt ~lvl s) b)
 
 (* Function, class, and program printers *)
