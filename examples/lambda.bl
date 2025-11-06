@@ -4,11 +4,12 @@ fun takesLambda(f: [i32, i32] -> f64, x: u8) => u64 {
 
 
 fun main(args: [string; 2]) => u64 {
+    let z = 12;
     /*
     fn lambda: [i32, i32] -> f64 = |a, b| {
         let x = a;
         let y = b;
-        return (x+y) as f64;
+        return (x+y*z) as f64;
     };
     
     fn lambda = (a: i32, b: i32) -> f64 {
