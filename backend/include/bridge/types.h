@@ -53,12 +53,8 @@ struct RefTy {
     std::unique_ptr<Ty> inner;
     int64_t size = 0;
 
-    // for RRange
-    std::unique_ptr<Ty> range_start;
-    std::unique_ptr<Ty> range_end;
-
     // for RClass
-    std::string class_name;
+    std::string cname;
 };
 
 enum class TyTag {

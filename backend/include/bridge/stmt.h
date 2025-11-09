@@ -45,6 +45,9 @@ struct For {
     std::string id;
     std::unique_ptr<Exp> start;
     std::unique_ptr<Exp> end;
+    bool incl;
+    std::unique_ptr<Exp> step;
+    Ty iter_ty;
     std::vector<std::unique_ptr<Stmt>> body;
 };
 

@@ -35,14 +35,12 @@ enum class BinOp {
     Or
 };
 
-// Basic literal/leaf variants
 struct EBool { bool value; };
 struct EInt  { std::string value; std::unique_ptr<IntTy> int_ty; };
 struct EFloat { double value; FloatTy float_ty; };
 struct EStr  { std::string value; };
 struct EId   { std::string id; };
 
-// Complex expressions
 struct ECall {
     std::unique_ptr<Exp> callee;
     std::vector<std::unique_ptr<Exp>> args;
@@ -79,20 +77,9 @@ struct ECast {
     Ty ty;
 };
 
-struct ERange {
-    std::unique_ptr<Exp> start;
-    std::unique_ptr<Exp> end;
-    bool inclusive;
-};
-
 struct EProj {
     std::unique_ptr<Exp> obj;
     std::string field;
-};
-
-struct EObjCons {
-    std::string id;
-    std::vector<std::unique_ptr<Exp>> args;
 };
 
 struct EObjInit {
@@ -112,9 +99,7 @@ using ExpVariant = std::variant<
     EIndex,
     EArray,
     ECast,
-    ERange,
     EProj,
-    EObjCons,
     EObjInit
 >;
 
@@ -122,7 +107,6 @@ struct Exp {
     ExpVariant val;
 };
 
-// Convert an OCaml value (typed AST exp) into this bridge Exp
 Exp convert_exp(value v);
 
 std::string toString(BinOp op);

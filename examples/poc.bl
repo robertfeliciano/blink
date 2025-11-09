@@ -2,5 +2,15 @@ fun main(a: i32) => i32 {
     while (a > 10) {
         let x: i32 = a - 1;
     }
+    let x = 12;
+    if x < 20 { 
+        // something
+    } 
+    else if x > 10 { 
+        // something
+    }
+    else {
+        // something else
+    }
     return 1;
 }

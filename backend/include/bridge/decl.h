@@ -18,6 +18,7 @@ struct FDecl {
 };
 
 struct Field {
+    std::vector<std::unique_ptr<Stmt>> prelude;
     std::string fieldName;
     Ty ftyp;
     std::unique_ptr<Exp> init;
