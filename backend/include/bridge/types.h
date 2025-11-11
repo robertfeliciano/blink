@@ -40,7 +40,7 @@ struct RetTy {
     std::unique_ptr<Ty> val; // for RetVal
 };
 
-enum class RefTyTag { RString, RArray, RRange, RClass, RFun };
+enum class RefTyTag { RString, RArray, RClass, RFun };
 
 struct RefTy {
     RefTyTag tag;
@@ -72,6 +72,10 @@ struct Ty {
 };
 
 // Converters from OCaml values (implemented in bridge source)
+IntTy convert_int_ty(value v);
+
+FloatTy convert_float_ty(value v);
+
 Ty convert_ty(value v);
 
 RetTy convert_ret_ty(value v);

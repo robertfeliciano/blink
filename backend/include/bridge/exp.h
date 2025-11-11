@@ -36,7 +36,13 @@ enum class BinOp {
 };
 
 struct EBool { bool value; };
-struct EInt  { std::string value; std::unique_ptr<IntTy> int_ty; };
+struct EInt  { 
+    std::unique_ptr<IntTy> int_ty;
+    union {
+        __int128 s;
+        unsigned __int128 u;
+    };
+};
 struct EFloat { double value; FloatTy float_ty; };
 struct EStr  { std::string value; };
 struct EId   { std::string id; };

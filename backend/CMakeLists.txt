@@ -1,4 +1,4 @@
-# clang++ -std=c++20 -fPIC -shared -Iinclude -I$(ocamlc -where) src/ast/*.cpp main.cpp -o my_ast_bindings.so
+# clang++ -std=c++20 -fPIC -shared -Iinclude -I$(ocamlc -where) src/bridge/*.cpp main.cpp -o my_ast_bindings.so
 
 cmake_minimum_required(VERSION 3.16)
 project(my_ast_project LANGUAGES CXX)
@@ -28,7 +28,8 @@ include_directories(
 )
 
 file(GLOB_RECURSE SOURCES
-    src/ast/*.cpp
+    src/bridge/*.cpp
+    # src/ast/*.cpp
     # src/codegen/*.cpp
     main.cpp
 )
@@ -37,6 +38,19 @@ find_package(LLVM REQUIRED CONFIG)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+find_path(GMP_INCLUDE_DIR NAMES gmp.h)
+find_library(GMP_LIBRARY NAMES gmp libgmp)
+find_library(GMPXX_LIBRARY NAMES gmpxx libgmpxx)
+
+if(NOT GMP_INCLUDE_DIR OR NOT GMP_LIBRARY)
+    message(FATAL_ERROR "GMP not found! Please install it (e.g. sudo dnf install gmp-devel)")
+endif()
+
+include_directories(${GMP_INCLUDE_DIR})
+message(STATUS "Found GMP include dir: ${GMP_INCLUDE_DIR}")
+message(STATUS "Found GMP libraries: ${GMP_LIBRARY}, ${GMPXX_LIBRARY}")
+
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
@@ -72,5 +86,5 @@ set_target_properties(convert PROPERTIES
     PREFIX "dll"  # OCaml expects 'dllconvert.so'
 )
 
-target_link_libraries(convert PRIVATE ${llvm_libs})
-target_link_libraries(convert_static PRIVATE ${llvm_libs})
+target_link_libraries(convert PRIVATE ${llvm_libs} ${GMPXX_LIBRARY} ${GMP_LIBRARY})
+target_link_libraries(convert_static PRIVATE ${llvm_libs} ${GMPXX_LIBRARY} ${GMP_LIBRARY})
