@@ -46,27 +46,22 @@ EInt convert_zarith_int(value z_val, value int_ty_val) {
     if (!z_val)
         throw std::runtime_error("Null Z.t value in convert_zarith_int");
 
-    // Convert OCaml int_ty first
     auto int_ty = std::make_unique<IntTy>(convert_int_ty(int_ty_val));
 
-    // Extract mpz_t pointer from Zarith custom block
     mpz_t* z_ptr = reinterpret_cast<mpz_t*>(Data_custom_val(z_val));
     if (!z_ptr)
         throw std::runtime_error("Invalid Zarith integer pointer");
 
-    // Determine signedness from IntTy (customize as needed)
     bool is_signed = true;
     if (int_ty && int_ty->tag == IntTyTag::Unsigned) {
         is_signed = false;
     }
 
-    // Check bit length to avoid overflow
     size_t bitlen = mpz_sizeinbase(*z_ptr, 2);
     if (bitlen > 128) {
         throw std::overflow_error("Zarith integer too large for 128-bit target");
     }
 
-    // Export raw bytes (big-endian)
     unsigned char buf[16] = {0};
     size_t written = 0;
     mpz_export(buf, &written, 1 /* most significant first */, 1, 1, 0, *z_ptr);
@@ -74,9 +69,9 @@ EInt convert_zarith_int(value z_val, value int_ty_val) {
     // Combine bytes into unsigned __int128
     unsigned __int128 mag = 0;
     for (size_t i = 0; i < written; ++i)
+        // magic
         mag = (mag << 8) | buf[i];
 
-    // Build EInt
     EInt ei;
     ei.int_ty = std::move(int_ty);
 
