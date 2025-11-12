@@ -41,7 +41,6 @@ BinOp convert_binop(value v) {
     }
 }
 
-
 i128 string_to_i128(const std::string& str) {
     size_t i = 0;
 
@@ -60,7 +59,6 @@ i128 string_to_i128(const std::string& str) {
     return negative ? -result : result;
 }
 
-
 u128 string_to_u128(const std::string& str) {
     size_t i = 0;
     if (str[i] == '-') 
@@ -74,7 +72,6 @@ u128 string_to_u128(const std::string& str) {
 
     return result;
 }
-
 
 Exp convert_exp(value v) {
     Exp result;
@@ -250,8 +247,6 @@ std::string toString(UnOp op) {
     throw std::runtime_error("Unknown UnOp");
 }
 
-
-// Helper visitor for expToString
 struct ExpToStringVisitor {
     std::string operator()(const EBool& e) const { return e.value ? "true" : "false"; }
     std::string operator()(const EInt& e) const { 

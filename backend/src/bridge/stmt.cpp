@@ -37,10 +37,11 @@ Stmt convert_stmt(value v) {
             throw std::runtime_error("Lambda declarations not supported in bridge conversion");
         }
         case 2: { // Decl of vdecl (id * ty * exp * bool)
-            std::string id = String_val(Field(v, 0));
-            Ty ty = convert_ty(Field(v, 1));
-            auto init = std::make_unique<Exp>(convert_exp(Field(v, 2)));
-            bool is_const = Bool_val(Field(v, 3));
+            value vdecl = Field(v, 0);
+            std::string id = String_val(Field(vdecl, 0));
+            Ty ty = convert_ty(Field(vdecl, 1));
+            auto init = std::make_unique<Exp>(convert_exp(Field(vdecl, 2)));
+            bool is_const = Bool_val(Field(vdecl, 3));
             result.val = VDecl{ id, std::move(ty), std::move(init), is_const };
             break;
         }
