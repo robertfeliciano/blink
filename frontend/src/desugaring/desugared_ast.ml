@@ -60,15 +60,6 @@ and stmt =
   | Ret of exp option
   | SCall of exp * exp list
   | If of exp * block * block
-  | For of
-      id
-      * exp
-      * exp
-      * bool
-      * exp
-      * ty (* type of iterator, i.e. float, i32, u8, etc *)
-      * block (* iterator, start, stop, incl, step, body *)
-  | ForEach of id * exp * ty * block
   | While of exp * block
   | Break
   | Continue

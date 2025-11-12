@@ -38,15 +38,16 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let f_stmts, fin' = desugar_exp fin in
       let st_stmts, step' = desugar_exp step in
       let prelude = s_stmts @ f_stmts @ st_stmts in
-      let step_ = D.Id "%step" in
+      let step_name = "%step" in
+      let step_ = D.Id step_name in
       let iter_ = D.Id iter in
       let ty = convert_ty ty in
-      let step_assn = D.Assn (step_, step', ty) in
-      let iter_assn = D.Assn (iter_, start', ty) in
+      let step_decl = D.Decl (step_name, ty, step', false) in
+      let iter_decl = D.Decl (iter, ty, start', false) in
       let zero = get_zero ty in
       let up_to = if incl then D.Lte else Lt in
       let down_to = if incl then D.Gte else Gt in
-      let create_cond cmp = D.Bop (cmp, step_, fin', TBool) in
+      let create_cond cmp = D.Bop (cmp, iter_, fin', TBool) in
       let body' = desugar_block body in
       let step_dec =
         D.If
@@ -74,7 +75,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
             [ SCall (Id "panic", []) ],
             [ step_inc ] )
       in
-      prelude @ [ step_assn; iter_assn; zero_check ]
+      prelude @ [ step_decl; iter_decl; zero_check ]
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
       (* TODO dont call proj - just call method direectly (like after desugaring it) *)

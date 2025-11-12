@@ -173,24 +173,6 @@ and show_stmt ?(lvl = 0) = function
         (String.concat ";\n"
            (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) eblock))
         (indent lvl)
-  | ForEach (id, iter, iter_ty, body) ->
-      Printf.sprintf "%sForEach(%s in %s : %s [\n%s\n%s])" (indent lvl) id
-        (show_exp ~lvl:(lvl + 1) iter)
-        (show_ty iter_ty)
-        (String.concat ";\n"
-           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
-        (indent lvl)
-  | For (id, start, stop, incl, step, step_ty, body) ->
-      Printf.sprintf "%sFor(%s = %s to %s incl=%b step=%s : %s [\n%s\n%s])"
-        (indent lvl) id
-        (show_exp ~lvl:(lvl + 1) start)
-        (show_exp ~lvl:(lvl + 1) stop)
-        incl
-        (show_exp ~lvl:(lvl + 1) step)
-        (show_ty step_ty)
-        (String.concat ";\n"
-           (List.map (fun s -> show_stmt ~lvl:(lvl + 2) s) body))
-        (indent lvl)
   | While (cond, body) ->
       Printf.sprintf "%sWhile(%s) [\n%s\n%s]" (indent lvl)
         (show_exp ~lvl:(lvl + 1) cond)

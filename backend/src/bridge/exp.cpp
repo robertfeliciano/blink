@@ -77,7 +77,7 @@ Exp convert_exp(value v) {
     Exp result;
 
     if (!Is_block(v)) {
-        throw std::runtime_error("Expected block for exp variant");
+        throw std::runtime_error("Expected caml block for exp variant");
     }
 
     switch (Tag_val(v)) {

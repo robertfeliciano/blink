@@ -22,93 +22,81 @@ static std::vector<std::unique_ptr<Stmt>> convert_block(value v) {
 Stmt convert_stmt(value v) {
     Stmt result;
 
-    if (!Is_block(v))
-        throw std::runtime_error("Expected block for stmt variant");
-
-    switch (Tag_val(v)) {
-        case 0: { // Assn of exp * exp * ty
-            auto lhs = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-            auto rhs = std::make_unique<Exp>(convert_exp(Field(v, 1)));
-            Ty ty = convert_ty(Field(v, 2));
-            result.val = Assn{ std::move(lhs), std::move(rhs), std::move(ty) };
-            break;
-        }
-        case 1: { // LambdaDecl of ldecl
-            throw std::runtime_error("Lambda declarations not supported in bridge conversion");
-        }
-        case 2: { // Decl of vdecl (id * ty * exp * bool)
-            value vdecl = Field(v, 0);
-            std::string id = String_val(Field(vdecl, 0));
-            Ty ty = convert_ty(Field(vdecl, 1));
-            auto init = std::make_unique<Exp>(convert_exp(Field(vdecl, 2)));
-            bool is_const = Bool_val(Field(vdecl, 3));
-            result.val = VDecl{ id, std::move(ty), std::move(init), is_const };
-            break;
-        }
-        case 3: { // Ret of exp option
-            value opt = Field(v, 0);
-            Ret r;
-            if (Is_block(opt)) {
-                r.value = std::make_shared<Exp>(convert_exp(Field(opt, 0)));
-            } else {
-                r.value = std::nullopt;
+    if (Is_block(v)) {
+        switch (Tag_val(v)) {
+            case 0: { // Assn of exp * exp * ty
+                auto lhs = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                auto rhs = std::make_unique<Exp>(convert_exp(Field(v, 1)));
+                Ty ty = convert_ty(Field(v, 2));
+                result.val = Assn{ std::move(lhs), std::move(rhs), std::move(ty) };
+                break;
             }
-            result.val = std::move(r);
-            break;
-        }
-        case 4: { // SCall of exp * exp list
-            auto callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-            value args_v = Field(v, 1);
-            std::vector<std::unique_ptr<Exp>> args;
-            while (args_v != Val_emptylist) {
-                value head = Field(args_v, 0);
-                args.push_back(std::make_unique<Exp>(convert_exp(head)));
-                args_v = Field(args_v, 1);
+            case 1: { // LambdaDecl of ldecl
+                throw std::runtime_error("Lambda declarations not supported in bridge conversion");
             }
-            result.val = SCall{ std::move(callee), std::move(args) };
-            break;
+            case 2: { // Decl of vdecl (id * ty * exp * bool)
+                value vdecl = Field(v, 0);
+                std::string id = String_val(Field(vdecl, 0));
+                Ty ty = convert_ty(Field(vdecl, 1));
+                auto init = std::make_unique<Exp>(convert_exp(Field(vdecl, 2)));
+                bool is_const = Bool_val(Field(vdecl, 3));
+                result.val = VDecl{ id, std::move(ty), std::move(init), is_const };
+                break;
+            }
+            case 3: { // Ret of exp option
+                value opt = Field(v, 0);
+                Ret r;
+                if (Is_block(opt)) {
+                    r.value = std::make_shared<Exp>(convert_exp(Field(opt, 0)));
+                } else {
+                    r.value = std::nullopt;
+                }
+                result.val = std::move(r);
+                break;
+            }
+            case 4: { // SCall of exp * exp list
+                auto callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                value args_v = Field(v, 1);
+                std::vector<std::unique_ptr<Exp>> args;
+                while (args_v != Val_emptylist) {
+                    value head = Field(args_v, 0);
+                    args.push_back(std::make_unique<Exp>(convert_exp(head)));
+                    args_v = Field(args_v, 1);
+                }
+                result.val = SCall{ std::move(callee), std::move(args) };
+                break;
+            }
+            case 5: { // If of exp * block * block
+                auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                auto then_b = convert_block(Field(v, 1));
+                auto else_b = convert_block(Field(v, 2));
+                result.val = If{ std::move(cond), std::move(then_b), std::move(else_b) };
+                break;
+            }
+            case 6: { // While of exp * block
+                auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                auto body = convert_block(Field(v, 1));
+                result.val = While{ std::move(cond), std::move(body) };
+                break;
+            }
+            default: {
+                throw std::runtime_error("Unsupported stmt variant in bridge conversion");
+            }
         }
-        case 5: { // If of exp * block * block
-            auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-            auto then_b = convert_block(Field(v, 1));
-            auto else_b = convert_block(Field(v, 2));
-            result.val = If{ std::move(cond), std::move(then_b), std::move(else_b) };
-            break;
-        }
-        case 6: { // For of id * exp * exp * bool * exp * ty * block
-            std::string id = String_val(Field(v, 0));
-            auto start = std::make_unique<Exp>(convert_exp(Field(v, 1)));
-            auto end = std::make_unique<Exp>(convert_exp(Field(v, 2)));
-            bool incl = Bool_val(Field(v, 3));
-            auto step = std::make_unique<Exp>(convert_exp(Field(v, 4)));
-            Ty iter_ty = convert_ty(Field(v, 5));
-            auto body = convert_block(Field(v, 6));
-            result.val = For{ id, std::move(start), std::move(end), incl, std::move(step), std::move(iter_ty), std::move(body) };
-            break;
-        }
-        case 7: { // ForEach of id * exp * ty * block
-            std::string iterator = String_val(Field(v, 0));
-            auto iterable = std::make_unique<Exp>(convert_exp(Field(v, 1)));
-            Ty iter_ty = convert_ty(Field(v, 2));
-            auto body = convert_block(Field(v, 4));
-            result.val = ForEach{ iterator, std::move(iterable), std::move(iter_ty), std::move(body) };
-        }
-        case 8: { // While of exp * block
-            auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-            auto body = convert_block(Field(v, 1));
-            result.val = While{ std::move(cond), std::move(body) };
-            break;
-        }
-        case 9: { // Break
-            result.val = Break{};
-            break;
-        }
-        case 10: { // Continue
-            result.val = Continue{};
-            break;
-        }
-        default: {
-            throw std::runtime_error("Unsupported stmt variant in bridge conversion");
+    }
+    else {
+        switch (Int_val(v)) {
+            case 0: { // Break
+                result.val = Break{};
+                break;
+            }
+            case 1: { // Continue
+                result.val = Continue{};
+                break;
+            }
+            default: {
+                throw std::runtime_error("Unsupported stmt variant in bridge conversion");
+            }
         }
     }
 
@@ -126,7 +114,7 @@ struct StmtToStringVisitor {
         return indent(indentLevel) + expToString(*s.lhs) + " = " + expToString(*s.rhs) + ";";
     }
     std::string operator()(const VDecl& s) const {
-        return indent(indentLevel) + (s.is_const ? "const " : "var ") + s.id + ": " + tyToString(s.ty) + " = " + expToString(*s.init) + ";";
+        return indent(indentLevel) + (s.is_const ? "const " : "let ") + s.id + ": " + tyToString(s.ty) + " = " + expToString(*s.init) + ";";
     }
     std::string operator()(const Ret& s) const {
         if (s.value.has_value()) 
@@ -149,20 +137,6 @@ struct StmtToStringVisitor {
         res += indent(indentLevel) + " } else {\n";
         for (auto &st : s.else_branch) res += stmtToString(*st, indentLevel + 1) + "\n";
         res += indent(indentLevel) + " }";
-        return res;
-    }
-    std::string operator()(const For& s) const {
-        std::string res = indent(indentLevel) + "for (" + s.id + " = " + expToString(*s.start) + "; " + s.id + " < " + expToString(*s.end);
-        res += (s.incl ? " <= " : " < ");
-        res += expToString(*s.end) + ") {\n";
-        for (auto &st : s.body) res += stmtToString(*st, indentLevel + 1) + "\n";
-        res += indent(indentLevel) + " }";
-        return res;
-    }
-    std::string operator()(const ForEach& s) const {
-        std::string res = indent(indentLevel) + "for (" + s.iterator + " in " + expToString(*s.iterable) + " {\n";
-        for (auto &st : s.body) res += stmtToString(*st, indentLevel + 1) + "\n";
-        res += indent(indentLevel) + "}";
         return res;
     }
     std::string operator()(const While& s) const {

@@ -87,20 +87,6 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
                 (union_result
                    (analyze_block locals then_blk)
                    (analyze_block locals else_blk))
-          | For (iter_id, start_e, stop_e, _incl, step_e, _ty, body_blk) ->
-              let locals_body = StringSet.add iter_id locals in
-              let parts = [
-                analyze_exp locals false start_e;
-                analyze_exp locals false stop_e;
-                analyze_exp locals false step_e;
-                analyze_block locals_body body_blk;
-              ] in
-              List.fold_left union_result empty_result parts
-          | ForEach (iter_id, coll_e, _ty, body_blk) ->
-              let locals_body = StringSet.add iter_id locals in
-              union_result
-                (analyze_exp locals false coll_e)
-                (analyze_block locals_body body_blk)
           | While (cond, body_blk) ->
               union_result
                 (analyze_exp locals false cond)

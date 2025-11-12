@@ -41,23 +41,6 @@ struct If {
     std::vector<std::unique_ptr<Stmt>> else_branch;
 };
 
-struct For {
-    std::string id;
-    std::unique_ptr<Exp> start;
-    std::unique_ptr<Exp> end;
-    bool incl;
-    std::unique_ptr<Exp> step;
-    Ty iter_ty;
-    std::vector<std::unique_ptr<Stmt>> body;
-};
-
-struct ForEach {
-    std::string iterator;
-    std::unique_ptr<Exp> iterable;
-    Ty iter_ty;
-    std::vector<std::unique_ptr<Stmt>> body;
-};
-
 struct While {
     std::unique_ptr<Exp> cond;
     std::vector<std::unique_ptr<Stmt>> body;
@@ -72,8 +55,6 @@ using StmtVariant = std::variant<
     Ret,
     SCall,
     If,
-    For,
-    ForEach,
     While,
     Break,
     Continue
