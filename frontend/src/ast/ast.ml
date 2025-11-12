@@ -107,8 +107,6 @@ type cdecl = {
 
 type program = Prog of fdecl node list * cdecl node list [@@boxed]
 
-external convert_caml_ast : program -> unit = "convert_caml_ast"
-
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
 

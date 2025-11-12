@@ -85,3 +85,5 @@ type fdecl = {
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
 type cdecl = { cname : id; fields : field list }
 type program = Prog of fdecl list * cdecl list [@@boxed]
+
+external convert_caml_ast : program -> unit = "convert_caml_ast"

@@ -3,7 +3,7 @@
 #include <caml/mlvalues.h>
 #include <caml/memory.h>
 
-#include <ast/prog.h>
+#include <bridge/prog.h>
 // #include <codegen/generator.h>
 
 using namespace std;

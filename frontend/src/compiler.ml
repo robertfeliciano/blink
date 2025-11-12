@@ -6,6 +6,7 @@ open Typing.Type
 open Desugaring.Desugar
 open Typing.Pprint_typed_ast
 open Desugaring.Pprint_desugared_ast
+module DT = Desugaring.Desugared_ast
 
 let ( >>= ) r f = match r with Ok v -> f v | Error _ as e -> e
 
@@ -21,5 +22,5 @@ let compile ?(print_ast = false) ?(print_tast = false) ?(print_dast = false) (le
   >>= desugar_prog
   >>= printer print_dast show_desugared_program
   |> function
-  | Ok _ -> printf "Done!\n"
+  | Ok p -> DT.convert_caml_ast p
   | Error e -> eprintf "%s\n" (Error.to_string_hum e)
