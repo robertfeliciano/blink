@@ -258,9 +258,11 @@ std::string toString(UnOp op) {
 // Helper visitor for expToString
 struct ExpToStringVisitor {
     std::string operator()(const EBool& e) const { return e.value ? "true" : "false"; }
-    std::string operator()(const EInt& e) const {
-        // We don't have the bigint value here; print type and TODO marker
-        return std::string("<int TODO>");
+    std::string operator()(const EInt& e) const { 
+        if (e.int_ty->tag == IntTyTag::Signed)
+            return std::format("{}", e.s);
+        else
+            return std::format("{}", e.u);
     }
     std::string operator()(const EFloat& e) const { return std::to_string(e.value); }
     std::string operator()(const EStr& e) const { return "\"" + e.value + "\""; }

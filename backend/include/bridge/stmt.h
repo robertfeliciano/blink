@@ -51,6 +51,13 @@ struct For {
     std::vector<std::unique_ptr<Stmt>> body;
 };
 
+struct ForEach {
+    std::string iterator;
+    std::unique_ptr<Exp> iterable;
+    Ty iter_ty;
+    std::vector<std::unique_ptr<Stmt>> body;
+};
+
 struct While {
     std::unique_ptr<Exp> cond;
     std::vector<std::unique_ptr<Stmt>> body;
@@ -66,6 +73,7 @@ using StmtVariant = std::variant<
     SCall,
     If,
     For,
+    ForEach,
     While,
     Break,
     Continue

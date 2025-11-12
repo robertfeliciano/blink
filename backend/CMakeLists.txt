@@ -73,6 +73,9 @@ llvm_map_components_to_libnames(llvm_libs
     globalisel
 )
 
+add_compile_options(-stdlib=libc++)
+add_link_options(-stdlib=libc++)
+
 add_library(convert_static STATIC ${SOURCES})
 set_target_properties(convert_static PROPERTIES
     OUTPUT_NAME "convert"
