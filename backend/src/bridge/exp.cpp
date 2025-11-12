@@ -3,7 +3,6 @@
 
 #include <caml/mlvalues.h>
 #include <caml/custom.h> 
-#include <gmp.h>
 #include <cstdlib>
 #include <vector>
 #include <cstring>
@@ -42,52 +41,38 @@ BinOp convert_binop(value v) {
     }
 }
 
-EInt convert_zarith_int(value z_val, value int_ty_val) {
-    if (!z_val)
-        throw std::runtime_error("Null Z.t value in convert_zarith_int");
 
-    auto int_ty = std::make_unique<IntTy>(convert_int_ty(int_ty_val));
+i128 string_to_i128(const std::string& str) {
+    size_t i = 0;
 
-    mpz_t* z_ptr = reinterpret_cast<mpz_t*>(Data_custom_val(z_val));
-    if (!z_ptr)
-        throw std::runtime_error("Invalid Zarith integer pointer");
-
-    bool is_signed = true;
-    if (int_ty && int_ty->tag == IntTyTag::Unsigned) {
-        is_signed = false;
+    bool negative = false;
+    if (str[i] == '-') { 
+        negative = true; i++; 
     }
 
-    size_t bitlen = mpz_sizeinbase(*z_ptr, 2);
-    if (bitlen > 128) {
-        throw std::overflow_error("Zarith integer too large for 128-bit target");
+    i128 result = 0;
+    for (; i < str.size(); ++i) {
+        if (!isdigit(str[i])) 
+            throw std::invalid_argument("Invalid character in input");
+        result = result * 10 + (str[i] - '0');
     }
 
-    unsigned char buf[16] = {0};
-    size_t written = 0;
-    mpz_export(buf, &written, 1 /* most significant first */, 1, 1, 0, *z_ptr);
+    return negative ? -result : result;
+}
 
-    // Combine bytes into unsigned __int128
-    unsigned __int128 mag = 0;
-    for (size_t i = 0; i < written; ++i)
-        // magic
-        mag = (mag << 8) | buf[i];
 
-    EInt ei;
-    ei.int_ty = std::move(int_ty);
+u128 string_to_u128(const std::string& str) {
+    size_t i = 0;
+    if (str[i] == '-') 
+        throw std::invalid_argument("Unsigned integer cannot have sign");
 
-    if (is_signed) {
-        if (mpz_sgn(*z_ptr) < 0) {
-            ei.s = -static_cast<__int128>(mag);
-        } else {
-            ei.s = static_cast<__int128>(mag);
-        }
-    } else {
-        if (mpz_sgn(*z_ptr) < 0)
-            throw std::overflow_error("Negative value cannot be stored in unsigned int");
-        ei.u = mag;
+    u128 result = 0;
+    for (; i < str.size(); ++i) {
+        if (!isdigit(str[i])) throw std::invalid_argument("Invalid character in input");
+        result = result * 10 + (str[i] - '0');
     }
 
-    return ei;
+    return result;
 }
 
 
@@ -104,14 +89,25 @@ Exp convert_exp(value v) {
             result.val = EBool{b};
             break;
         }
-        case 1: { // Int of Z.t * int_ty
-            value z_val = Field(v, 0);
-            value int_ty_val = Field(v, 1);
+        case 1: { // Int of string * int_ty
+            std::string maybe_z = String_val(Field(v, 0));
+            value maybe_int_ty = Field(v, 1);
 
-            EInt ei = convert_zarith_int(z_val, int_ty_val);
+            auto int_ty = convert_int_ty(maybe_int_ty);
+
+            EInt ei;
+            ei.int_ty = std::make_unique<IntTy>(int_ty);
+
+            if (int_ty.tag == IntTyTag::Signed) {
+                ei.s = string_to_i128(maybe_z);
+            } else {
+                ei.u = string_to_u128(maybe_z);
+            }
+        
             result.val = std::move(ei);
             break;
         }
+        
         case 2: { // Float of float * float_ty
             double d = Double_val(Field(v, 0));
             FloatTy fty = convert_float_ty(Field(v, 1));

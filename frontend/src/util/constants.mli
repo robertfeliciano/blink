@@ -4,5 +4,6 @@ module Methods : sig
 end
 
 module Math : sig
+  val max64 : string
   val max128 : string
 end

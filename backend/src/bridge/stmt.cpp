@@ -48,7 +48,7 @@ Stmt convert_stmt(value v) {
             value opt = Field(v, 0);
             Ret r;
             if (Is_block(opt)) {
-                r.value = std::make_optional<std::unique_ptr<Exp>>(std::make_unique<Exp>(convert_exp(Field(opt, 0))));
+                r.value = std::make_shared<Exp>(convert_exp(Field(opt, 0)));
             } else {
                 r.value = std::nullopt;
             }

@@ -36,7 +36,7 @@ type binop =
 
 type exp =
   | Bool of bool
-  | Int of Z.t * int_ty
+  | Int of string * int_ty  (* converting to string to work easier in C++ *)
   | Float of float * float_ty
   | Str of string
   | Id of id

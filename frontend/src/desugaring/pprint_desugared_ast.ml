@@ -70,7 +70,7 @@ let show_binop = function
 let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) ->
-      Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
+      Printf.sprintf "Int(%s, %s)" (i) (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id

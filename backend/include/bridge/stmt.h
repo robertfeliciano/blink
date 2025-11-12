@@ -27,7 +27,7 @@ struct VDecl {
 };
 
 struct Ret {
-    std::optional<std::unique_ptr<Exp>> value;
+    std::optional<std::shared_ptr<Exp>> value;
 };
 
 struct SCall {

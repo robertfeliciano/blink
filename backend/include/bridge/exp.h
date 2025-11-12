@@ -10,6 +10,9 @@
 
 #include <bridge/types.h>
 
+using i128 = __int128;
+using u128 = unsigned __int128;
+
 struct Exp;
 
 enum class UnOp {
@@ -39,8 +42,8 @@ struct EBool { bool value; };
 struct EInt  { 
     std::unique_ptr<IntTy> int_ty;
     union {
-        __int128 s;
-        unsigned __int128 u;
+        i128 s;
+        u128 u;
     };
 };
 struct EFloat { double value; FloatTy float_ty; };

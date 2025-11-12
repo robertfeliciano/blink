@@ -19,7 +19,7 @@ let gensym sfx =
 
 let get_zero (ty : D.ty) : D.exp =
   match ty with
-  | TInt some_int_ty -> Int (Z.of_int 0, some_int_ty)
+  | TInt some_int_ty -> Int ("0", some_int_ty)
   | TFloat some_float_ty -> Float (0.0, some_float_ty)
   | _ ->
       desugar_error

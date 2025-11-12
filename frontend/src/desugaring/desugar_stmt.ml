@@ -139,7 +139,7 @@ and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
 and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   match e with
   | Bool b -> ([], D.Bool b)
-  | Int (i, ity) -> ([], D.Int (i, convert_int_ty ity))
+  | Int (i, ity) -> ([], D.Int (Z.to_string i, convert_int_ty ity))
   | Float (f, fty) -> ([], D.Float (f, convert_float_ty fty))
   | Str s -> ([], D.Str s)
   | Id id -> ([], D.Id id)
