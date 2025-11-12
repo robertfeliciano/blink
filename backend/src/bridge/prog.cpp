@@ -38,14 +38,3 @@ Program convert_program(value prog) {
 
     return program;
 }
-
-std::string programToString(const Program& program) {
-    std::ostringstream oss;
-    for (const auto &c : program.classes) {
-        oss << cdeclToString(c) << "\n\n";
-    }
-    for (const auto &f : program.functions) {
-        oss << fdeclToString(f) << "\n\n";
-    }
-    return oss.str();
-}

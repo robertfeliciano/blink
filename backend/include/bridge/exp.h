@@ -117,9 +117,3 @@ struct Exp {
 };
 
 Exp convert_exp(value v);
-
-std::string toString(BinOp op);
-
-std::string toString(UnOp op);
-
-std::string expToString(const Exp& exp);

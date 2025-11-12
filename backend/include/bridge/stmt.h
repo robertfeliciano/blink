@@ -64,7 +64,4 @@ struct Stmt {
     StmtVariant val;
 };
 
-// Convert an OCaml value (typed AST stmt) into this bridge Stmt
 Stmt convert_stmt(value v);
-
-std::string stmtToString(const Stmt& stmt, int indentLevel = 0);

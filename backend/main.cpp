@@ -4,6 +4,7 @@
 #include <caml/memory.h>
 
 #include <bridge/prog.h>
+#include <util/print.h>
 // #include <codegen/generator.h>
 
 using namespace std;

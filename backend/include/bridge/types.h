@@ -71,7 +71,6 @@ struct Ty {
     std::unique_ptr<RefTy> ref_ty;
 };
 
-// Converters from OCaml values (implemented in bridge source)
 IntTy convert_int_ty(value v);
 
 FloatTy convert_float_ty(value v);
@@ -79,5 +78,3 @@ FloatTy convert_float_ty(value v);
 Ty convert_ty(value v);
 
 RetTy convert_ret_ty(value v);
-
-std::string tyToString(const Ty& ty);

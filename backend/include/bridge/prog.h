@@ -13,5 +13,3 @@ struct Program {
 };
 
 Program convert_program(value v);
-
-std::string programToString(const Program& prog);

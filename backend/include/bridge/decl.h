@@ -31,10 +31,6 @@ struct CDecl {
     std::vector<FDecl> methods;
 };
 
-// Converters from OCaml values into bridge representations
 FDecl convert_fdecl(value v);
 Field convert_field(value v);
 CDecl convert_cdecl(value v);
-
-std::string fdeclToString(const FDecl& f);
-std::string cdeclToString(const CDecl& c);
