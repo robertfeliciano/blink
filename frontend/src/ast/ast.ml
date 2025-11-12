@@ -105,7 +105,7 @@ type cdecl = {
   methods : fdecl node list;
 }
 
-type program = Prog of fdecl node list * cdecl node list [@@boxed]
+type program = Prog of fdecl node list * cdecl node list
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '

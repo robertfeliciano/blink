@@ -1,6 +1,4 @@
-
 open Desugared_ast
-
 module StringSet = Set.Make (String)
 
 type result = { reads : StringSet.t; writes : StringSet.t }
@@ -27,7 +25,8 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
   | Bool _ | Int _ | Float _ | Str _ -> empty_result
   | Id x ->
       if StringSet.mem x locals then empty_result
-      else if is_lhs then { reads = StringSet.empty; writes = StringSet.singleton x }
+      else if is_lhs then
+        { reads = StringSet.empty; writes = StringSet.singleton x }
       else { reads = StringSet.singleton x; writes = StringSet.empty }
   | Call (fn, args, _) ->
       List.fold_left
@@ -35,9 +34,7 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
         (analyze_exp locals false fn)
         args
   | Bop (_, a, b, _) ->
-      union_result
-        (analyze_exp locals false a)
-        (analyze_exp locals false b)
+      union_result (analyze_exp locals false a) (analyze_exp locals false b)
   | Uop (_, x, _) -> analyze_exp locals false x
   | Index (base, idx, _) ->
       let rbase = analyze_exp locals is_lhs base in
@@ -55,8 +52,12 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
         empty_result fields
   | Lambda (params, _ret, body) ->
       let nested = analyze_lambda params body in
-      let reads = StringSet.filter (fun id -> not (StringSet.mem id locals)) nested.reads in
-      let writes = StringSet.filter (fun id -> not (StringSet.mem id locals)) nested.writes in
+      let reads =
+        StringSet.filter (fun id -> not (StringSet.mem id locals)) nested.reads
+      in
+      let writes =
+        StringSet.filter (fun id -> not (StringSet.mem id locals)) nested.writes
+      in
       { reads; writes }
 
 and analyze_block (locals_init : StringSet.t) (blk : block) : result =
@@ -69,13 +70,12 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
               union_result
                 (analyze_exp locals true lhs)
                 (analyze_exp locals false rhs)
-          | LambdaDecl (_id, _, init_exp)
-          | Decl (_id, _, init_exp, _) ->
+          | LambdaDecl (_id, _, init_exp) | Decl (_id, _, init_exp, _) ->
               analyze_exp locals false init_exp
-          | Ret maybe_e ->
-              (match maybe_e with
-               | None -> empty_result
-               | Some e -> analyze_exp locals false e)
+          | Ret maybe_e -> (
+              match maybe_e with
+              | None -> empty_result
+              | Some e -> analyze_exp locals false e)
           | SCall (fn, args) ->
               List.fold_left
                 (fun a x -> union_result a (analyze_exp locals false x))
@@ -95,7 +95,8 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
         in
         let locals' =
           match stmt with
-          | Decl (id, _, _, _) | LambdaDecl (id, _, _) -> StringSet.add id locals
+          | Decl (id, _, _, _) | LambdaDecl (id, _, _) ->
+              StringSet.add id locals
           | _ -> locals
         in
         loop locals' (union_result acc r) rest

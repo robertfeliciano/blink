@@ -9,8 +9,6 @@
 
 
 Program convert_program(value prog) {
-    // CAMLparam1(prog);
-
     Program program;
 
     value fdecls = Field(prog, 0);

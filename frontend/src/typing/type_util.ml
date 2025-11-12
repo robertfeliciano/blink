@@ -184,19 +184,19 @@ and subtype_ret_ty (tc : Tctxt.t) (t1 : Typed_ast.ret_ty)
   | RetVal t1', RetVal t2' -> subtype tc t1' t2'
   | _ -> false
 
-let infer_integer_ty (n: Z.t) (e : exp node) : Typed_ast.int_ty = 
-  let open Z in 
-  if fits_int32 n then TSigned Ti32 
-  else if fits_int32_unsigned n then TUnsigned Tu32 
-  else if fits_int64 n then TSigned Ti64 
+let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
+  let open Z in
+  if fits_int32 n then TSigned Ti32
+  else if fits_int32_unsigned n then TUnsigned Tu32
+  else if fits_int64 n then TSigned Ti64
   else if fits_int64_unsigned n then TUnsigned Tu64
-  else 
+  else
     let min_i128 = neg (shift_left one 127) in
     let max_i128 = sub (shift_left one 127) one in
     if geq n min_i128 && leq n max_i128 then TSigned Ti128
-    else if geq n zero && leq n Z.(sub (shift_left one 128) one) then TUnsigned Tu64
-    else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large") 
-
+    else if geq n zero && leq n Z.(sub (shift_left one 128) one) then
+      TUnsigned Tu64
+    else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
 
 let fits_in_int_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
   let open Z in

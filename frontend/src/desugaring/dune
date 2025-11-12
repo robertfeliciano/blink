@@ -4,7 +4,7 @@
  (preprocess
   (pps ppx_deriving.show))
  (libraries core typing util fmt zarith)
-  (foreign_archives ../../lib/convert)
+ (foreign_archives ../../lib/convert)
  (modes byte native)
  (c_library_flags
   (:standard

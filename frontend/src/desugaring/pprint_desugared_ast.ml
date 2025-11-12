@@ -69,8 +69,7 @@ let show_binop = function
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
-  | Int (i, ity) ->
-      Printf.sprintf "Int(%s, %s)" (i) (show_int_ty ity)
+  | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" i (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
@@ -215,8 +214,9 @@ let show_cdecl ?(lvl = 0) { cname; fields } =
   in
   Printf.sprintf "%scdecl{name=%s; \n%sfields=[\n%s];\n}"
     (indent (lvl + 1))
-    cname fields_s
+    cname
     (indent (lvl + 1))
+    fields_s
 
 let show_desugared_program (Prog (fns, cns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in

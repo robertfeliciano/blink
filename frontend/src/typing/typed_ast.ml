@@ -98,4 +98,4 @@ type cdecl = {
   methods : fdecl list;
 }
 
-type program = Prog of fdecl list * cdecl list [@@boxed]
+type program = Prog of fdecl list * cdecl list

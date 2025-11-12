@@ -52,7 +52,7 @@ RefTy convert_ref_ty(value v) {
             case 0: { 
                 ref.tag = RefTyTag::RArray;
                 ref.inner = std::make_unique<Ty>(convert_ty(Field(v, 0)));
-                ref.size = Long_val(Field(v, 1));
+                ref.size = Int64_val(Field(v, 1));
                 break;
             }
             case 1: { 
