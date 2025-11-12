@@ -4,5 +4,5 @@ module Methods = struct
 end
 
 module Math = struct
-  let max128 = "18446744073709551615"
+  let max128 = "340282366920938463463374607431768211455"
 end
