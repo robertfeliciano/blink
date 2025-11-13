@@ -7,7 +7,6 @@
 #include <bridge/prog.h>
 #include <bridge/decl.h>
 
-
 Program convert_program(value prog) {
     Program program;
 

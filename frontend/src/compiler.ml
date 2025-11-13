@@ -23,4 +23,5 @@ let compile ?(print_ast = false) ?(print_tast = false) ?(print_dast = false) ?(d
   >>= printer print_dast show_desugared_program
   |> function
   | Ok p -> DT.convert_caml_ast p
+  (* | Ok _ -> printf "Done" *)
   | Error e -> eprintf "%s\n" (Error.to_string_hum e)

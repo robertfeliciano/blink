@@ -55,7 +55,12 @@ RefTy convert_ref_ty(value v) {
                 ref.size = Int64_val(Field(v, 1));
                 break;
             }
-            case 1: { 
+            case 1: {
+                ref.tag = RefTyTag::RClass;
+                ref.cname = std::string(String_val(Field(v, 0)));
+                break;
+            }
+            case 2: { 
                 ref.tag = RefTyTag::RFun;
                 value tys = Field(v, 0);
                 while (tys != Val_emptylist) {
@@ -64,11 +69,6 @@ RefTy convert_ref_ty(value v) {
                     tys = Field(tys, 1);
                 }
                 ref.ret = convert_ret_ty(Field(v, 1));
-                break;
-            }
-            case 2: {
-                ref.tag = RefTyTag::RClass;
-                ref.cname = std::string(String_val(Field(v, 0)));
                 break;
             }
         }

@@ -50,6 +50,9 @@ FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; mutable b
 
 Field convert_field(value v) { // record field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
     Field out;
+    out.fieldName = std::string(String_val(Field(v, 1)));
+    out.ftyp = convert_ty(Field(v, 2));
+    out.init = std::make_unique<Exp>(convert_exp(Field(v, 3)));
 
     value prelude_v = Field(v, 0);
     while (prelude_v != Val_emptylist) {
@@ -58,18 +61,13 @@ Field convert_field(value v) { // record field = { prelude : stmt list; fieldNam
         prelude_v = Field(prelude_v, 1);
     }
 
-    out.fieldName = std::string(String_val(Field(v, 1)));
-    out.ftyp = convert_ty(Field(v, 2));
-    out.init = std::make_unique<Exp>(convert_exp(Field(v, 3)));
 
     return out;
 }
 
 CDecl convert_cdecl(value v) { // record cdecl = { cname : id; fields : field list }
     CDecl out;
-
     out.cname = std::string(String_val(Field(v, 0)));
-
     value fields_v = Field(v, 1);
     while (fields_v != Val_emptylist) {
         value head = Field(fields_v, 0);

@@ -202,7 +202,7 @@ Exp convert_exp(value v) {
                 std::string fname = String_val(Field(pair, 0));
                 value fexp = Field(pair, 1);
                 fields.emplace_back(fname, std::make_unique<Exp>(convert_exp(fexp)));
-                fields_v = Field(v, 1);
+                fields_v = Field(fields_v, 1);
             }
             result.val = EObjInit{ id, std::move(fields) };
             break;
