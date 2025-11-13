@@ -185,7 +185,7 @@ struct ExpToStringVisitor {
     std::string operator()(const EObjInit& e) const {
         std::string res = e.id + "{";
         for (size_t i = 0; i < e.fields.size(); ++i) {
-            res += e.fields[i].first + ": " + expToString(*e.fields[i].second);
+            res += e.fields[i].first + ":= " + expToString(*e.fields[i].second);
             if (i + 1 < e.fields.size()) res += ", ";
         }
         res += "}";
