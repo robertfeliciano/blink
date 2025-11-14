@@ -8,6 +8,7 @@
 #include <bridge/stmt.h>
 #include <bridge/exp.h>
 #include <bridge/types.h>
+#include <util/constants.h>
 
 static std::vector<std::unique_ptr<Stmt>> convert_block(value v) {
     std::vector<std::unique_ptr<Stmt>> out;
@@ -24,17 +25,17 @@ Stmt convert_stmt(value v) {
 
     if (Is_block(v)) {
         switch (Tag_val(v)) {
-            case 0: { // Assn of exp * exp * ty
+            case Constants::STMT_Assn: { // Assn of exp * exp * ty
                 auto lhs = std::make_unique<Exp>(convert_exp(Field(v, 0)));
                 auto rhs = std::make_unique<Exp>(convert_exp(Field(v, 1)));
                 Ty ty = convert_ty(Field(v, 2));
                 result.val = Assn{ std::move(lhs), std::move(rhs), std::move(ty) };
                 break;
             }
-            case 1: { // LambdaDecl of ldecl
+            case Constants::STMT_LambdaDecl: { // LambdaDecl of ldecl
                 throw std::runtime_error("Lambda declarations not supported in bridge conversion");
             }
-            case 2: { // Decl of vdecl (id * ty * exp * bool)
+            case Constants::STMT_Decl: { // Decl of vdecl (id * ty * exp * bool)
                 value vdecl = Field(v, 0);
                 std::string id = String_val(Field(vdecl, 0));
                 Ty ty = convert_ty(Field(vdecl, 1));
@@ -43,7 +44,7 @@ Stmt convert_stmt(value v) {
                 result.val = VDecl{ id, std::move(ty), std::move(init), is_const };
                 break;
             }
-            case 3: { // Ret of exp option
+            case Constants::STMT_Ret: { // Ret of exp option
                 value opt = Field(v, 0);
                 Ret r;
                 if (Is_block(opt)) {
@@ -54,7 +55,7 @@ Stmt convert_stmt(value v) {
                 result.val = std::move(r);
                 break;
             }
-            case 4: { // SCall of exp * exp list
+            case Constants::STMT_SCall: { // SCall of exp * exp list
                 auto callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
                 value args_v = Field(v, 1);
                 std::vector<std::unique_ptr<Exp>> args;
@@ -66,14 +67,14 @@ Stmt convert_stmt(value v) {
                 result.val = SCall{ std::move(callee), std::move(args) };
                 break;
             }
-            case 5: { // If of exp * block * block
+            case Constants::STMT_If: { // If of exp * block * block
                 auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
                 auto then_b = convert_block(Field(v, 1));
                 auto else_b = convert_block(Field(v, 2));
                 result.val = If{ std::move(cond), std::move(then_b), std::move(else_b) };
                 break;
             }
-            case 6: { // While of exp * block
+            case Constants::STMT_While: { // While of exp * block
                 auto cond = std::make_unique<Exp>(convert_exp(Field(v, 0)));
                 auto body = convert_block(Field(v, 1));
                 result.val = While{ std::move(cond), std::move(body) };
@@ -86,11 +87,11 @@ Stmt convert_stmt(value v) {
     }
     else {
         switch (Int_val(v)) {
-            case 0: { // Break
+            case Constants::CTRL_Break: { // Break
                 result.val = Break{};
                 break;
             }
-            case 1: { // Continue
+            case Constants::CTRL_Continue: { // Continue
                 result.val = Continue{};
                 break;
             }

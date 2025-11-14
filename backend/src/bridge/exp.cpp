@@ -11,32 +11,33 @@
 #include <bridge/stmt.h>
 #include <bridge/exp.h>
 #include <bridge/types.h>
+#include <util/constants.h>
 
 UnOp convert_unop(value v) {
     switch (Int_val(v)) {
-        case 0: return UnOp::Neg;
-        case 1: return UnOp::Not;
+        case Constants::UNOP_Neg: return UnOp::Neg;
+        case Constants::UNOP_Not: return UnOp::Not;
         default: throw std::runtime_error("Unknown UnOp");
     }
 }
 
 BinOp convert_binop(value v) {
     switch (Int_val(v)) {
-        case 0: return BinOp::Add;
-        case 1: return BinOp::Sub;
-        case 2: return BinOp::Mul;
-        case 3: return BinOp::Div;
-        case 4: return BinOp::At;
-        case 5: return BinOp::Mod;
-        case 6: return BinOp::Pow;
-        case 7: return BinOp::Eqeq;
-        case 8: return BinOp::Neq;
-        case 9: return BinOp::Lt;
-        case 10: return BinOp::Lte;
-        case 11: return BinOp::Gt;
-        case 12: return BinOp::Gte;
-        case 13: return BinOp::And;
-        case 14: return BinOp::Or;
+        case Constants::BINOP_Add: return BinOp::Add;
+        case Constants::BINOP_Sub: return BinOp::Sub;
+        case Constants::BINOP_Mul: return BinOp::Mul;
+        case Constants::BINOP_Div: return BinOp::Div;
+        case Constants::BINOP_At: return BinOp::At;
+        case Constants::BINOP_Mod: return BinOp::Mod;
+        case Constants::BINOP_Pow: return BinOp::Pow;
+        case Constants::BINOP_Eqeq: return BinOp::Eqeq;
+        case Constants::BINOP_Neq: return BinOp::Neq;
+        case Constants::BINOP_Lt: return BinOp::Lt;
+        case Constants::BINOP_Lte: return BinOp::Lte;
+        case Constants::BINOP_Gt: return BinOp::Gt;
+        case Constants::BINOP_Gte: return BinOp::Gte;
+        case Constants::BINOP_And: return BinOp::And;
+        case Constants::BINOP_Or: return BinOp::Or;
         default: throw std::runtime_error("Unknown BinOp");
     }
 }
@@ -81,12 +82,12 @@ Exp convert_exp(value v) {
     }
 
     switch (Tag_val(v)) {
-        case 0: { // Bool of bool
+        case Constants::EXP_Bool: { // Bool of bool
             bool b = Bool_val(Field(v, 0));
             result.val = EBool{b};
             break;
         }
-        case 1: { // Int of string * int_ty
+        case Constants::EXP_Int: { // Int of string * int_ty
             std::string maybe_z = String_val(Field(v, 0));
             value maybe_int_ty = Field(v, 1);
 
@@ -105,23 +106,23 @@ Exp convert_exp(value v) {
             break;
         }
         
-        case 2: { // Float of float * float_ty
+        case Constants::EXP_Float: { // Float of float * float_ty
             double d = Double_val(Field(v, 0));
             FloatTy fty = convert_float_ty(Field(v, 1));
             result.val = EFloat{d, fty};
             break;
         }
-        case 3: { // Str of string
+        case Constants::EXP_Str: { // Str of string
             std::string s = String_val(Field(v, 0));
             result.val = EStr{s};
             break;
         }
-        case 4: { // Id of id
+        case Constants::EXP_Id: { // Id of id
             std::string id = String_val(Field(v, 0));
             result.val = EId{id};
             break;
         }
-        case 5: { // Call of exp * exp list * ty
+        case Constants::EXP_Call: { // Call of exp * exp list * ty
             value callee_v = Field(v, 0);
             value args_v = Field(v, 1);
             value ty_v = Field(v, 2);
@@ -138,7 +139,7 @@ Exp convert_exp(value v) {
             result.val = ECall{ std::move(callee), std::move(args), std::move(ty) };
             break;
         }
-        case 6: { // Bop of binop * exp * exp * ty
+        case Constants::EXP_Bop: { // Bop of binop * exp * exp * ty
             BinOp bop = convert_binop(Field(v, 0));
             auto left = std::make_unique<Exp>(convert_exp(Field(v, 1)));
             auto right = std::make_unique<Exp>(convert_exp(Field(v, 2)));
@@ -147,7 +148,7 @@ Exp convert_exp(value v) {
             result.val = EBop{ bop, std::move(left), std::move(right), std::move(ty) };
             break;
         }
-        case 7: { // Uop of unop * exp * ty
+        case Constants::EXP_Uop: { // Uop of unop * exp * ty
             UnOp uop = convert_unop(Field(v, 0));
             auto arg = std::make_unique<Exp>(convert_exp(Field(v, 1)));
             Ty ty = convert_ty(Field(v, 2));
@@ -155,7 +156,7 @@ Exp convert_exp(value v) {
             result.val = EUop{ uop, std::move(arg), std::move(ty) };
             break;
         }
-        case 8: { // Index of exp * exp * ty
+        case Constants::EXP_Index: { // Index of exp * exp * ty
             auto collection = std::make_unique<Exp>(convert_exp(Field(v, 0)));
             auto index = std::make_unique<Exp>(convert_exp(Field(v, 1)));
             Ty ty = convert_ty(Field(v, 2));
@@ -163,7 +164,7 @@ Exp convert_exp(value v) {
             result.val = EIndex{ std::move(collection), std::move(index), std::move(ty) };
             break;
         }
-        case 9: { // Array of exp list * ty * int64
+        case Constants::EXP_Array: { // Array of exp list * ty * int64
             value elems_v = Field(v, 0);
             std::vector<std::unique_ptr<Exp>> elements;
             while (elems_v != Val_emptylist) {
@@ -181,19 +182,19 @@ Exp convert_exp(value v) {
             result.val = std::move(ea);
             break;
         }
-        case 10: { // Cast of exp * ty
+        case Constants::EXP_Cast: { // Cast of exp * ty
             auto expr = std::make_unique<Exp>(convert_exp(Field(v, 0)));
             Ty ty = convert_ty(Field(v, 1));
             result.val = ECast{ std::move(expr), std::move(ty) };
             break;
         }
-        case 11: { // Proj of exp * id
+        case Constants::EXP_Proj: { // Proj of exp * id
             auto obj = std::make_unique<Exp>(convert_exp(Field(v, 0)));
             std::string field = String_val(Field(v, 1));
             result.val = EProj{ std::move(obj), field };
             break;
         }
-        case 12: { // ObjInit of id * (id * exp) list
+        case Constants::EXP_ObjInit: { // ObjInit of id * (id * exp) list
             std::string id = String_val(Field(v, 0));
             value fields_v = Field(v, 1);
             std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
@@ -207,7 +208,7 @@ Exp convert_exp(value v) {
             result.val = EObjInit{ id, std::move(fields) };
             break;
         }
-        case 13: { // Lambda of (id * ty) list * ret_ty * block
+        case Constants::EXP_Lambda: { // Lambda of (id * ty) list * ret_ty * block
             throw std::runtime_error("Lambdas not supported yet!");
         }
         default: {
