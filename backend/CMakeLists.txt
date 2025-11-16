@@ -30,7 +30,7 @@ include_directories(
 file(GLOB_RECURSE SOURCES
     src/bridge/*.cpp
     src/util/*.cpp
-    # src/codegen/*.cpp
+    src/codegen/*.cpp
     main.cpp
 )
 

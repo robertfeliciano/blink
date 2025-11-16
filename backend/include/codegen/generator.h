@@ -27,6 +27,8 @@
 #include <bridge/stmt.h>
 #include <bridge/prog.h>
 #include <codegen/types.h>
+#include <codegen/exp.h>
+#include <codegen/decl.h>
 
 struct Generator {
     std::unique_ptr<llvm::LLVMContext> ctxt;
@@ -57,9 +59,9 @@ struct Generator {
         return TypeToLLGenerator(*this).codegenRetTy(ty);
     }
 
-    // void codegenFunctionProtos(const Program& p) {
-    //     return DeclToLLVisitor(*this).codegenFunctionProtos(p);
-    // }
+    void codegenFunctionProtos(const Program& p) {
+        return DeclToLLVisitor(*this).codegenFunctionPrototypes(p.functions);
+    }
 
     // void codegenDecl(const Decl& d) {
     //     return std::visit(DeclToLLVisitor(*this), d.val);

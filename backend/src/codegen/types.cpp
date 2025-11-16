@@ -1,7 +1,7 @@
 #include <codegen/generator.h>
 #include <codegen/types.h>
 
-llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
+inline llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
     switch (si) {
         case Sint::Ti8:
             return llvm::Type::getInt8Ty(*gen.ctxt);
@@ -16,7 +16,7 @@ llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
     }
 }
 
-llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
+inline llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
     switch (ui) {
         case Uint::Tu8:
             return llvm::Type::getInt8Ty(*gen.ctxt);
@@ -31,7 +31,7 @@ llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
     }
 }
 
-llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
+inline llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
     switch (ty.tag) {
         case TyTag::TBool:
             return llvm::Type::getInt1Ty(*gen.ctxt);
@@ -55,7 +55,7 @@ llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
     }
 }
 
-llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
+inline llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
     switch (rty.tag) {
         case RetTyTag::RetVoid:
             return llvm::Type::getVoidTy(*gen.ctxt);

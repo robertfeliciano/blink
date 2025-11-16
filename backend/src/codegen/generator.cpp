@@ -1,4 +1,5 @@
 #include <codegen/generator.h>
+#include <codegen/decl.h>
 
 Generator::Generator() {
     ctxt = std::make_unique<llvm::LLVMContext>();
@@ -6,13 +7,13 @@ Generator::Generator() {
     mod = std::make_unique<llvm::Module>("Module", *ctxt);
 }
 
-// void Generator::codegenProgram(const Program& p) {
-//     codegenFunctionProtos(p);
-//     for (const auto& decl : p) {
-//         codegenDecl(decl);
-//     }
-//     optimize();
-// }
+void Generator::codegenProgram(const Program& p) {
+    codegenFunctionProtos(p);
+    for (const auto& decl : p.functions) {
+        // codegenDecl(decl);
+    }
+    optimize();
+}
 
 void Generator::configureTarget() {
     llvm::InitializeNativeTarget();
