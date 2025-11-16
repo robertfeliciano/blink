@@ -43,9 +43,9 @@ struct Generator {
 
     Generator();
 
-    // llvm::Value* codegenExp(const Exp& e) {
-    //     return std::visit(ExpToLLVisitor(*this), e.val);
-    // }
+    llvm::Value* codegenExp(const Exp& e) {
+        return std::visit(ExpToLLVisitor(*this), e.val);
+    }
 
     // llvm::Value* codegenStmt(const Stmt& s) {
     //     return std::visit(StmtToLLVisitor(*this), s.val);

@@ -1,7 +1,7 @@
 #include <codegen/generator.h>
 #include <codegen/types.h>
 
-inline llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
+llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
     switch (si) {
         case Sint::Ti8:
             return llvm::Type::getInt8Ty(*gen.ctxt);
@@ -16,7 +16,7 @@ inline llvm::Type* TypeToLLGenerator::createSignedInt(const Sint si) {
     }
 }
 
-inline llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
+llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
     switch (ui) {
         case Uint::Tu8:
             return llvm::Type::getInt8Ty(*gen.ctxt);

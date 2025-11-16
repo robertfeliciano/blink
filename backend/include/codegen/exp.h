@@ -4,6 +4,8 @@
 
 #include <bridge/exp.h>
 
+using llvm::Value;
+
 struct Generator;
 
 class ExpToLLVisitor {
@@ -12,14 +14,14 @@ class ExpToLLVisitor {
 public:
     explicit ExpToLLVisitor(Generator& g) : gen(g) {}
 
-    llvm::Value* operator()(const EInt& e);
-    llvm::Value* operator()(const EBool& e);
-    llvm::Value* operator()(const EId& e);
-    llvm::Value* operator()(const EFloat& e);
-    llvm::Value* operator()(const EStr& e);
-    llvm::Value* operator()(const ECall& e);
-    llvm::Value* operator()(const EBop& e);
-    llvm::Value* operator()(const EUop& e);
-    llvm::Value* operator()(const EIndex& e);
-    llvm::Value* operator()(const EArray& e);
+    Value* operator()(const EInt& e);
+    Value* operator()(const EBool& e);
+    Value* operator()(const EId& e);
+    Value* operator()(const EFloat& e);
+    Value* operator()(const EStr& e);
+    Value* operator()(const ECall& e);
+    Value* operator()(const EBop& e);
+    Value* operator()(const EUop& e);
+    Value* operator()(const EIndex& e);
+    Value* operator()(const EArray& e);
 };
