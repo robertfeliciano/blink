@@ -23,7 +23,7 @@ let rec analyze_lambda (params : (id * ty) list) (body : block) : result =
 and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
   match e with
   | Bool _ | Int _ | Float _ | Str _ -> empty_result
-  | Id x ->
+  | Id (x, _) ->
       if StringSet.mem x locals then empty_result
       else if is_lhs then
         { reads = StringSet.empty; writes = StringSet.singleton x }
@@ -45,7 +45,7 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
         (fun acc e -> union_result acc (analyze_exp locals false e))
         empty_result elems
   | Cast (e, _) -> analyze_exp locals false e
-  | Proj (base, _) -> analyze_exp locals is_lhs base
+  | Proj (base, _, _) -> analyze_exp locals is_lhs base
   | ObjInit (_, fields) ->
       List.fold_left
         (fun acc (_, ex) -> union_result acc (analyze_exp locals false ex))

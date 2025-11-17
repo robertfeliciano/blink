@@ -86,16 +86,16 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
   | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args false tc with
       | Error msg -> type_error stmt_n msg
-      | Ok (Proj (tobj, _, cname), arg_types, typed_args, RetVoid) ->
+      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVoid) ->
           ( tc,
             Typed_ast.(
-              SCall (Proj (tobj, mth, cname), typed_args, arg_types, RetVoid)),
+              SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, RetVoid)),
             false )
-      | Ok (Proj (tobj, _, cname), arg_types, typed_args, t) ->
+      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, ret_ty) ->
           type_warning stmt_n "Ignoring non-void function";
           ( tc,
             Typed_ast.(
-              SCall (Proj (tobj, mth, cname), typed_args, arg_types, t)),
+              SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, ret_ty)),
             false )
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
@@ -221,14 +221,14 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       match Tctxt.lookup_option i tc with
       | Some t ->
           check_expected_ty expected t e;
-          (Id i, t)
+          (Id (i, t), t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args true tc with
-      | Ok (Proj (tobj, _, cname), arg_types, typed_args, RetVal rt) ->
+      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVal rt) ->
           check_expected_ty expected rt e;
           Typed_ast.
-            (Call (Proj (tobj, mth, cname), typed_args, arg_types, rt), rt)
+            (Call (Proj (tobj, mth, cname, t), typed_args, arg_types, rt), rt)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
@@ -322,7 +322,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           match Tctxt.lookup_field_option cid f tc with
           | Some fty ->
               check_expected_ty expected fty e;
-              (Typed_ast.Proj (tec, f, cid), fty)
+              (Typed_ast.Proj (tec, f, cid, fty), fty)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
@@ -418,7 +418,7 @@ and type_method (proj : exp) (args : exp node list) (from_exp : bool)
               match type_func args temp_func from_exp tc with
               | Error msg -> Error msg
               | Ok (arg_types, typed_args, rt) ->
-                  Ok (Typed_ast.Proj (tobj, mth, cid), arg_types, typed_args, rt)
+                  Ok (Typed_ast.Proj (tobj, mth, cid, (TRef (RFun (List.map fst argheaders, rt)))), arg_types, typed_args, rt)
               )
           | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
       | _ -> Error "Attempting to call method of non-class type.")

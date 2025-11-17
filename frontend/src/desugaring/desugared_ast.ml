@@ -39,14 +39,14 @@ type exp =
   | Int of string * int_ty (* converting to string to work easier in C++ *)
   | Float of float * float_ty
   | Str of string
-  | Id of id
+  | Id of id * ty
   | Call of exp * exp list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
   | Array of exp list * ty * int64
   | Cast of exp * ty
-  | Proj of exp * id
+  | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
 

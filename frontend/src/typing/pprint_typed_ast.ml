@@ -84,7 +84,7 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
   | Str s -> Printf.sprintf "Str(%S)" s
-  | Id id -> Printf.sprintf "Id(%s)" id
+  | Id (id, t) -> Printf.sprintf "Id(%s, %s)" id (show_ty t)
   | Call (fn, args, arg_types, ty) ->
       let args_s =
         String.concat ";\n"
@@ -128,8 +128,8 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "Array([%s], %s; %Ld)" elems_s (show_ty ty) sz
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
-  | Proj (e, i, cname) ->
-      Printf.sprintf "Proj(%s : %s, %s)" (show_exp ~lvl:(lvl + 1) e) cname i
+  | Proj (e, i, cname, t) ->
+      Printf.sprintf "Proj(%s : %s, %s : %s)" (show_exp ~lvl:(lvl + 1) e) cname i (show_ty t)
   | ObjInit (cn, fields) ->
       let fs =
         String.concat ";\n"

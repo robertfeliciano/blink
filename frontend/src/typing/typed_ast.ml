@@ -42,14 +42,14 @@ type exp =
   | Int of Z.t * int_ty
   | Float of float * float_ty
   | Str of string
-  | Id of id
+  | Id of id * ty
   | Call of exp * exp list * ty list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
   | Array of exp list * ty * int64
   | Cast of exp * ty
-  | Proj of exp * id * id (* x.y -> Proj(x, "y", type of x) *)
+  | Proj of exp * id * id  * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
 

@@ -39,9 +39,9 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let st_stmts, step' = desugar_exp step in
       let prelude = s_stmts @ f_stmts @ st_stmts in
       let step_name = "%step" in
-      let step_ = D.Id step_name in
-      let iter_ = D.Id iter in
       let ty = convert_ty ty in
+      let step_ = D.Id (step_name, ty) in
+      let iter_ = D.Id (iter, ty) in
       let step_decl = D.Decl (step_name, ty, step', false) in
       let iter_decl = D.Decl (iter, ty, start', false) in
       let zero = get_zero ty in
@@ -72,18 +72,20 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let zero_check =
         D.If
           ( Bop (Eqeq, step_, zero, TBool),
-            [ SCall (Id "panic", []) ],
+            [ SCall (Id ("panic", TRef (RFun ([], RetVoid))), []) ],
             [ step_inc ] )
       in
       prelude @ [ step_decl; iter_decl; zero_check ]
+      (* TODO add types to the rest of the ast *)
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
       (* TODO dont call proj - just call method direectly (like after desugaring it) *)
-      let cond = D.Call (Proj (coll', Methods.hasNext), [], TBool) in
+      let cond = D.Call (Proj (coll', Methods.hasNext,  TBool), [], TBool) in
+      let of_ty = convert_ty of_ty in
       let set_iter =
         D.Assn
-          ( Id iter,
-            Call (Proj (coll', Methods.iterate), [], convert_ty of_ty),
+          ( Id (iter, of_ty),
+            Call (Proj (coll', Methods.iterate, of_ty), [], of_ty),
             TBool )
       in
       let body' = set_iter :: desugar_block body in
@@ -92,24 +94,24 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
       cstmts @ [ While (cond', body') ]
-  | SCall (Proj (inst, pname, cname), args, types, ret) ->
+  | SCall (Proj (inst, pname, cname, t), args, types, ret) ->
       let istmts, inst' = desugar_exp inst in
       let args_stmts, args' = List.map desugar_exp args |> flatten in
       let mangled = mangle_name ~enclosing_class:cname pname types ret in
-      istmts @ args_stmts @ [ SCall (Id mangled, inst' :: args') ]
+      istmts @ args_stmts @ [ SCall (Id (mangled, convert_ty t), inst' :: args') ]
   | SCall (fn, args, tys, ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id fname ->
+      | D.Id (fname, t) ->
           let mangled_name = mangle_name fname tys ret in
-          sf @ sa @ [ SCall (Id mangled_name, args') ]
+          sf @ sa @ [ SCall (Id (mangled_name, t), args') ]
       | _ ->
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVoid)) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          sf @ [ tmp_decl ] @ sa @ [ SCall (Id fn_store, args') ])
+          sf @ [ tmp_decl ] @ sa @ [ SCall (Id (fn_store, fn_ty), args') ])
   | Decl v ->
       let estmts, v' = desugar_vdecl v in
       estmts @ [ Decl v' ]
@@ -143,7 +145,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Int (i, ity) -> ([], D.Int (Z.to_string i, convert_int_ty ity))
   | Float (f, fty) -> ([], D.Float (f, convert_float_ty fty))
   | Str s -> ([], D.Str s)
-  | Id id -> ([], D.Id id)
+  | Id (id, t) -> ([], D.Id (id, convert_ty t))
   | Bop (op, e1, e2, ty) ->
       let s1, e1' = desugar_exp e1 in
       let s2, e2' = desugar_exp e2 in
@@ -161,9 +163,9 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Cast (e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))
-  | Proj (inst, field, _cname) ->
+  | Proj (inst, field, _cname, t) ->
       let s, inst' = desugar_exp inst in
-      (s, D.Proj (inst', field))
+      (s, D.Proj (inst', field, convert_ty t))
   | ObjInit (cn, fields) ->
       let stmts, fields' =
         List.fold_left
@@ -173,14 +175,14 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           ([], []) fields
       in
       (List.flatten stmts, D.ObjInit (cn, fields'))
-  | Call (Proj (inst, pname, cname), args, tys, ty) ->
+  | Call (Proj (inst, pname, cname, t), args, tys, ty) ->
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let si, inst' = desugar_exp inst in
       let sa, args' = List.map desugar_exp args |> flatten in
       let mangled_name =
         mangle_name ~enclosing_class:cname pname tys (RetVal ty)
       in
-      (si @ sa, D.Call (D.Id mangled_name, inst' :: args', convert_ty ty))
+      (si @ sa, D.Call (D.Id (mangled_name, convert_ty t), inst' :: args', convert_ty ty))
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
@@ -188,9 +190,9 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id fname ->
+      | D.Id (fname, _t) ->
           let mangled_name = mangle_name fname tys (RetVal ty) in
-          (sf @ sa, D.Call (Id mangled_name, args', ty'))
+          (sf @ sa, D.Call (Id (mangled_name, ty'), args', ty'))
       | _ ->
           (* will expand chained calls: 
         ```
@@ -216,7 +218,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          (sf @ [ tmp_decl ] @ sa, D.Call (Id fn_store, args', ty')))
+          (sf @ [ tmp_decl ] @ sa, D.Call (Id (fn_store, fn_ty), args', ty')))
   | Lambda (args, ret_ty, body) ->
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
       let converted_ret = convert_ret_ty ret_ty in
