@@ -84,7 +84,9 @@ Exp convert_exp(value v) {
     switch (Tag_val(v)) {
         case Constants::EXP_Bool: { // Bool of bool
             bool b = Bool_val(Field(v, 0));
-            result.val = EBool{b};
+            Ty ty;
+            ty.tag = TyTag::TBool;
+            result.val = EBool{b, std::move(ty)};
             break;
         }
         case Constants::EXP_Int: { // Int of string * int_ty
@@ -93,15 +95,19 @@ Exp convert_exp(value v) {
 
             auto int_ty = convert_int_ty(maybe_int_ty);
 
+            Ty ty;
+            ty.tag = TyTag::TInt;
+            ty.int_ty = std::make_unique<IntTy>(int_ty);
+
             EInt ei;
             ei.int_ty = std::make_unique<IntTy>(int_ty);
+            ei.ty = std::move(ty);
 
-            if (int_ty.tag == IntTyTag::Signed) {
+            if (int_ty.tag == IntTyTag::Signed)
                 ei.s = string_to_i128(maybe_z);
-            } else {
+            else
                 ei.u = string_to_u128(maybe_z);
-            }
-        
+
             result.val = std::move(ei);
             break;
         }
@@ -109,12 +115,23 @@ Exp convert_exp(value v) {
         case Constants::EXP_Float: { // Float of float * float_ty
             double d = Double_val(Field(v, 0));
             FloatTy fty = convert_float_ty(Field(v, 1));
-            result.val = EFloat{d, fty};
+
+            Ty ty;
+            ty.tag = TyTag::TFloat;
+            ty.float_ty = std::make_unique<FloatTy>(fty);
+
+            result.val = EFloat{ d, fty, std::move(ty) };
             break;
         }
         case Constants::EXP_Str: { // Str of string
             std::string s = String_val(Field(v, 0));
-            result.val = EStr{s};
+
+            Ty ty;
+            ty.tag = TyTag::TRef;
+            ty.ref_ty = std::make_unique<RefTy>();
+            ty.ref_ty->tag = RefTyTag::RString;
+
+            result.val = EStr{ s, std::move(ty) };
             break;
         }
         case Constants::EXP_Id: { // Id of id
@@ -199,6 +216,7 @@ Exp convert_exp(value v) {
         case Constants::EXP_ObjInit: { // ObjInit of id * (id * exp) list
             std::string id = String_val(Field(v, 0));
             value fields_v = Field(v, 1);
+
             std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
             while (fields_v != Val_emptylist) {
                 value pair = Field(fields_v, 0);
@@ -207,7 +225,14 @@ Exp convert_exp(value v) {
                 fields.emplace_back(fname, std::make_unique<Exp>(convert_exp(fexp)));
                 fields_v = Field(fields_v, 1);
             }
-            result.val = EObjInit{ id, std::move(fields) };
+
+            Ty ty;
+            ty.tag = TyTag::TRef;
+            ty.ref_ty = std::make_unique<RefTy>();
+            ty.ref_ty->tag = RefTyTag::RClass;
+            ty.ref_ty->cname = id;
+            
+            result.val = EObjInit{ id, std::move(fields), std::move(ty) };
             break;
         }
         case Constants::EXP_Lambda: { // Lambda of (id * ty) list * ret_ty * block

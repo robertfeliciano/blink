@@ -38,16 +38,19 @@ enum class BinOp {
     Or
 };
 
-struct EBool { bool value; };
+struct EBool { 
+    bool value; 
+    Ty ty; };
 struct EInt  { 
     std::unique_ptr<IntTy> int_ty;
     union {
         i128 s;
         u128 u;
     };
+    Ty ty;
 };
-struct EFloat { double value; FloatTy float_ty; };
-struct EStr { std::string value; };
+struct EFloat { double value; FloatTy float_ty; Ty ty; };
+struct EStr { std::string value; Ty ty; };
 struct EId { 
     std::string id; 
     Ty ty;
@@ -98,6 +101,7 @@ struct EProj {
 struct EObjInit {
     std::string id;
     std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
+    Ty ty;
 };
 
 using ExpVariant = std::variant<

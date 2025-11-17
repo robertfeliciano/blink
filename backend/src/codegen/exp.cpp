@@ -67,7 +67,82 @@ Value* ExpToLLVisitor::operator()(const EFloat& e) {
     return llvm::ConstantFP::get(*gen.ctxt, ap);
 }
 
-Value* ExpToLLVisitor::operator()(const ECall& e) {
+Value* ExpToLLVisitor::operator()(const EBop& e) {
+    Value* lhs = gen.codegenExp(*e.left);
+    Value* rhs = gen.codegenExp(*e.right);
+    if (!lhs || !rhs)
+        llvm_unreachable("Unknown operands to binary expression");
 
+    // ---- Determine signedness based on operand types ----
+
+    auto isUnsignedIntTy = [&](const Ty& ty) -> bool {
+        if (ty.tag != TyTag::TInt)
+            return false;
+        return ty.int_ty->tag == IntTyTag::Unsigned;
+    };
+
+    bool lhsUnsigned = isUnsignedIntTy(getExpTy(*e.left));
+    bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
+    
+    bool bothUnsigned = lhsUnsigned && rhsUnsigned;
+
+    // ---- Generate operations ----
+
+    switch (e.op) {
+        case BinOp::Add:
+            // Same LLVM op for add/sub/mul unless doing NUW/NSW
+            return gen.builder->CreateAdd(lhs, rhs, "addtmp");
+
+        case BinOp::Sub:
+            return gen.builder->CreateSub(lhs, rhs, "subtmp");
+
+        case BinOp::Mul:
+            return gen.builder->CreateMul(lhs, rhs, "multmp");
+
+        case BinOp::Div:
+            return bothUnsigned
+                ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
+                : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
+
+        case BinOp::Mod:
+            return bothUnsigned
+                ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
+                : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
+
+        case BinOp::Eqeq:
+            return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+
+        case BinOp::Neq:
+            return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
+
+        case BinOp::Lt:
+            return bothUnsigned
+                ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
+                : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
+
+        case BinOp::Lte:
+            return bothUnsigned
+                ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
+                : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
+
+        case BinOp::Gt:
+            return bothUnsigned
+                ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
+                : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
+
+        case BinOp::Gte:
+            return bothUnsigned
+                ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
+                : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
+
+        case BinOp::And:
+            return gen.builder->CreateAnd(lhs, rhs, "andtmp");
+
+        case BinOp::Or:
+            return gen.builder->CreateOr(lhs, rhs, "ortmp");
+
+        default:
+            llvm_unreachable("Unsupported binary operator");
+    }
 }
 

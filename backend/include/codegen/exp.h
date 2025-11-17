@@ -24,4 +24,11 @@ public:
     Value* operator()(const EUop& e);
     Value* operator()(const EIndex& e);
     Value* operator()(const EArray& e);
+
+private:
+    const Ty& getExpTy(const Exp& exp) {
+        return std::visit([](const auto& node) -> const Ty& {
+            return node.ty;
+        }, exp.val);
+    };
 };
