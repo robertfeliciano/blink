@@ -47,8 +47,11 @@ struct EInt  {
     };
 };
 struct EFloat { double value; FloatTy float_ty; };
-struct EStr  { std::string value; };
-struct EId   { std::string id; };
+struct EStr { std::string value; };
+struct EId { 
+    std::string id; 
+    Ty ty;
+};
 
 struct ECall {
     std::unique_ptr<Exp> callee;
@@ -89,6 +92,7 @@ struct ECast {
 struct EProj {
     std::unique_ptr<Exp> obj;
     std::string field;
+    Ty ty;
 };
 
 struct EObjInit {

@@ -289,11 +289,11 @@ std::string cdeclToString(const CDecl& c) {
 
 std::string programToString(const Program& prog) {
     std::ostringstream oss;
-    for (const auto &f : prog.functions) {
-        oss << fdeclToString(f) << "\n\n";
-    }
     for (const auto &c : prog.classes) {
         oss << cdeclToString(c) << "\n\n";
+    }
+    for (const auto &f : prog.functions) {
+        oss << fdeclToString(f) << "\n\n";
     }
     return oss.str();
 }

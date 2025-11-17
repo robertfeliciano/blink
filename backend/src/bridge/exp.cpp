@@ -119,7 +119,8 @@ Exp convert_exp(value v) {
         }
         case Constants::EXP_Id: { // Id of id
             std::string id = String_val(Field(v, 0));
-            result.val = EId{id};
+            Ty ty = convert_ty(Field(v, 1));
+            result.val = EId{id, std::move(ty)};
             break;
         }
         case Constants::EXP_Call: { // Call of exp * exp list * ty
@@ -191,7 +192,8 @@ Exp convert_exp(value v) {
         case Constants::EXP_Proj: { // Proj of exp * id
             auto obj = std::make_unique<Exp>(convert_exp(Field(v, 0)));
             std::string field = String_val(Field(v, 1));
-            result.val = EProj{ std::move(obj), field };
+            Ty ty = convert_ty(Field(v, 2));
+            result.val = EProj{ std::move(obj), field , std::move(ty) };
             break;
         }
         case Constants::EXP_ObjInit: { // ObjInit of id * (id * exp) list
