@@ -28,6 +28,7 @@
 #include <bridge/prog.h>
 #include <codegen/types.h>
 #include <codegen/exp.h>
+#include <codegen/stmt.h>
 #include <codegen/decl.h>
 
 struct Generator {
@@ -47,9 +48,9 @@ struct Generator {
         return std::visit(ExpToLLVisitor(*this), e.val);
     }
 
-    // llvm::Value* codegenStmt(const Stmt& s) {
-    //     return std::visit(StmtToLLVisitor(*this), s.val);
-    // }
+    llvm::Value* codegenStmt(const Stmt& s) {
+        return std::visit(StmtToLLVisitor(*this), s.val);
+    }
 
     llvm::Type* codegenType(const Ty& ty) {
         return TypeToLLGenerator(*this).codegenTy(ty);

@@ -14,16 +14,19 @@ class ExpToLLVisitor {
 public:
     explicit ExpToLLVisitor(Generator& g) : gen(g) {}
 
-    Value* operator()(const EInt& e);
     Value* operator()(const EBool& e);
-    Value* operator()(const EId& e);
+    Value* operator()(const EInt& e);
     Value* operator()(const EFloat& e);
     Value* operator()(const EStr& e);
+    Value* operator()(const EId& e);
     Value* operator()(const ECall& e);
     Value* operator()(const EBop& e);
     Value* operator()(const EUop& e);
     Value* operator()(const EIndex& e);
     Value* operator()(const EArray& e);
+    Value* operator()(const ECast& e);
+    Value* operator()(const EProj& e);
+    Value* operator()(const EObjInit& e);
 
 private:
     const Ty& getExpTy(const Exp& exp) {

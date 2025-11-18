@@ -73,9 +73,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     if (!lhs || !rhs)
         llvm_unreachable("Unknown operands to binary expression");
 
-    // ---- Determine signedness based on operand types ----
-
-    auto isUnsignedIntTy = [&](const Ty& ty) -> bool {
+    inline auto isUnsignedIntTy = [&](const Ty& ty) -> bool {
         if (ty.tag != TyTag::TInt)
             return false;
         return ty.int_ty->tag == IntTyTag::Unsigned;
@@ -86,18 +84,30 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     
     bool bothUnsigned = lhsUnsigned && rhsUnsigned;
 
-    // ---- Generate operations ----
+    inline auto addWrapFlags = [&](Value* inst) {
+        auto* op = llvm::cast<llvm::BinaryOperator>(inst);
+        if (bothUnsigned)
+            op->setHasNoUnsignedWrap(true);
+        else
+            op->setHasNoSignedWrap(true);
+        return inst;
+    };
 
     switch (e.op) {
-        case BinOp::Add:
-            // Same LLVM op for add/sub/mul unless doing NUW/NSW
-            return gen.builder->CreateAdd(lhs, rhs, "addtmp");
+        case BinOp::Add: {
+            auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
+            return addWrapFlags(inst);
+        }
 
-        case BinOp::Sub:
-            return gen.builder->CreateSub(lhs, rhs, "subtmp");
+        case BinOp::Sub: {
+            auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
+            return addWrapFlags(inst);
+        }
 
-        case BinOp::Mul:
-            return gen.builder->CreateMul(lhs, rhs, "multmp");
+        case BinOp::Mul: {
+            auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
+            return addWrapFlags(inst);
+        }
 
         case BinOp::Div:
             return bothUnsigned
@@ -145,4 +155,65 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
             llvm_unreachable("Unsupported binary operator");
     }
 }
+
+/*
+Value* ExpToLLVisitor::operator()(const EUop& e) {
+    Value* argVal = gen.codegenExp(*e.arg);
+    if (!argVal)
+        llvm_unreachable("null arg in EUop");
+
+    Ty argTy  = getExpTy(*e.arg);
+    bool isInt  = argTy.tag == TyTag::TInt;
+    bool isBool = argTy.tag == TyTag::TBool;
+    bool isFloat= argTy.tag == TyTag::TFloat;
+
+    switch (e.op) {
+        case UnOp::Neg: {
+            if (isInt) {
+                // Integer NEG = 0 - x
+                Value* zero = llvm::ConstantInt::get(argVal->getType(), 0);
+                auto* inst = gen.builder->CreateSub(zero, argVal, "negtmp");
+
+                // Add NSW/NUW if you want to assume no overflow
+                if (auto* bin = dyn_cast<llvm::BinaryOperator>(inst)) {
+                    bin->setHasNoSignedWrap(true);
+                    bin->setHasNoUnsignedWrap(true);
+                }
+                return inst;
+            }
+
+            if (isFloat) {
+                // Float NEG
+                auto* inst = gen.builder->CreateFNeg(argVal, "fnegtmp");
+
+                // Optional: fast-math flags
+                if (auto* fop = dyn_cast<llvm::FPMathOperator>(inst)) {
+                    llvm::FastMathFlags fmf;
+                    fmf.setFast();    // or setNoNaNs(), etc.
+                    fop->setFastMathFlags(fmf);
+                }
+                return inst;
+            }
+
+            llvm_unreachable("Neg operator on non-numeric type");
+        }
+
+        case UnOp::Not: {
+            if (isInt) {
+                // Bitwise NOT (~x)
+                return gen.builder->CreateNot(argVal, "nottmp");
+            }
+
+            if (isBool) {
+                // Boolean NOT (!x) = xor with true
+                return gen.builder->CreateNot(argVal, "boolnottmp");
+            }
+
+            llvm_unreachable("Not operator on unsupported type");
+        }
+    }
+
+    llvm_unreachable("Unknown unary op");
+}
+*/
 
