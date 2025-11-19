@@ -31,7 +31,7 @@ llvm::Type* TypeToLLGenerator::createUnsignedInt(const Uint ui) {
     }
 }
 
-inline llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
+llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
     switch (ty.tag) {
         case TyTag::TBool:
             return llvm::Type::getInt1Ty(*gen.ctxt);
@@ -50,12 +50,13 @@ inline llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
                 case FloatTy::Tf64:
                     return llvm::Type::getDoubleTy(*gen.ctxt);
             }
+            // todo tref
         default: 
             throw std::runtime_error("Other type not supported yet");
     }
 }
 
-inline llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
+llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
     switch (rty.tag) {
         case RetTyTag::RetVoid:
             return llvm::Type::getVoidTy(*gen.ctxt);

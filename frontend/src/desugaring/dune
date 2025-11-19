@@ -9,7 +9,6 @@
  (c_library_flags
   (:standard
    -lstdc++
-   -stdlib=libc++
    -Wl,--start-group
    -Wl,--whole-archive
    -Wl,--no-whole-archive
