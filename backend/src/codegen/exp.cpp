@@ -1,5 +1,6 @@
 #include <codegen/generator.h>
 #include <codegen/exp.h>
+#include <cstdio>
 
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
@@ -31,12 +32,37 @@ short getIntSize(const EInt& e) {
     }
 }
 
+static llvm::APInt makeAPInt128(unsigned numBits, unsigned __int128 v) {
+    uint64_t words[2] = {
+        (uint64_t)v,
+        (uint64_t)(v >> 64)
+    };
+    return llvm::APInt(numBits, 2, words);
+}
+
+static llvm::APInt makeAPSInt128(unsigned numBits, __int128 v) {
+    uint64_t words[2] = {
+        (uint64_t)v,
+        (uint64_t)(v >> 64)
+    };
+    return llvm::APInt(numBits, 2, words);
+}
+
+
 Value* ExpToLLVisitor::operator()(const EInt& e) {
     short int_sz = getIntSize(e);
-    if (e.int_ty->tag == IntTyTag::Unsigned)
-        return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(int_sz, e.u));
-    else
-        return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(int_sz, e.s));
+    if (int_sz < 128) {
+        if (e.int_ty->tag == IntTyTag::Unsigned)
+            return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(int_sz, e.u));
+        else
+            return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(int_sz, e.s));
+    } else {
+        llvm::APInt ap = (e.int_ty->tag == IntTyTag::Unsigned)
+        ? makeAPInt128(int_sz, e.u)
+        : makeAPSInt128(int_sz, e.s);
+
+        return llvm::ConstantInt::get(*gen.ctxt, ap);
+    }
 }
 
 Value* ExpToLLVisitor::operator()(const EBool& e) {

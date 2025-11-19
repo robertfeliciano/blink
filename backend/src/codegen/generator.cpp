@@ -12,7 +12,7 @@ void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }
-    optimize();
+    // optimize();
 }
 
 void Generator::configureTarget() {

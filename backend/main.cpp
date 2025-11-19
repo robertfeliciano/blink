@@ -14,6 +14,7 @@ extern "C" {
         CAMLparam1(p);
         Program prog = convert_program(p);
         Generator gen;
+        gen.configureTarget();
         gen.codegenProgram(prog);
         gen.dumpLL("new_output.ll");
         std::cout << programToString(prog) << std::endl;
