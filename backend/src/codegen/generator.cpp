@@ -10,7 +10,7 @@ Generator::Generator() {
 void Generator::codegenProgram(const Program& p) {
     codegenFunctionProtos(p);
     for (const auto& decl : p.functions) {
-        // codegenDecl(decl);
+        codegenFDecl(decl);
     }
     optimize();
 }

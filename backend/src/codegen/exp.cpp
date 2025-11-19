@@ -73,7 +73,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     if (!lhs || !rhs)
         llvm_unreachable("Unknown operands to binary expression");
 
-    inline auto isUnsignedIntTy = [&](const Ty& ty) -> bool {
+    auto isUnsignedIntTy = [&](const Ty& ty) -> bool {
         if (ty.tag != TyTag::TInt)
             return false;
         return ty.int_ty->tag == IntTyTag::Unsigned;
@@ -84,7 +84,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     
     bool bothUnsigned = lhsUnsigned && rhsUnsigned;
 
-    inline auto addWrapFlags = [&](Value* inst) {
+    auto addWrapFlags = [&](Value* inst) {
         auto* op = llvm::cast<llvm::BinaryOperator>(inst);
         if (bothUnsigned)
             op->setHasNoUnsignedWrap(true);
@@ -217,3 +217,27 @@ Value* ExpToLLVisitor::operator()(const EUop& e) {
 }
 */
 
+Value* ExpToLLVisitor::operator()(const EStr& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const ECall& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const EUop& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const EIndex& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const EArray& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const ECast& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const EProj& e) { 
+    throw new std::runtime_error("not supported yet");
+}
+Value* ExpToLLVisitor::operator()(const EObjInit& e) { 
+    throw new std::runtime_error("not supported yet");
+}

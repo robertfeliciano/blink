@@ -5,7 +5,7 @@
 
 #include <bridge/prog.h>
 #include <util/print.h>
-// #include <codegen/generator.h>
+#include <codegen/generator.h>
 
 using namespace std;
 
@@ -15,7 +15,7 @@ extern "C" {
         Program prog = convert_program(p);
         // Generator gen;
         // gen.codegenProgram(prog);
-        // gen.dumpLL("output.ll");
+        // gen.dumpLL("new_output.ll");
         std::cout << programToString(prog) << std::endl;
         CAMLreturn(Val_unit);
     }

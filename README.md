@@ -24,3 +24,6 @@ Alternative, starting in the root directory, `blink/`, run the following command
 `dune exec src/blink.exe -- <filename>`
 
 I usually do the frontend and backend in two separate panes in a tmux window.
+
+Generate the list of llvm libs that need to be linked with: 
+`llvm-config --libs --system-libs --ldflags --link-static > llvm_flags.sexp`

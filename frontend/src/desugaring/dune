@@ -14,8 +14,8 @@
    -Wl,--whole-archive
    -Wl,--no-whole-archive
    -Wl,--end-group
-   -lgmp
-   -lgmpxx
+   ; -lgmp
+   ; -lgmpxx
    ; All necessary LLVM libs
    -lLLVMWindowsManifest
    -lLLVMXRay

@@ -2,7 +2,6 @@
 
 #include <stdlib.h>
 
-#include <string>
 #include <map>
 
 #include "llvm/IR/IRBuilder.h"
@@ -10,6 +9,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Target/TargetMachine.h"
@@ -26,6 +26,7 @@
 #include <bridge/exp.h>
 #include <bridge/stmt.h>
 #include <bridge/prog.h>
+#include <bridge/decl.h>
 #include <codegen/types.h>
 #include <codegen/exp.h>
 #include <codegen/stmt.h>
@@ -64,9 +65,10 @@ struct Generator {
         return DeclToLLVisitor(*this).codegenFunctionPrototypes(p.functions);
     }
 
-    // void codegenDecl(const Decl& d) {
-    //     return std::visit(DeclToLLVisitor(*this), d.val);
-    // }
+    void codegenFDecl(const FDecl& d) {
+        // temporary
+        return DeclToLLVisitor(*this).codegenFDecl(d);
+    }
 
     void codegenProgram(const Program& p);
 

@@ -23,3 +23,38 @@ void DeclToLLVisitor::codegenFunctionPrototypes(const std::vector<FDecl>& fns) {
         codegenFunctionProto(decl);
     }
 }
+
+void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
+    llvm::Function* llFun = gen.mod->getFunction(f.fname);
+    llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(*gen.ctxt, f.fname+"_entry", llFun);
+
+    gen.builder->SetInsertPoint(entryBlock);
+
+    gen.varEnv.clear();
+    for (auto& arg : llFun->args()) {
+        int argNum = arg.getArgNo();
+
+        std::string argName = f.args[argNum].second;
+        llvm::Type* argType = llFun->getFunctionType()->getParamType(argNum);
+        gen.varEnv[argName] = gen.builder->CreateAlloca(argType, nullptr, llvm::Twine(argName));
+
+        gen.builder->CreateStore(&arg, gen.varEnv[argName]);
+    }
+
+    llvm::Value* retVal;
+    for (auto& stmtNode : f.body) {
+        retVal = gen.codegenStmt(*stmtNode);
+    }
+    if (llFun->getReturnType()->isVoidTy()) {
+        if (!llvm::dyn_cast<llvm::ReturnInst>(retVal)) {
+            gen.builder->CreateRetVoid();
+        }
+    }
+  
+    llvm::verifyFunction(*llFun);
+}
+
+
+void DeclToLLVisitor::codegenCDecl(const CDecl& f) {
+    throw new std::runtime_error("classes not supported yet");
+}
