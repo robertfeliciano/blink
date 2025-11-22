@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stdlib.h>
-
 #include <map>
 
 #include "llvm/IR/IRBuilder.h"
@@ -39,39 +38,40 @@ struct Generator {
     std::unique_ptr<llvm::Module> mod;
 
     std::map<std::string, llvm::AllocaInst *> varEnv;
-    
+
+    ExpToLLVisitor expVisitor;
+    StmtToLLVisitor stmtVisitor;
+    TypeToLLGenerator typeGen;
+    DeclToLLVisitor declVisitor;
+
     void configureTarget();
-
     void optimize();
-
     Generator();
 
     llvm::Value* codegenExp(const Exp& e) {
-        return std::visit(ExpToLLVisitor(*this), e.val);
+        return std::visit(expVisitor, e.val);
     }
 
     llvm::Value* codegenStmt(const Stmt& s) {
-        return std::visit(StmtToLLVisitor(*this), s.val);
+        return std::visit(stmtVisitor, s.val);
     }
 
     llvm::Type* codegenType(const Ty& ty) {
-        return TypeToLLGenerator(*this).codegenTy(ty);
+        return typeGen.codegenTy(ty);
     }
 
     llvm::Type* codegenRetType(const RetTy& ty) {
-        return TypeToLLGenerator(*this).codegenRetTy(ty);
+        return typeGen.codegenRetTy(ty);
     }
 
     void codegenFunctionProtos(const Program& p) {
-        return DeclToLLVisitor(*this).codegenFunctionPrototypes(p.functions);
+        return declVisitor.codegenFunctionPrototypes(p.functions);
     }
 
     void codegenFDecl(const FDecl& d) {
-        // temporary
-        return DeclToLLVisitor(*this).codegenFDecl(d);
+        return declVisitor.codegenFDecl(d);
     }
 
     void codegenProgram(const Program& p);
-
     void dumpLL(const std::string& filename);
 };

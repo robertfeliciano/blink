@@ -51,8 +51,8 @@ Value* StmtToLLVisitor::operator()(const If& s) {
 
     gen.builder->SetInsertPoint(thenBlock);
 
-    for (auto& s : s.then_branch) {
-        gen.codegenStmt(*s);
+    for (auto& stmt : s.then_branch) {
+        gen.codegenStmt(*stmt);
     }
 
     thenBlock = gen.builder->GetInsertBlock();
@@ -61,8 +61,8 @@ Value* StmtToLLVisitor::operator()(const If& s) {
     parent->getBasicBlockList().push_back(elseBlock);
     gen.builder->SetInsertPoint(elseBlock);
 
-    for (auto& s : s.else_branch) {
-        gen.codegenStmt(*s);
+    for (auto& stmt : s.else_branch) {
+        gen.codegenStmt(*stmt);
     }
 
     elseBlock = gen.builder->GetInsertBlock();

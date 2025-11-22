@@ -1,10 +1,15 @@
 #include <codegen/generator.h>
 #include <codegen/decl.h>
 
-Generator::Generator() {
-    ctxt = std::make_unique<llvm::LLVMContext>();
-    builder = std::make_unique<llvm::IRBuilder<>>(*ctxt);
-    mod = std::make_unique<llvm::Module>("Module", *ctxt);
+Generator::Generator()
+    : ctxt(std::make_unique<llvm::LLVMContext>()),
+      builder(std::make_unique<llvm::IRBuilder<>>(*ctxt)),
+      mod(std::make_unique<llvm::Module>("Module", *ctxt)),
+      expVisitor(*this),
+      stmtVisitor(*this),
+      typeGen(*this),
+      declVisitor(*this)
+{
 }
 
 void Generator::codegenProgram(const Program& p) {
@@ -20,8 +25,8 @@ void Generator::configureTarget() {
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
     
-    auto targetTriple = llvm::sys::getDefaultTargetTriple();
-    mod->setTargetTriple(targetTriple);
+    auto triple = llvm::sys::getDefaultTargetTriple();
+    mod->setTargetTriple(triple);
 }
 
 void Generator::optimize() {
@@ -40,26 +45,23 @@ void Generator::optimize() {
 
     llvm::FunctionPassManager fpm;
 
-    // fpm.addPass(llvm::InlinerPass());
     fpm.addPass(llvm::PromotePass());
     fpm.addPass(llvm::InstCombinePass());
     fpm.addPass(llvm::ReassociatePass());
     fpm.addPass(llvm::GVNPass());
     fpm.addPass(llvm::SimplifyCFGPass());
 
-    // Run optimization passes on each function in the module
-    for (auto &func : *mod) {
+    for (auto& func : *mod) {
         fpm.run(func, fam);
     }
 }
 
 void Generator::dumpLL(const std::string& filename) {
-    // mod->print(llvm::outs(), nullptr);
     std::error_code EC;
     llvm::raw_fd_ostream outFile(filename, EC);
+
     if (EC) {
         throw std::runtime_error("Could not open file " + filename + ": " + EC.message());
     }
     mod->print(outFile, nullptr);
 }
-
