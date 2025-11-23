@@ -3,7 +3,12 @@ class Point {
     let y: i32 = 0;
 }
 
+fun helper(a: i8, b: i8) => i8 {
+    return a+b;
+}
+
 fun main(argc: i32) => i32 {
-    let x = new Point { x = 1, y = 22 };
-    return x.y;
+    // let x = new Point { x = 1, y = 22 };
+    let arr = [1, 2, 3, 4, 5];
+    return arr[4];
 }

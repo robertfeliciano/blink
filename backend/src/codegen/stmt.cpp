@@ -1,61 +1,13 @@
 #include <codegen/generator.h>
 #include <codegen/stmt.h>
 
-llvm::Value* StmtToLLVisitor::codegenLValue(const Exp& e) {
-    return std::visit([&](auto const& node) -> llvm::Value* {
-
-        using T = std::decay_t<decltype(node)>;
-
-        if constexpr (std::is_same_v<T, EId>) {
-            auto it = gen.varEnv.find(node.id);
-            if (it == gen.varEnv.end()) {
-                throw std::runtime_error("Unknown variable (lvalue): " + node.id);
-            }
-            return it->second; // allocaInst*
-        }
-
-        else if constexpr (std::is_same_v<T, EProj>) {
-            return gen.getStructFieldPtr(node);
-        }
-
-        else if constexpr (std::is_same_v<T, EIndex>) {
-            llvm::Value* arrPtr = codegenLValue(*node.collection);
-            llvm::Value* idx    = gen.codegenExp(*node.index);
-        
-            const Ty& collTy = gen.getTyFromExp(*node.collection);
-        
-            llvm::Type* llArrayTy = gen.codegenType(collTy);
-            if (!llvm::isa<llvm::ArrayType>(llArrayTy)) {
-                throw std::runtime_error("Indexing into non-array type in lvalue");
-            }
-        
-            llvm::Value* zero = llvm::ConstantInt::get(
-                llvm::Type::getInt32Ty(*gen.ctxt), 0);
-            
-            return gen.builder->CreateGEP(
-                llArrayTy,
-                arrPtr,
-                { zero, idx },
-                "idx_lvalue"
-            );
-        }
-        
-
-        else {
-            throw std::runtime_error("Expression is not assignable");
-        }
-
-    }, e.val);
-}
-
-
 Value* StmtToLLVisitor::operator()(const Assn& s) {
-    llvm::Value* lhsPtr = codegenLValue(*s.lhs);
+    Value* lhsPtr = gen.lvalueCreator.codegenLValue(*s.lhs);
     if (!lhsPtr)
         throw std::runtime_error("Assignment to invalid lvalue");
     
 
-    llvm::Value* rhsVal = gen.codegenExp(*s.rhs);
+    Value* rhsVal = gen.codegenExp(*s.rhs);
     if (!rhsVal)
         throw std::runtime_error("Assignment RHS produced null value");
 

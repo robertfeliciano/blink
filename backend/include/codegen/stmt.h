@@ -26,7 +26,4 @@ public:
     llvm::Value* operator()(const While& s);
     llvm::Value* operator()(const Break& s);
     llvm::Value* operator()(const Continue& s);
-
-private:
-    llvm::Value* codegenLValue(const Exp& e);
 };

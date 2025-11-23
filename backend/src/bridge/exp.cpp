@@ -191,12 +191,11 @@ Exp convert_exp(value v) {
                 elems_v = Field(elems_v, 1);
             }
             Ty ty = convert_ty(Field(v, 1));
-            uint64_t size = static_cast<uint64_t>(Long_val(Field(v, 2)));
+            uint64_t size = static_cast<int64_t>(Long_val(Field(v, 2)));
 
             EArray ea;
             ea.elements = std::move(elements);
             ea.ty = std::move(ty);
-            ea.size = size;
             result.val = std::move(ea);
             break;
         }

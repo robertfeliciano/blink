@@ -31,6 +31,7 @@
 #include <codegen/exp.h>
 #include <codegen/stmt.h>
 #include <codegen/decl.h>
+#include <codegen/lvalue.h>
 
 struct Generator {
     std::unique_ptr<llvm::LLVMContext> ctxt;
@@ -46,6 +47,7 @@ struct Generator {
     StmtToLLVisitor stmtVisitor;
     TypeToLLGenerator typeGen;
     DeclToLLVisitor declVisitor;
+    LValueCreator lvalueCreator;
 
     std::vector<llvm::BasicBlock*> breakTargets;
     std::vector<llvm::BasicBlock*> continueTargets;
@@ -56,10 +58,6 @@ struct Generator {
 
     llvm::Value* codegenExp(const Exp& e) {
         return std::visit(expVisitor, e.val);
-    }
-
-    llvm::Value* getStructFieldPtr(const EProj& e) {
-        return expVisitor.getStructFieldPtr(e);
     }
 
     llvm::Value* codegenStmt(const Stmt& s) {

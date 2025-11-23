@@ -19,7 +19,6 @@ public:
 private: 
     llvm::Type* createSignedInt(const Sint si);
     llvm::Type* createUnsignedInt(const Uint ui);
-    llvm::Type* getStringType();
     llvm::Type* getStaticArrayType(const RefTy& rt);
     llvm::Type* getClassType(const std::string& cname);
     llvm::Type* getFunctionPointerType(const RefTy& rt);

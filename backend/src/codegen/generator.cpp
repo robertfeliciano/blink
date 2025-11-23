@@ -8,7 +8,8 @@ Generator::Generator()
       expVisitor(*this),
       stmtVisitor(*this),
       typeGen(*this),
-      declVisitor(*this)
+      declVisitor(*this),
+      lvalueCreator(*this)
 {
 }
 
@@ -20,6 +21,7 @@ void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }
+    // TODO put flag in ocaml side for optimization level
     // optimize();
 }
 

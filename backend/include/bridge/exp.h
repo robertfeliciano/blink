@@ -84,7 +84,6 @@ struct EIndex {
 struct EArray {
     std::vector<std::unique_ptr<Exp>> elements;
     Ty ty;
-    uint64_t size = 0;
 };
 
 struct ECast {

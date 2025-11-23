@@ -48,7 +48,6 @@ static llvm::APInt makeAPSInt128(unsigned numBits, __int128 v) {
     return llvm::APInt(numBits, 2, words);
 }
 
-
 Value* ExpToLLVisitor::operator()(const EInt& e) {
     short int_sz = getIntSize(e);
     if (int_sz < 128) {
@@ -186,28 +185,57 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 Value* ExpToLLVisitor::operator()(const EUop& e) {
     throw new std::runtime_error("not supported yet");
 }
+
 Value* ExpToLLVisitor::operator()(const EStr& e) { 
     throw new std::runtime_error("not supported yet");
 }
+
 Value* ExpToLLVisitor::operator()(const ECall& e) { 
     throw new std::runtime_error("not supported yet");
 }
+
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 
-    throw new std::runtime_error("not supported yet");
+    llvm::Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
+
+    llvm::Type* valTy = gen.codegenType(gen.getTyFromExp(*e.collection));
+
+    return gen.builder->CreateLoad(valTy->getArrayElementType(), elemPtr, "idx_load");
 }
+
 Value* ExpToLLVisitor::operator()(const EArray& e) { 
-    throw new std::runtime_error("not supported yet");
+    llvm::Type* elemTy = gen.codegenType(e.ty);
+
+    llvm::Type* arrTy = llvm::ArrayType::get(elemTy, static_cast<uint64_t>(e.elements.size()));
+
+    Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
+
+    Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
+
+    for (size_t i = 0; i < e.elements.size(); i++) {
+        Value* val = gen.codegenExp(*e.elements[i]);
+
+        Value* idx = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), i);
+
+        Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, { zero, idx }, "elemPtr");
+
+        gen.builder->CreateStore(val, elemPtr);
+    }
+
+    return arrPtr;
 }
+
 Value* ExpToLLVisitor::operator()(const ECast& e) { 
     throw new std::runtime_error("not supported yet");
 }
+
 Value* ExpToLLVisitor::operator()(const EProj& e) { 
-    llvm::Value* fieldPtr = gen.getStructFieldPtr(e);
+    Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
     llvm::Type* fieldTy = gen.codegenType(e.ty);
 
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
+
 Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     auto it = gen.structTypes.find(e.id);
     if (it == gen.structTypes.end()) {
@@ -221,7 +249,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     uint64_t size = dl.getTypeAllocSize(structTy);
 
     llvm::Type* i64Ty = llvm::Type::getInt64Ty(*gen.ctxt);
-    llvm::Value* sizeVal = llvm::ConstantInt::get(i64Ty, size);
+    Value* sizeVal = llvm::ConstantInt::get(i64Ty, size);
 
     // TODO add malloc to blink's stdlib
     llvm::Function* mallocFn = gen.mod->getFunction("malloc");
@@ -241,11 +269,11 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         );
     }
 
-    llvm::Value* rawPtr = gen.builder->CreateCall(mallocFn, { sizeVal }, "rawmem");
+    Value* rawPtr = gen.builder->CreateCall(mallocFn, { sizeVal }, "rawmem");
 
-    llvm::Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
+    Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
 
-    std::unordered_map<std::string, llvm::Value*> userInitMap;
+    std::unordered_map<std::string, Value*> userInitMap;
 
     for (auto& [fname, fexp] : e.fields) {
         userInitMap[fname] = gen.codegenExp(*fexp);
@@ -261,7 +289,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
             gen.codegenStmt(*stmtPtr); 
         }
 
-        llvm::Value* storedVal = nullptr;
+        Value* storedVal = nullptr;
 
         if (userInitMap.contains(fd.fieldName)) {
             storedVal = userInitMap[fd.fieldName];
@@ -271,38 +299,11 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
             storedVal = llvm::Constant::getNullValue(fty);
         }
 
-        llvm::Value* fieldPtr =
+        Value* fieldPtr =
             gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
 
         gen.builder->CreateStore(storedVal, fieldPtr);
     }
 
     return objPtr;
-}
-
-llvm::Value* ExpToLLVisitor::getStructFieldPtr(const EProj& e) {
-    llvm::Value* objPtr = gen.codegenExp(*e.obj);
-
-    const Ty& objTy = gen.getTyFromExp(*e.obj);
-
-    if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
-        throw std::runtime_error("Expected reference type (class)");
-
-    const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
-
-    unsigned idx = 0;
-    bool found = false;
-    for (; idx < cd.fields.size(); ++idx) {
-        if (cd.fields[idx].fieldName == e.field) {
-            found = true;
-            break;
-        }
-    }
-
-    if (!found) throw std::runtime_error("Unknown field: " + e.field);
-
-
-    llvm::StructType* structTy = llvm::cast<llvm::StructType>(gen.codegenType(objTy));
-
-    return gen.builder->CreateStructGEP(structTy, objPtr, idx, "fieldptr");
 }
