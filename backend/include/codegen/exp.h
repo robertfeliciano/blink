@@ -27,9 +27,8 @@ public:
     Value* operator()(const ECast& e);
     Value* operator()(const EProj& e);
     Value* operator()(const EObjInit& e);
-private:
-// TODO remove duplicated code (identical function in generator.h)
-    const Ty& getExpTy(const Exp& exp) {
+
+    static const Ty& getExpTy(const Exp& exp) {
         return std::visit([](const auto& node) -> const Ty& {
             return node.ty;
         }, exp.val);

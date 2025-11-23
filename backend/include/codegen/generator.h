@@ -84,10 +84,8 @@ struct Generator {
         return declVisitor.codegenCDecl(d);
     }
 
-    const Ty& getTyFromExp(const Exp& e) {
-        return std::visit([](const auto& node) -> const Ty& {
-            return node.ty;
-        }, e.val);
+    const Ty& getExpTy(const Exp& e) {
+        return expVisitor.getExpTy(e);
     }
 
     void codegenProgram(const Program& p);

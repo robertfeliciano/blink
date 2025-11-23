@@ -1,5 +1,6 @@
 #include <codegen/generator.h>
 #include <codegen/lvalue.h>
+#include <codegen/exp.h>
 
 #include "llvm/IR/Value.h"
 
@@ -33,14 +34,16 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
 
 Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
     Value* arrPtr = gen.codegenExp(*e.collection);
-    Value* idx    = gen.codegenExp(*e.index);
+    Value* idx = gen.codegenExp(*e.index);
 
-    const Ty& collTy = gen.getTyFromExp(*e.collection);
+    const Ty& collTy = gen.getExpTy(*e.collection);
 
     llvm::Type* llArrayTy = gen.codegenType(collTy);
 
     //TODO clean this up. collection ty is an array ? why
+    printf("llarrayty: ");
     llArrayTy->print(llvm::outs());
+    puts("\n");
     if (!llvm::isa<llvm::ArrayType>(llArrayTy)) {
         throw std::runtime_error("Indexing into non-array type in lvalue");
     }
@@ -59,7 +62,7 @@ Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
 Value* LValueCreator::getStructFieldPtr(const EProj& e) {
     Value* objPtr = gen.codegenExp(*e.obj);
 
-    const Ty& objTy = gen.getTyFromExp(*e.obj);
+    const Ty& objTy = gen.getExpTy(*e.obj);
 
     if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
         throw std::runtime_error("Expected reference type (class)");

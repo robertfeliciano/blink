@@ -197,7 +197,10 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 
     llvm::Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
-    llvm::Type* valTy = gen.codegenType(gen.getTyFromExp(*e.collection));
+    llvm::Type* valTy = gen.codegenType(getExpTy(*e.collection));
+    printf("valty: ");
+    valTy->print(llvm::outs());
+    puts("\n");
 
     return gen.builder->CreateLoad(valTy->getArrayElementType(), elemPtr, "idx_load");
 }
