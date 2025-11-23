@@ -15,30 +15,7 @@ llvm::Value* StmtToLLVisitor::codegenLValue(const Exp& e) {
         }
 
         else if constexpr (std::is_same_v<T, EProj>) {
-            llvm::Value* objPtr = gen.codegenExp(*node.obj);
-
-            const Ty& objTy = gen.getTyFromExp(*node.obj);
-
-            if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
-                throw std::runtime_error("Expected reference type (class)");
-
-            const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
-
-            unsigned idx = 0;
-            bool found = false;
-            for (; idx < cd.fields.size(); ++idx) {
-                if (cd.fields[idx].fieldName == node.field) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) throw std::runtime_error("Unknown field: " + node.field);
-
-
-            llvm::StructType* structTy = llvm::cast<llvm::StructType>(gen.codegenType(objTy));
-
-            return gen.builder->CreateStructGEP(structTy, objPtr, idx, "fieldptr");
+            return gen.getStructFieldPtr(node);
         }
 
         else if constexpr (std::is_same_v<T, EIndex>) {

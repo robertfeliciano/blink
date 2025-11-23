@@ -3,7 +3,7 @@ class Point {
     let y: i32 = 0;
 }
 
-fun main(argc: i32) => u128 {
-    let x: u128 = 12;
-    return x;
+fun main(argc: i32) => i32 {
+    let x = new Point { x = 1, y = 22 };
+    return x.y;
 }

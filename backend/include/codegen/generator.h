@@ -58,6 +58,10 @@ struct Generator {
         return std::visit(expVisitor, e.val);
     }
 
+    llvm::Value* getStructFieldPtr(const EProj& e) {
+        return expVisitor.getStructFieldPtr(e);
+    }
+
     llvm::Value* codegenStmt(const Stmt& s) {
         return std::visit(stmtVisitor, s.val);
     }

@@ -28,6 +28,8 @@ public:
     Value* operator()(const EProj& e);
     Value* operator()(const EObjInit& e);
 
+    llvm::Value* getStructFieldPtr(const EProj& e);
+
 private:
     const Ty& getExpTy(const Exp& exp) {
         return std::visit([](const auto& node) -> const Ty& {

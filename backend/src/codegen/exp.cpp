@@ -202,7 +202,11 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
     throw new std::runtime_error("not supported yet");
 }
 Value* ExpToLLVisitor::operator()(const EProj& e) { 
-    throw new std::runtime_error("not supported yet");
+    llvm::Value* fieldPtr = gen.getStructFieldPtr(e);
+
+    llvm::Type* fieldTy = gen.codegenType(e.ty);
+
+    return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
 Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     auto it = gen.structTypes.find(e.id);
@@ -219,7 +223,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     llvm::Type* i64Ty = llvm::Type::getInt64Ty(*gen.ctxt);
     llvm::Value* sizeVal = llvm::ConstantInt::get(i64Ty, size);
 
-    // Ensure malloc exists
+    // TODO add malloc to blink's stdlib
     llvm::Function* mallocFn = gen.mod->getFunction("malloc");
     if (!mallocFn) {
         llvm::FunctionType* mallocFTy =
@@ -241,49 +245,32 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
     llvm::Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
 
-    // Map of explicit field inits from "new Class { field = expr }"
     std::unordered_map<std::string, llvm::Value*> userInitMap;
 
     for (auto& [fname, fexp] : e.fields) {
         userInitMap[fname] = gen.codegenExp(*fexp);
     }
 
-    // Lookup the full class declaration
     const CDecl& classDecl = *gen.classEnv.at(e.id);
 
-    // Iterate over fields in declaration order
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
         const Field& fd = classDecl.fields[idx];
         llvm::Type* fty = gen.codegenType(fd.ftyp);
 
-        //
-        // 1. Run prelude statements
-        //
         for (auto& stmtPtr : fd.prelude) {
-            gen.codegenStmt(*stmtPtr);  // return value (if any) ignored
+            gen.codegenStmt(*stmtPtr); 
         }
 
-        //
-        // 2. Determine initializer value
-        //
         llvm::Value* storedVal = nullptr;
 
-        // (A) User provided override in new { ... }
         if (userInitMap.contains(fd.fieldName)) {
             storedVal = userInitMap[fd.fieldName];
-
-        // (B) Class field has a default initializer
         } else if (fd.init) {
             storedVal = gen.codegenExp(*fd.init);
-
-        // (C) Fallback: zero
         } else {
             storedVal = llvm::Constant::getNullValue(fty);
         }
 
-        //
-        // 3. Store into struct
-        //
         llvm::Value* fieldPtr =
             gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
 
@@ -291,4 +278,31 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     }
 
     return objPtr;
+}
+
+llvm::Value* ExpToLLVisitor::getStructFieldPtr(const EProj& e) {
+    llvm::Value* objPtr = gen.codegenExp(*e.obj);
+
+    const Ty& objTy = gen.getTyFromExp(*e.obj);
+
+    if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
+        throw std::runtime_error("Expected reference type (class)");
+
+    const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
+
+    unsigned idx = 0;
+    bool found = false;
+    for (; idx < cd.fields.size(); ++idx) {
+        if (cd.fields[idx].fieldName == e.field) {
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) throw std::runtime_error("Unknown field: " + e.field);
+
+
+    llvm::StructType* structTy = llvm::cast<llvm::StructType>(gen.codegenType(objTy));
+
+    return gen.builder->CreateStructGEP(structTy, objPtr, idx, "fieldptr");
 }
