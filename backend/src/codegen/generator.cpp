@@ -13,6 +13,9 @@ Generator::Generator()
 }
 
 void Generator::codegenProgram(const Program& p) {
+    for (const auto& decl : p.classes) {
+        codegenCDecl(decl);
+    }
     codegenFunctionProtos(p);
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);

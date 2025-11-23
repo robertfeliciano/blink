@@ -28,7 +28,6 @@ struct CDecl {
     std::string cname;
     std::vector<std::string> impls;
     std::vector<Field> fields;
-    std::vector<FDecl> methods;
 };
 
 FDecl convert_fdecl(value v);

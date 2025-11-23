@@ -182,74 +182,14 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     }
 }
 
-/*
+
 Value* ExpToLLVisitor::operator()(const EUop& e) {
-    Value* argVal = gen.codegenExp(*e.arg);
-    if (!argVal)
-        llvm_unreachable("null arg in EUop");
-
-    Ty argTy  = getExpTy(*e.arg);
-    bool isInt  = argTy.tag == TyTag::TInt;
-    bool isBool = argTy.tag == TyTag::TBool;
-    bool isFloat= argTy.tag == TyTag::TFloat;
-
-    switch (e.op) {
-        case UnOp::Neg: {
-            if (isInt) {
-                // Integer NEG = 0 - x
-                Value* zero = llvm::ConstantInt::get(argVal->getType(), 0);
-                auto* inst = gen.builder->CreateSub(zero, argVal, "negtmp");
-
-                // Add NSW/NUW if you want to assume no overflow
-                if (auto* bin = dyn_cast<llvm::BinaryOperator>(inst)) {
-                    bin->setHasNoSignedWrap(true);
-                    bin->setHasNoUnsignedWrap(true);
-                }
-                return inst;
-            }
-
-            if (isFloat) {
-                // Float NEG
-                auto* inst = gen.builder->CreateFNeg(argVal, "fnegtmp");
-
-                // Optional: fast-math flags
-                if (auto* fop = dyn_cast<llvm::FPMathOperator>(inst)) {
-                    llvm::FastMathFlags fmf;
-                    fmf.setFast();    // or setNoNaNs(), etc.
-                    fop->setFastMathFlags(fmf);
-                }
-                return inst;
-            }
-
-            llvm_unreachable("Neg operator on non-numeric type");
-        }
-
-        case UnOp::Not: {
-            if (isInt) {
-                // Bitwise NOT (~x)
-                return gen.builder->CreateNot(argVal, "nottmp");
-            }
-
-            if (isBool) {
-                // Boolean NOT (!x) = xor with true
-                return gen.builder->CreateNot(argVal, "boolnottmp");
-            }
-
-            llvm_unreachable("Not operator on unsupported type");
-        }
-    }
-
-    llvm_unreachable("Unknown unary op");
+    throw new std::runtime_error("not supported yet");
 }
-*/
-
 Value* ExpToLLVisitor::operator()(const EStr& e) { 
     throw new std::runtime_error("not supported yet");
 }
 Value* ExpToLLVisitor::operator()(const ECall& e) { 
-    throw new std::runtime_error("not supported yet");
-}
-Value* ExpToLLVisitor::operator()(const EUop& e) { 
     throw new std::runtime_error("not supported yet");
 }
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 
@@ -264,6 +204,91 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
 Value* ExpToLLVisitor::operator()(const EProj& e) { 
     throw new std::runtime_error("not supported yet");
 }
-Value* ExpToLLVisitor::operator()(const EObjInit& e) { 
-    throw new std::runtime_error("not supported yet");
+Value* ExpToLLVisitor::operator()(const EObjInit& e) {
+    auto it = gen.structTypes.find(e.id);
+    if (it == gen.structTypes.end()) {
+        throw std::runtime_error("Unknown class: " + e.id);
+    }
+
+    llvm::StructType* structTy = it->second;
+    llvm::PointerType* structPtrTy = llvm::PointerType::getUnqual(structTy);
+
+    const llvm::DataLayout& dl = gen.mod->getDataLayout();
+    uint64_t size = dl.getTypeAllocSize(structTy);
+
+    llvm::Type* i64Ty = llvm::Type::getInt64Ty(*gen.ctxt);
+    llvm::Value* sizeVal = llvm::ConstantInt::get(i64Ty, size);
+
+    // Ensure malloc exists
+    llvm::Function* mallocFn = gen.mod->getFunction("malloc");
+    if (!mallocFn) {
+        llvm::FunctionType* mallocFTy =
+            llvm::FunctionType::get(
+                llvm::Type::getInt8PtrTy(*gen.ctxt),
+                { i64Ty },
+                false
+            );
+
+        mallocFn = llvm::Function::Create(
+            mallocFTy,
+            llvm::Function::ExternalLinkage,
+            "malloc",
+            gen.mod.get()
+        );
+    }
+
+    llvm::Value* rawPtr = gen.builder->CreateCall(mallocFn, { sizeVal }, "rawmem");
+
+    llvm::Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
+
+    // Map of explicit field inits from "new Class { field = expr }"
+    std::unordered_map<std::string, llvm::Value*> userInitMap;
+
+    for (auto& [fname, fexp] : e.fields) {
+        userInitMap[fname] = gen.codegenExp(*fexp);
+    }
+
+    // Lookup the full class declaration
+    const CDecl& classDecl = *gen.classEnv.at(e.id);
+
+    // Iterate over fields in declaration order
+    for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
+        const Field& fd = classDecl.fields[idx];
+        llvm::Type* fty = gen.codegenType(fd.ftyp);
+
+        //
+        // 1. Run prelude statements
+        //
+        for (auto& stmtPtr : fd.prelude) {
+            gen.codegenStmt(*stmtPtr);  // return value (if any) ignored
+        }
+
+        //
+        // 2. Determine initializer value
+        //
+        llvm::Value* storedVal = nullptr;
+
+        // (A) User provided override in new { ... }
+        if (userInitMap.contains(fd.fieldName)) {
+            storedVal = userInitMap[fd.fieldName];
+
+        // (B) Class field has a default initializer
+        } else if (fd.init) {
+            storedVal = gen.codegenExp(*fd.init);
+
+        // (C) Fallback: zero
+        } else {
+            storedVal = llvm::Constant::getNullValue(fty);
+        }
+
+        //
+        // 3. Store into struct
+        //
+        llvm::Value* fieldPtr =
+            gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
+
+        gen.builder->CreateStore(storedVal, fieldPtr);
+    }
+
+    return objPtr;
 }

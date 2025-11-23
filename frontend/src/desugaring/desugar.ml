@@ -12,7 +12,7 @@ let mangle_lambda lname = function
 let desugar_fn (fn : Typed.fdecl) (dbg : bool) : fdecl =
   let body = desugar_block fn.body in
   let mangled_name =
-    if dbg then fn.fname
+    if dbg || fn.fname = "main" then fn.fname
     else mangle_name fn.fname (List.map (fun (t, _) -> t) fn.args) fn.frtyp
   in
   {

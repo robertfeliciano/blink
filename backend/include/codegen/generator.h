@@ -37,12 +37,18 @@ struct Generator {
     std::unique_ptr<llvm::IRBuilder<>> builder;
     std::unique_ptr<llvm::Module> mod;
 
-    std::map<std::string, llvm::AllocaInst *> varEnv;
+    std::unordered_map<std::string, llvm::AllocaInst *> varEnv;
+    std::unordered_map<std::string, llvm::StructType*> structTypes;
+    std::unordered_map<std::string, const CDecl*> classEnv;
+    
 
     ExpToLLVisitor expVisitor;
     StmtToLLVisitor stmtVisitor;
     TypeToLLGenerator typeGen;
     DeclToLLVisitor declVisitor;
+
+    std::vector<llvm::BasicBlock*> breakTargets;
+    std::vector<llvm::BasicBlock*> continueTargets;
 
     void configureTarget();
     void optimize();
@@ -70,6 +76,16 @@ struct Generator {
 
     void codegenFDecl(const FDecl& d) {
         return declVisitor.codegenFDecl(d);
+    }
+
+    void codegenCDecl(const CDecl& d) {
+        return declVisitor.codegenCDecl(d);
+    }
+
+    const Ty& getTyFromExp(const Exp& e) {
+        return std::visit([](const auto& node) -> const Ty& {
+            return node.ty;
+        }, e.val);
     }
 
     void codegenProgram(const Program& p);

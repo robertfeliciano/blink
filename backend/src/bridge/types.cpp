@@ -52,7 +52,6 @@ RefTy convert_ref_ty(value v) {
     RefTy ref;
     if (Is_block(v)) {
         switch (Tag_val(v)) {
-            // TODO constants file for magic numbers - no more mystery cases
             case Constants::REFTY_Array: { 
                 ref.tag = RefTyTag::RArray;
                 ref.inner = std::make_unique<Ty>(convert_ty(Field(v, 0)));

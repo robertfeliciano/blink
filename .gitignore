@@ -30,13 +30,15 @@ _opam/
 
 src/*.exe
 
-
 *.so
 backend/build/
 
 .vscode/
 
 **/*.ll
+
+*.s
+*.o
 
 blink
 

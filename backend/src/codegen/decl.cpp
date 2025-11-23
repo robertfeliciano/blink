@@ -1,3 +1,8 @@
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/IR/DataLayout.h>
+
 #include <codegen/generator.h>
 #include <codegen/decl.h>
 
@@ -54,7 +59,20 @@ void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
     llvm::verifyFunction(*llFun);
 }
 
+void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
+    std::vector<llvm::Type*> llvmFields;
+    llvmFields.reserve(cd.fields.size());
 
-void DeclToLLVisitor::codegenCDecl(const CDecl& f) {
-    throw new std::runtime_error("classes not supported yet");
+    for (auto& fld : cd.fields) {
+        llvm::Type* fty = gen.codegenType(fld.ftyp);
+        llvmFields.push_back(fty);
+    }
+
+    llvm::StructType* st = llvm::StructType::create(*gen.ctxt, cd.cname);
+
+    st->setBody(llvmFields, /*isPacked=*/false);
+
+    gen.structTypes[cd.cname] = st;
+    gen.classEnv[cd.cname] = &cd;
 }
+

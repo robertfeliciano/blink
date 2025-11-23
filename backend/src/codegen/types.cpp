@@ -50,7 +50,8 @@ llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
                 case FloatTy::Tf64:
                     return llvm::Type::getDoubleTy(*gen.ctxt);
             }
-            // todo tref
+        case TyTag::TRef:
+            return codegenRefTy(*ty.ref_ty);
         default: 
             throw std::runtime_error("Other type not supported yet");
     }
@@ -63,4 +64,63 @@ llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
         case RetTyTag::RetVal:
             return codegenTy(*rty.val);
     }
+}
+
+llvm::Type* TypeToLLGenerator::codegenRefTy(const RefTy& rt) {
+    switch (rt.tag) {
+        case RefTyTag::RString:
+            return llvm::Type::getInt8PtrTy(*gen.ctxt);
+
+        case RefTyTag::RArray:
+            return getStaticArrayType(rt);
+
+        case RefTyTag::RClass:
+            return getClassType(rt.cname);
+
+        case RefTyTag::RFun:
+            return getFunctionPointerType(rt);
+
+        default:
+            throw std::runtime_error("Unknown RefTyTag in codegenRefTy");
+    }
+}
+
+llvm::Type* TypeToLLGenerator::getStaticArrayType(const RefTy& rt) {
+    if (!rt.inner)
+        throw std::runtime_error("Array type missing inner type");
+
+    llvm::Type* elemTy = codegenTy(*rt.inner);
+
+    if (rt.size < 0)
+        throw std::runtime_error("Static array size must be non-negative");
+
+    return llvm::ArrayType::get(elemTy, static_cast<uint64_t>(rt.size));
+}
+
+llvm::Type* TypeToLLGenerator::getClassType(const std::string& cname) {
+    auto it = gen.classEnv.find(cname);
+    if (it == gen.classEnv.end())
+        throw std::runtime_error("Unknown class type: " + cname);
+
+    const CDecl& cd = *it->second;
+
+    if (llvm::StructType* existing = gen.structTypes[cname])
+        return existing;
+    else
+        throw new std::runtime_error("Unknown class type: " + cname);
+}
+
+llvm::Type* TypeToLLGenerator::getFunctionPointerType(const RefTy& rt) {
+    std::vector<llvm::Type*> argTys;
+    argTys.reserve(rt.args.size());
+
+    for (auto& a : rt.args)
+        argTys.push_back(codegenTy(a));
+
+    llvm::Type* retTy = gen.codegenRetType(rt.ret);
+
+    llvm::FunctionType* fty =
+        llvm::FunctionType::get(retTy, argTys, false);
+
+    return fty->getPointerTo();
 }

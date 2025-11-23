@@ -1,0 +1,79 @@
+#!/usr/bin/bash
+set -o pipefail
+
+FILENAME="$1"
+LLVM_LL="new_output.ll"
+LLVM_S="new_output.s"
+LLVM_O="new_output.o"
+
+sanitize_filename() {
+    local fn; fn="$1"
+    if [[ -z "$fn" ]]; then
+        printf "Error: missing filename argument\n" >&2
+        return 1
+    fi
+    if [[ ! "$fn" =~ ^[A-Za-z0-9._/-]+$ ]]; then
+        printf "Error: invalid characters in filename\n" >&2
+        return 1
+    fi
+    if [[ ! "$fn" =~ \.bl$ ]]; then
+        printf "Error: filename must end with .bl\n" >&2
+        return 1
+    fi
+}
+
+run_blink() {
+    local fn; fn="$1"
+    if ! ./blink "$fn"; then
+        printf "Error: blink failed\n" >&2
+        return 1
+    fi
+    if [[ ! -s "$LLVM_LL" ]]; then
+        printf "Error: %s not created or empty\n" "$LLVM_LL" >&2
+        return 1
+    fi
+}
+
+compile_ll_to_s() {
+    if ! llc "$LLVM_LL" -o "$LLVM_S"; then
+        printf "Error: llc failed\n" >&2
+        return 1
+    fi
+    if [[ ! -s "$LLVM_S" ]]; then
+        printf "Error: %s not created or empty\n" "$LLVM_S" >&2
+        return 1
+    fi
+}
+
+compile_s_to_o() {
+    if ! clang "$LLVM_S" -o "$LLVM_O"; then
+        printf "Error: clang failed\n" >&2
+        return 1
+    fi
+    if [[ ! -s "$LLVM_O" ]]; then
+        printf "Error: %s not created or empty\n" "$LLVM_O" >&2
+        return 1
+    fi
+}
+
+main() {
+    if ! sanitize_filename "$FILENAME"; then
+        return 1
+    fi
+
+    if ! run_blink "$FILENAME"; then
+        return 1
+    fi
+
+    if ! compile_ll_to_s; then
+        return 1
+    fi
+
+    if ! compile_s_to_o; then
+        return 1
+    fi
+
+    printf "Build completed: %s\n" "$LLVM_O"
+}
+
+main

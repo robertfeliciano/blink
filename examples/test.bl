@@ -1,11 +1,9 @@
-fun main(argc: i32) => i32 {
-    // let x = 12;
-    if (5 > 2) {
-        // x = 9;
-        return 9;
-    } else {
-        // x = 22;
-        return 22;
-    }
-    // return 340282366920938463463374607431768211445;
+class Point { 
+    let x: i32 = 0;
+    let y: i32 = 0;
+}
+
+fun main(argc: i32) => u128 {
+    let x: u128 = 12;
+    return x;
 }

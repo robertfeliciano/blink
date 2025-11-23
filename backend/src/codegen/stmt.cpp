@@ -1,8 +1,91 @@
 #include <codegen/generator.h>
 #include <codegen/stmt.h>
 
+llvm::Value* StmtToLLVisitor::codegenLValue(const Exp& e) {
+    return std::visit([&](auto const& node) -> llvm::Value* {
+
+        using T = std::decay_t<decltype(node)>;
+
+        if constexpr (std::is_same_v<T, EId>) {
+            auto it = gen.varEnv.find(node.id);
+            if (it == gen.varEnv.end()) {
+                throw std::runtime_error("Unknown variable (lvalue): " + node.id);
+            }
+            return it->second; // allocaInst*
+        }
+
+        else if constexpr (std::is_same_v<T, EProj>) {
+            llvm::Value* objPtr = gen.codegenExp(*node.obj);
+
+            const Ty& objTy = gen.getTyFromExp(*node.obj);
+
+            if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
+                throw std::runtime_error("Expected reference type (class)");
+
+            const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
+
+            unsigned idx = 0;
+            bool found = false;
+            for (; idx < cd.fields.size(); ++idx) {
+                if (cd.fields[idx].fieldName == node.field) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (!found) throw std::runtime_error("Unknown field: " + node.field);
+
+
+            llvm::StructType* structTy = llvm::cast<llvm::StructType>(gen.codegenType(objTy));
+
+            return gen.builder->CreateStructGEP(structTy, objPtr, idx, "fieldptr");
+        }
+
+        else if constexpr (std::is_same_v<T, EIndex>) {
+            llvm::Value* arrPtr = codegenLValue(*node.collection);
+            llvm::Value* idx    = gen.codegenExp(*node.index);
+        
+            const Ty& collTy = gen.getTyFromExp(*node.collection);
+        
+            llvm::Type* llArrayTy = gen.codegenType(collTy);
+            if (!llvm::isa<llvm::ArrayType>(llArrayTy)) {
+                throw std::runtime_error("Indexing into non-array type in lvalue");
+            }
+        
+            llvm::Value* zero = llvm::ConstantInt::get(
+                llvm::Type::getInt32Ty(*gen.ctxt), 0);
+            
+            return gen.builder->CreateGEP(
+                llArrayTy,
+                arrPtr,
+                { zero, idx },
+                "idx_lvalue"
+            );
+        }
+        
+
+        else {
+            throw std::runtime_error("Expression is not assignable");
+        }
+
+    }, e.val);
+}
+
+
 Value* StmtToLLVisitor::operator()(const Assn& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(Assn) not supported yet");
+    llvm::Value* lhsPtr = codegenLValue(*s.lhs);
+    if (!lhsPtr)
+        throw std::runtime_error("Assignment to invalid lvalue");
+    
+
+    llvm::Value* rhsVal = gen.codegenExp(*s.rhs);
+    if (!rhsVal)
+        throw std::runtime_error("Assignment RHS produced null value");
+
+    gen.builder->CreateStore(rhsVal, lhsPtr);
+
+    return rhsVal;
+    
 }
 
 Value* StmtToLLVisitor::operator()(const VDecl& s) {

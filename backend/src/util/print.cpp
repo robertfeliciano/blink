@@ -279,10 +279,6 @@ std::string cdeclToString(const CDecl& c) {
         oss << indent(1) << fld.fieldName << ": " << tyToString(fld.ftyp) << " = " << expToString(*fld.init) << ";\n";
     }
 
-    for (const auto &m : c.methods) {
-        oss << indent(1) << fdeclToString(m) << "\n";
-    }
-
     oss << "};";
     return oss.str();
 }
