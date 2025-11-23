@@ -1,14 +1,6 @@
-class Point { 
-    let x: i32 = 0;
-    let y: i32 = 0;
-}
-
-fun helper(a: i8, b: i8) => i8 {
-    return a+b;
-}
-
 fun main(argc: i32) => i32 {
-    // let x = new Point { x = 1, y = 22 };
-    let arr = [1, 2, 3, 4, 5];
-    return arr[4];
+    //let nested: [[i32; 3]; 2] = [[1,2,3], [4,5,6]];
+    //let inside = nested[0];
+    let arr = [1,2,3,4,5];
+    return arr[2];
 }

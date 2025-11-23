@@ -46,8 +46,8 @@ type exp =
   | Call of exp * exp list * ty list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
-  | Index of exp * exp * ty
-  | Array of exp list * ty * int64 (* elems, elem ty, size *)
+  | Index of exp * exp * ty (* stores type of element produced by the index *)
+  | Array of exp list * ty (* stores type of array [t x n]*)
   | Cast of exp * ty
   | Proj of exp * id * id  * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list

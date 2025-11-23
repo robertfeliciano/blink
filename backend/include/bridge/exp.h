@@ -78,12 +78,12 @@ struct EUop {
 struct EIndex {
     std::unique_ptr<Exp> collection;
     std::unique_ptr<Exp> index;
-    Ty ty;
+    Ty ty; // type of element, e.g. i32
 };
 
 struct EArray {
     std::vector<std::unique_ptr<Exp>> elements;
-    Ty ty;
+    Ty ty; // array type: [t x n], e.g. [i32 x 5]
 };
 
 struct ECast {

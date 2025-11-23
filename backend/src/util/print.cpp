@@ -87,7 +87,8 @@ std::string tyToString(const Ty& ty) {
             switch (r.tag) {
                 case RefTyTag::RString: return "string";
                 case RefTyTag::RArray: {
-                    return tyToString(*r.inner) + "[" + std::to_string(r.size) + "]";
+                    return "[" + std::to_string(r.size) + " x " + tyToString(*r.inner) + "]";
+                    // return tyToString(*r.inner) + "[" + std::to_string(r.size) + "]";
                 }
                 case RefTyTag::RClass:
                     return r.cname;

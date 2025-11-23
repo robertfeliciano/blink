@@ -121,11 +121,11 @@ let rec show_exp ?(lvl = 0) = function
         (show_exp ~lvl:(lvl + 1) arr)
         (show_exp ~lvl:(lvl + 1) idx)
         (show_ty ty)
-  | Array (elems, ty, sz) ->
+  | Array (elems, ty) ->
       let elems_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)
       in
-      Printf.sprintf "Array([%s], %s; %Ld)" elems_s (show_ty ty) sz
+      Printf.sprintf "Array([%s], %s)" elems_s (show_ty ty)
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
   | Proj (e, i, cname, t) ->

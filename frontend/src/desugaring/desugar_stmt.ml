@@ -157,9 +157,9 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let sa, arr' = desugar_exp arr in
       let si, idx' = desugar_exp idx in
       (sa @ si, D.Index (arr', idx', convert_ty ty))
-  | Array (elems, ty, sz) ->
+  | Array (elems, ty) ->
       let ss, elems' = List.map desugar_exp elems |> flatten in
-      (ss, D.Array (elems', convert_ty ty, sz))
+      (ss, D.Array (elems', convert_ty ty))
   | Cast (e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))

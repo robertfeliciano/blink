@@ -44,7 +44,7 @@ type exp =
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
-  | Array of exp list * ty * int64
+  | Array of exp list * ty
   | Cast of exp * ty
   | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list

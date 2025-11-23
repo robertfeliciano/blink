@@ -1,6 +1,7 @@
 #include <codegen/generator.h>
 #include <codegen/exp.h>
 #include <cstdio>
+#include <util/debug.h>
 
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
@@ -197,18 +198,18 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 
     llvm::Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
-    llvm::Type* valTy = gen.codegenType(getExpTy(*e.collection));
-    printf("valty: ");
-    valTy->print(llvm::outs());
-    puts("\n");
+    llvm::Type* resultTy = gen.codegenType(e.ty);
 
-    return gen.builder->CreateLoad(valTy->getArrayElementType(), elemPtr, "idx_load");
+    if (resultTy->isAggregateType()) {
+        // some kind of collection, like an array
+        return elemPtr;
+    } else {
+        // primitive value
+        return gen.builder->CreateLoad(resultTy, elemPtr, "idx_load");
+    }
 }
-
 Value* ExpToLLVisitor::operator()(const EArray& e) { 
-    llvm::Type* elemTy = gen.codegenType(e.ty);
-
-    llvm::Type* arrTy = llvm::ArrayType::get(elemTy, static_cast<uint64_t>(e.elements.size()));
+    llvm::Type* arrTy = gen.codegenType(e.ty);
 
     Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
 

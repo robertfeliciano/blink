@@ -40,7 +40,7 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
       let rbase = analyze_exp locals is_lhs base in
       let ridx = analyze_exp locals false idx in
       union_result rbase ridx
-  | Array (elems, _, _) ->
+  | Array (elems, _) ->
       List.fold_left
         (fun acc e -> union_result acc (analyze_exp locals false e))
         empty_result elems

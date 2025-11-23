@@ -36,14 +36,8 @@ Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
     Value* arrPtr = gen.codegenExp(*e.collection);
     Value* idx = gen.codegenExp(*e.index);
 
-    const Ty& collTy = gen.getExpTy(*e.collection);
+    llvm::Type* llArrayTy = gen.codegenType(gen.getExpTy(*e.collection));
 
-    llvm::Type* llArrayTy = gen.codegenType(collTy);
-
-    //TODO clean this up. collection ty is an array ? why
-    printf("llarrayty: ");
-    llArrayTy->print(llvm::outs());
-    puts("\n");
     if (!llvm::isa<llvm::ArrayType>(llArrayTy)) {
         throw std::runtime_error("Indexing into non-array type in lvalue");
     }

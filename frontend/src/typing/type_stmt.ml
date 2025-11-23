@@ -290,21 +290,21 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
       let t_iter, iter_ty = type_exp tc e_iter in
-      let arr_ty =
+      let ty_of_array =
         match iter_ty with
         | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
         | t ->
             type_error e
               ("cannot index non-array type, recieved " ^ Printer.show_ty t)
       in
-      check_expected_ty expected arr_ty e;
+      check_expected_ty expected ty_of_array e;
       let t_idx, idx_ty = type_exp tc e_idx in
       let _ =
         match idx_ty with
         | Typed_ast.TInt _ -> ()
         | _ -> type_error e "index must be integer type"
       in
-      (Typed_ast.Index (t_iter, t_idx, arr_ty), arr_ty)
+      (Typed_ast.Index (t_iter, t_idx, ty_of_array), ty_of_array)
   | Array _ -> type_array expected tc e
   | Cast (e, t) ->
       let te, e_ty = type_exp tc e in
@@ -431,7 +431,8 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       type_error en
         "Could not infer type of empty array. Please provide type annotation."
   | Array [], Some (TRef (RArray (elt_ty, len))) ->
-      (Typed_ast.Array ([], elt_ty, len), TRef (RArray (elt_ty, len)))
+    let ty_of_array = Typed_ast.TRef (RArray (elt_ty, len)) in
+      (Typed_ast.Array ([], ty_of_array), ty_of_array)
   | Array [], Some other ->
       type_error en
         ("Expected " ^ Printer.show_ty other ^ " but got empty array.")
@@ -476,7 +477,7 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
             ("Array type mismatch. Expected " ^ Printer.show_ty exp
            ^ " but got " ^ Printer.show_ty arr_ty)
       | _ -> ());
-      (Typed_ast.Array (all_elems, h_ty, len), arr_ty)
+      (Typed_ast.Array (all_elems, arr_ty), arr_ty)
   | _ -> type_error en "Somehow reached unreachable state."
 
 and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
