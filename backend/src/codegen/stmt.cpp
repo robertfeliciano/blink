@@ -1,5 +1,6 @@
 #include <codegen/generator.h>
 #include <codegen/stmt.h>
+#include <util/debug.h>
 
 Value* StmtToLLVisitor::operator()(const Assn& s) {
     Value* lhsPtr = gen.lvalueCreator.codegenLValue(*s.lhs);
@@ -22,6 +23,8 @@ Value* StmtToLLVisitor::operator()(const VDecl& s) {
         throw std::runtime_error("Null initialization for VDecl... How?");
     }
     Value* init = gen.codegenExp(*s.init);
+
+    llvm::Type* llTy = init->getType();
     llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
     llvm::IRBuilder<> tmp(
         &(parent->getEntryBlock()),

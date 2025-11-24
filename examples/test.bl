@@ -1,6 +1,9 @@
 fun main(argc: i32) => i32 {
-    //let nested: [[i32; 3]; 2] = [[1,2,3], [4,5,6]];
-    //let inside = nested[0];
-    let arr = [1,2,3,4,5];
-    return arr[2];
+    let nested: [[i32; 3]; 2] = [[1,2,3], [4,5,6]];
+    let inside = nested[0];
+    let elem = inside[0];
+    //let x = 22;
+    let arr = [99, 100, 101];
+    return nested[0][1] + nested[1][2] + arr[1];
+    //return nested[0][2];
 }

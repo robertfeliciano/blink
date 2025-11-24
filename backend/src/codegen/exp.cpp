@@ -82,6 +82,7 @@ Value* ExpToLLVisitor::operator()(const EFloat& e) {
 
     switch (e.float_ty) {
         case FloatTy::Tf32:
+        // TODO check this
             ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
             break;
         case FloatTy::Tf64:
@@ -182,7 +183,6 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     }
 }
 
-
 Value* ExpToLLVisitor::operator()(const EUop& e) {
     throw new std::runtime_error("not supported yet");
 }
@@ -196,7 +196,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 
-    llvm::Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
+    Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
     llvm::Type* resultTy = gen.codegenType(e.ty);
 
@@ -208,21 +208,43 @@ Value* ExpToLLVisitor::operator()(const EIndex& e) {
         return gen.builder->CreateLoad(resultTy, elemPtr, "idx_load");
     }
 }
+
 Value* ExpToLLVisitor::operator()(const EArray& e) { 
     llvm::Type* arrTy = gen.codegenType(e.ty);
 
     Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
-
     Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
+
+    llvm::Type* innerTy = arrTy->getArrayElementType();
+    bool isAggregate = innerTy->isAggregateType();
+
+    llvm::DataLayout dl = gen.mod->getDataLayout();
+    Value* size = nullptr;
+    unsigned align = 0;
+    Value* isVolatile = nullptr;
+
+    if (isAggregate) {
+        uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
+        size = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
+        // align = DL.getABIS
+        align = (unsigned) dl.getABITypeAlign(innerTy).value();
+        isVolatile = llvm::ConstantInt::getFalse(*gen.ctxt);
+    }
 
     for (size_t i = 0; i < e.elements.size(); i++) {
         Value* val = gen.codegenExp(*e.elements[i]);
-
         Value* idx = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), i);
 
-        Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, { zero, idx }, "elemPtr");
+        Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, { zero, idx }, "elem_ptr");
 
-        gen.builder->CreateStore(val, elemPtr);
+        if (isAggregate) {
+            Value* dest = gen.builder->CreateBitCast(elemPtr, llvm::Type::getInt8PtrTy(*gen.ctxt), "DestI8Ptr");
+            Value* src = gen.builder->CreateBitCast(val, llvm::Type::getInt8PtrTy(*gen.ctxt), "SrcI8Ptr");
+            
+            gen.builder->CreateMemCpy(dest, llvm::MaybeAlign(align), src, llvm::MaybeAlign(align), size, isVolatile);
+        } else {
+            gen.builder->CreateStore(val, elemPtr);
+        }
     }
 
     return arrPtr;
