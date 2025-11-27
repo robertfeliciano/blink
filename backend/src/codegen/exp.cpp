@@ -226,7 +226,6 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     if (isAggregate) {
         uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
         size = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
-        // align = DL.getABIS
         align = (unsigned) dl.getABITypeAlign(innerTy).value();
         isVolatile = llvm::ConstantInt::getFalse(*gen.ctxt);
     }
