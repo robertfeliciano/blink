@@ -5,20 +5,22 @@ open Desugared_ast
 open Conversions
 module Typed = Typing.Typed_ast
 
-let mangle_lambda lname = function
+(* let mangle_lambda lname = function
   | Typed.TRef (RFun (arg_tys, ret_ty)) -> mangle_name lname arg_tys ret_ty
-  | _ -> lname
+  | _ -> lname *)
 
 let desugar_fn (fn : Typed.fdecl) (dbg : bool) : fdecl =
   let body = desugar_block fn.body in
   let mangled_name =
     if dbg || fn.fname = "main" then fn.fname
-    else mangle_name fn.fname (List.map (fun (t, _) -> t) fn.args) fn.frtyp
+    (* else mangle_name fn.fname (List.map (fun (t, _) -> t) fn.args) fn.frtyp *)
+      else fn.fname
   in
   {
     frtyp = convert_ret_ty fn.frtyp;
     fname = mangled_name;
-    args = List.map (fun (t, i) -> (convert_ty t, mangle_lambda i t)) fn.args;
+    (* args = List.map (fun (t, i) -> (convert_ty t, mangle_lambda i t)) fn.args; *)
+    args = List.map (fun (t, i) -> (convert_ty t, i)) fn.args;
     body;
   }
 
