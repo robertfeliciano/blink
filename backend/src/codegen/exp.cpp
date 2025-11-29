@@ -192,7 +192,29 @@ Value* ExpToLLVisitor::operator()(const EStr& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const ECall& e) { 
-    throw new std::runtime_error("not supported yet");
+    std::vector<Value*> args;
+    args.reserve(e.args.size());
+
+    for (const auto& arg: e.args) {
+        Value* val = gen.codegenExp(*arg);
+        if (!val) 
+            llvm_unreachable("Failed to create LL argument.");
+        
+        args.push_back(val);
+    }
+
+    if (!std::holds_alternative<EId>(e.callee->val)) 
+        llvm_unreachable("We do not currently support chained/higher order function calls.");
+    
+
+    const EId& idNode = std::get<EId>(e.callee->val);
+
+    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+
+    if (!callee) 
+        throw std::runtime_error("Calling unknown function: " + idNode.id);
+    
+    return gen.builder->CreateCall(callee, args, "call");
 }
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) { 

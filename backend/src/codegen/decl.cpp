@@ -9,10 +9,27 @@
 void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     std::vector<llvm::Type*> argTys;
     for (auto& arg : fn.args) {
-        argTys.push_back(gen.codegenType(arg.first));
+        const Ty& argTy = arg.first;
+
+        if (argTy.tag == TyTag::TRef && argTy.ref_ty->tag == RefTyTag::RClass) {
+            // take structs as pointers
+            argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
+        } else {
+            llvm::Type* baseTy = gen.codegenType(argTy);
+            argTys.push_back(baseTy);
+        }
     }
-    llvm::Type* retTy = gen.codegenRetType(fn.frtyp);
-    llvm::FunctionType* ftyp = llvm::FunctionType::get(retTy, argTys, false);
+
+    const RetTy& retTy = fn.frtyp;
+    llvm::Type* llRetTy;
+
+    if (retTy.tag == RetTyTag::RetVal && retTy.val->tag == TyTag::TRef && retTy.val->ref_ty->tag == RefTyTag::RClass) {
+        llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
+    } else {
+        llRetTy = gen.codegenRetType(fn.frtyp);
+    }
+    
+    llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
     llvm::Function* llfn = llvm::Function::Create(ftyp, llvm::Function::ExternalLinkage, fn.fname, gen.mod.get());
 

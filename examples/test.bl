@@ -1,18 +1,25 @@
 class Point { 
     let x: i32 = 0;
     let y: i32 = 0;
-}
-fun main(argc: i32) => i32 {
-    let nested = [[1,2,3], [4,5,6]];
-    let super_nested = [[[1,2],[3,4]],[[5,6],[7,8]]];
-    let p = new Point { x = 22 , y = super_nested[0][1][1]+3 };
-    return p.y;
 
-    //return super_nested[0][1][1] + p.x;
-    //let inside = nested[0];
-    //let elem = inside[0];
-    //let x = 22;
-    //let arr = [99, 100, 101];
-    //return nested[0][1] + nested[1][2] + arr[1];
-    //return nested[0][2];
+    fun sumX(other: Point) => i32 {
+        return this.x + other.x;
+    }
+
+    fun midpt(other: Point) => Point {
+        return new Point {
+            x = (this.x + other.x)/2,
+            y = (this.y + other.y)/2
+        };
+    }
+}
+
+fun main(argc: i32) => i32 {
+    let super_nested = [[[1,2],[3,4]],[[5,6],[7,8]]];
+    //let p = new Point { x = 22 , y = super_nested[0][1][1]+3 };
+    let p = new Point { x = 22, y = 9 };
+    let p_0 = new Point { x = 10, y = 9 };
+    return p.midpt(p_0).x + super_nested[0][1][1];
+    //let m = p.midpt(p_0);
+    //return p.midpt(p_0).x;
 }

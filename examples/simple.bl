@@ -1,19 +1,21 @@
 fun right_bound(i: u8) => u8 {
-    return 10;
+    return i;
 }
 
 
-fun main(argv: [string; 2]) => i32 {
-    let x: u32 = 0;
+fun main(argv: [string; 2]) => u8 {
+    let y: u8 = 10;
+    let x = right_bound(y);
     /*
     for i in 0..right_bound(x) by 2 {
         x += i;
     }
-    */
+    
     let i: u8 = 0;
     while i < right_bound(x as u8) {
         x = x + i as u32;
         i = i + 2;
     }
-    return 0;
+    */
+    return x;
 }
