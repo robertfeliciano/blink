@@ -6,7 +6,7 @@ backend:
 	@if [ ! -d backend/build ]; then \
 		cd backend && ./builder; \
 	fi
-	cd backend/build && make
+	cd backend/build && make -j$(nproc)
 
 frontend: 
 	cd frontend && dune build && mv ./_build/default/src/blink.exe ../blink -f

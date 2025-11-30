@@ -40,16 +40,13 @@ type exp =
   | Float of float * float_ty
   | Str of string
   | Id of id * ty
-  | Call of
-      exp
-      * exp list
-      * ty (* TODO make callee only id - no other exp possible after desugaring *)
+  | Call of exp * exp list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
-  | Index of exp * exp * ty (* TODO make collection only id *)
+  | Index of exp * exp * ty
   | Array of exp list * ty
   | Cast of exp * ty
-  | Proj of exp * id * ty (* TODO make class instance only id *)
+  | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
 
@@ -61,7 +58,7 @@ and stmt =
   | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list (* TODO make callee only id - no other exp possible after desugaring *)
+  | SCall of exp * exp list
   | If of exp * block * block
   | While of exp * block
   | Break

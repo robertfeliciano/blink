@@ -46,7 +46,8 @@ type exp =
   | Call of exp * exp list * ty list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
-  | Index of exp * exp * ty (* stores type of element produced by the index *)
+  | Index of exp * exp * ty * ty
+    (* stores type of element produced by the index and the type of the array *)
   | Array of exp list * ty (* stores type of array [t x n]*)
   | Cast of exp * ty
   | Proj of

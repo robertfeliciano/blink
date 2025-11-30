@@ -1,0 +1,12 @@
+class Inner {
+    let i: i32 = 0;
+}
+
+class Outer {
+    let inside: Inner = new Inner { i = 44 };
+}
+
+fun main() => i32 {
+    let o = new Outer { inside = new Innter { i = 55 } };
+    return o.inside.i;
+}

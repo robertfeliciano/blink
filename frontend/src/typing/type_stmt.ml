@@ -304,7 +304,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         | Typed_ast.TInt _ -> ()
         | _ -> type_error e "index must be integer type"
       in
-      (Typed_ast.Index (t_iter, t_idx, ty_of_array), ty_of_array)
+      (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
   | Array _ -> type_array expected tc e
   | Cast (e, t) ->
       let te, e_ty = type_exp tc e in

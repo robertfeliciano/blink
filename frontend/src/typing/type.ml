@@ -30,12 +30,13 @@ let type_field (tc : Tctxt.t) (fn : field node) : Typed_ast.field =
   let tinit, init_ty =
     match init with
     | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
-    | None -> type_error fn "deafult initializers not yet allowed."
+    | None -> type_error fn "default initializers not yet allowed."
   in
   { fieldName; ftyp = init_ty; init = tinit }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   let { elt = { cname; impls; fields; methods }; loc = _ } = cn in
+  (* TODO fold tc so later fields can reference earlier ones maybe *)
   let tfields = List.map (type_field tc) fields in
   let globals' =
     List.map (fun (f : Typed_ast.field) -> (f.fieldName, f.ftyp)) tfields

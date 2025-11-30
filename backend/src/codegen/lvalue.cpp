@@ -26,7 +26,7 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
             }
 
             else {
-                throw std::runtime_error("Expression is not assignable");
+                llvm_unreachable("Expression is not a valid lvalue.");
             }
         },
         e.val);
@@ -35,8 +35,8 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
 Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
     Value* arrPtr;
 
-    if (std::holds_alternative<ECall>(e.collection->val)) {
-        // call is an intermediary - but still not an lvalue
+    if (holds_any_of<ECall, EObjInit, EArray>(e.collection->val)) {
+        // these are intermediaries which are parents of lvalues
         arrPtr = gen.codegenExp(*e.collection);
     } else {
         arrPtr = codegenLValue(*e.collection);
@@ -66,8 +66,8 @@ Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
 Value* LValueCreator::getStructFieldPtr(const EProj& e) {
     Value* objPtr;
 
-    if (std::holds_alternative<ECall>(e.obj->val)) {
-        // call is an intermediary - but still not an lvalue
+    if (holds_any_of<ECall, EObjInit, EArray>(e.obj->val)) {
+        // these are intermediaries which are parents of lvalues
         objPtr = gen.codegenExp(*e.obj);
     } else {
         objPtr = codegenLValue(*e.obj);

@@ -1,0 +1,25 @@
+class List {
+    let x: [i32; 4] = [0,0,0,0];
+}
+
+/*
+class Point {
+    let x: i32 = 0;
+    let y: i32 = 9;
+}
+*/
+
+fun main() => i32 {
+    
+    let l = new List { x = [1,2,3,4] };
+    let tmp1 = l.x;
+    //return new Point { x = 1, y = 4 }.y;
+    //return tmp1[2];
+    return l.x[0];
+    //return [1,2,3,4][0];
+    /*
+    let temp = extra();
+    let x = other();
+    return temp[3];
+    */
+}

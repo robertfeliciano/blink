@@ -2,7 +2,9 @@ open Desugar_util
 open Conversions
 module Methods = Util.Constants.Methods
 module Typed = Typing.Typed_ast
+module Type_stmt = Typing.Type_stmt
 module D = Desugared_ast
+module A = Ast
 
 let base_op = function
   | Typed.PluEq -> D.Add
@@ -153,9 +155,16 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Uop (op, e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Uop (convert_unop op, e', convert_ty ty))
-  | Index (arr, idx, ty) ->
-      (* TODO split up things like `call(..)[i]` to turn into let tmp0 = call(..); tmp0[i]. also x.y[i] -> tmp = x.y ; tmp[i]*)
-      let sa, arr' = desugar_exp arr in
+  | Index (arr, idx, ty, iter_ty) ->
+      let sa, arr' =
+        if is_lvalue arr then
+          let stmts_arr, d_arr = desugar_exp arr in
+          let lvalue_typ = convert_ty iter_ty in
+          let tmp_id = gensym "lval" in
+          let tmp_decl = D.Decl (tmp_id, lvalue_typ, d_arr, true) in
+          (stmts_arr @ [ tmp_decl ], D.Id (tmp_id, lvalue_typ))
+        else desugar_exp arr
+      in
       let si, idx' = desugar_exp idx in
       (sa @ si, D.Index (arr', idx', convert_ty ty))
   | Array (elems, ty) ->
@@ -164,9 +173,16 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Cast (e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))
-  | Proj (inst, field, _cname, t) ->
-      (* add similar thing as index simplification *)
-      let s, inst' = desugar_exp inst in
+  | Proj (inst, field, cname, t) ->
+      let s, inst' =
+        if is_lvalue inst then
+          let stmts_inst, d_inst = desugar_exp inst in
+          let lvalue_typ = D.TRef (RClass cname) in
+          let tmp_id = gensym "lval" in
+          let tmp_decl = D.Decl (tmp_id, lvalue_typ, d_inst, true) in
+          (stmts_inst @ [ tmp_decl ], D.Id (tmp_id, lvalue_typ))
+        else desugar_exp inst
+      in
       (s, D.Proj (inst', field, convert_ty t))
   | ObjInit (cn, fields) ->
       let stmts, fields' =

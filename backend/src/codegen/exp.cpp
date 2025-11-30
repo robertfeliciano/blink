@@ -1,7 +1,6 @@
 #include <codegen/exp.h>
 #include <codegen/generator.h>
 #include <cstdio>
-#include <util/debug.h>
 
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {

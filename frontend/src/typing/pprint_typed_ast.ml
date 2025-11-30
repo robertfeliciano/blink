@@ -116,11 +116,11 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "Uop(%s, %s, %s)" (show_unop op)
         (show_exp ~lvl:(lvl + 1) e)
         (show_ty ty)
-  | Index (arr, idx, ty) ->
-      Printf.sprintf "Index(%s, %s, %s)"
+  | Index (arr, idx, ty, ity) ->
+      Printf.sprintf "Index(%s, %s, %s, arr of %s)"
         (show_exp ~lvl:(lvl + 1) arr)
         (show_exp ~lvl:(lvl + 1) idx)
-        (show_ty ty)
+        (show_ty ty) (show_ty ity)
   | Array (elems, ty) ->
       let elems_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)

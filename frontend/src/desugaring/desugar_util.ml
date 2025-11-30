@@ -15,7 +15,9 @@ let counter = ref 0
 let gensym sfx =
   let n = !counter in
   incr counter;
-  "%tmp" ^ sfx ^ Int.to_string n
+  "%tmp_" ^ sfx ^ Int.to_string n
+
+let is_lvalue = function T.Index _ | T.Proj _ -> true | _ -> false
 
 let get_zero (ty : D.ty) : D.exp =
   match ty with

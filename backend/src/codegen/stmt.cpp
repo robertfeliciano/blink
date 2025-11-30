@@ -1,6 +1,5 @@
 #include <codegen/generator.h>
 #include <codegen/stmt.h>
-#include <util/debug.h>
 
 Value* StmtToLLVisitor::operator()(const Assn& s) {
     // typechecker has lready checked, LHS of assn can only be id, field proj, or index
