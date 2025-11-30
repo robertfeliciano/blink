@@ -74,7 +74,6 @@ Value* ExpToLLVisitor::operator()(const EFloat& e) {
 
     switch (e.float_ty) {
     case FloatTy::Tf32:
-        // TODO check this
         ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
         break;
     case FloatTy::Tf64:
@@ -190,14 +189,14 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
     }
 
     if (!std::holds_alternative<EId>(e.callee->val))
-        llvm_unreachable("We do not currently support chained/higher order function calls.");
+        llvm_unreachable("We do not currently support chained/higher-order functions.");
 
     const EId& idNode = std::get<EId>(e.callee->val);
 
     llvm::Function* callee = gen.mod->getFunction(idNode.id);
 
     if (!callee)
-        throw std::runtime_error("Calling unknown function: " + idNode.id);
+        llvm_unreachable("Calling unknown function.");
 
     return gen.builder->CreateCall(callee, args, "call");
 }
@@ -233,7 +232,7 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     if (isAggregate) {
         uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
         size                  = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
-        align                 = (unsigned)dl.getABITypeAlign(innerTy).value();
+        align                 = (unsigned) dl.getABITypeAlign(innerTy).value();
         isVolatile            = llvm::ConstantInt::getFalse(*gen.ctxt);
     }
 

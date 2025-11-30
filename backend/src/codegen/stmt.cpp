@@ -3,6 +3,7 @@
 #include <util/debug.h>
 
 Value* StmtToLLVisitor::operator()(const Assn& s) {
+    // typechecker has lready checked, LHS of assn can only be id, field proj, or index
     Value* lhsPtr = gen.lvalueCreator.codegenLValue(*s.lhs);
     if (!lhsPtr)
         throw std::runtime_error("Assignment to invalid lvalue");
