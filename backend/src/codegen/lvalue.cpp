@@ -25,17 +25,6 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
                 return getArrayElemPtr(node);
             }
 
-            else if constexpr (std::is_same_v<T, ECall>) {
-                const Ty& retTy = gen.getExpTy(e);
-
-                if (retTy.tag == TyTag::TRef &&
-                    (retTy.ref_ty->tag == RefTyTag::RClass || retTy.ref_ty->tag == RefTyTag::RArray)) {
-                    return gen.codegenExp(e);
-                } else {
-                    throw std::runtime_error("Attempting to use call result as lvalue");
-                }
-            }
-
             else {
                 throw std::runtime_error("Expression is not assignable");
             }
@@ -44,7 +33,14 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
 }
 
 Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
-    Value* arrPtr = codegenLValue(*e.collection);
+    Value* arrPtr;
+
+    if (std::holds_alternative<ECall>(e.collection->val)) {
+        // call is an intermediary - but still not an lvalue
+        arrPtr = gen.codegenExp(*e.collection);
+    } else {
+        arrPtr = codegenLValue(*e.collection);
+    }
 
     Value* idx = gen.codegenExp(*e.index);
 
@@ -68,7 +64,14 @@ Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
 }
 
 Value* LValueCreator::getStructFieldPtr(const EProj& e) {
-    Value* objPtr = codegenLValue(*e.obj);
+    Value* objPtr;
+
+    if (std::holds_alternative<ECall>(e.obj->val)) {
+        // call is an intermediary - but still not an lvalue
+        objPtr = gen.codegenExp(*e.obj);
+    } else {
+        objPtr = codegenLValue(*e.obj);
+    }
 
     const Ty& objTy = gen.getExpTy(*e.obj);
 

@@ -61,7 +61,7 @@ and stmt =
   | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list
+  | SCall of exp * exp list (* TODO make callee only id - no other exp possible after desugaring *)
   | If of exp * block * block
   | While of exp * block
   | Break
