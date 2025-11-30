@@ -49,7 +49,8 @@ type exp =
   | Index of exp * exp * ty (* stores type of element produced by the index *)
   | Array of exp list * ty (* stores type of array [t x n]*)
   | Cast of exp * ty
-  | Proj of exp * id * id  * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
+  | Proj of
+      exp * id * id * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
 

@@ -1,47 +1,27 @@
 #pragma once
 
-#include <vector>
+#include <bridge/types.h>
+#include <caml/mlvalues.h>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
-#include <optional>
-
-#include <caml/mlvalues.h>
-
-#include <bridge/types.h>
+#include <vector>
 
 using i128 = __int128;
 using u128 = unsigned __int128;
 
 struct Exp;
 
-enum class UnOp {
-    Neg,
-    Not
-};
+enum class UnOp { Neg, Not };
 
-enum class BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    At,
-    Mod,
-    Pow,
-    Eqeq,
-    Neq,
-    Lt,
-    Lte,
-    Gt,
-    Gte,
-    And,
-    Or
-};
+enum class BinOp { Add, Sub, Mul, Div, At, Mod, Pow, Eqeq, Neq, Lt, Lte, Gt, Gte, And, Or };
 
-struct EBool { 
-    bool value; 
-    Ty ty; };
-struct EInt  { 
+struct EBool {
+    bool value;
+    Ty   ty;
+};
+struct EInt {
     std::unique_ptr<IntTy> int_ty;
     union {
         i128 s;
@@ -49,75 +29,69 @@ struct EInt  {
     };
     Ty ty;
 };
-struct EFloat { double value; FloatTy float_ty; Ty ty; };
-struct EStr { std::string value; Ty ty; };
-struct EId { 
-    std::string id; 
-    Ty ty;
+struct EFloat {
+    double  value;
+    FloatTy float_ty;
+    Ty      ty;
+};
+struct EStr {
+    std::string value;
+    Ty          ty;
+};
+struct EId {
+    std::string id;
+    Ty          ty;
 };
 
 struct ECall {
-    std::unique_ptr<Exp> callee;
+    std::unique_ptr<Exp>              callee;
     std::vector<std::unique_ptr<Exp>> args;
-    Ty ty;
+    Ty                                ty;
 };
 
 struct EBop {
-    BinOp op;
+    BinOp                op;
     std::unique_ptr<Exp> left;
     std::unique_ptr<Exp> right;
-    Ty ty;
+    Ty                   ty;
 };
 
 struct EUop {
-    UnOp op;
+    UnOp                 op;
     std::unique_ptr<Exp> arg;
-    Ty ty;
+    Ty                   ty;
 };
 
 struct EIndex {
     std::unique_ptr<Exp> collection;
     std::unique_ptr<Exp> index;
-    Ty ty; // type of element, e.g. i32
+    Ty                   ty; // type of element, e.g. i32
 };
 
 struct EArray {
     std::vector<std::unique_ptr<Exp>> elements;
-    Ty ty; // array type: [t x n], e.g. [i32 x 5]
+    Ty                                ty; // array type: [t x n], e.g. [i32 x 5]
 };
 
 struct ECast {
     std::unique_ptr<Exp> expr;
-    Ty ty;
+    Ty                   ty;
 };
 
 struct EProj {
     std::unique_ptr<Exp> obj;
-    std::string field;
-    Ty ty;
+    std::string          field;
+    Ty                   ty;
 };
 
 struct EObjInit {
-    std::string id;
+    std::string                                               id;
     std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
-    Ty ty;
+    Ty                                                        ty;
 };
 
-using ExpVariant = std::variant<
-    EBool,
-    EInt,
-    EFloat,
-    EStr,
-    EId,
-    ECall,
-    EBop,
-    EUop,
-    EIndex,
-    EArray,
-    ECast,
-    EProj,
-    EObjInit
->;
+using ExpVariant =
+    std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj, EObjInit>;
 
 struct Exp {
     ExpVariant val;

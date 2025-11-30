@@ -1,22 +1,22 @@
 #pragma once
 
+#include <bridge/types.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Type.h>
-
-#include <bridge/types.h>
 
 struct Generator;
 
 class TypeToLLGenerator {
     Generator& gen;
 
-public: 
+  public:
     explicit TypeToLLGenerator(Generator& g) : gen(g) {}
 
     llvm::Type* codegenTy(const Ty& ty);
     llvm::Type* codegenRetTy(const RetTy& ty);
     llvm::Type* codegenRefTy(const RefTy& rt);
-private: 
+
+  private:
     llvm::Type* createSignedInt(const Sint si);
     llvm::Type* createUnsignedInt(const Uint ui);
     llvm::Type* getStaticArrayType(const RefTy& rt);

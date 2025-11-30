@@ -1,51 +1,45 @@
-#include <codegen/generator.h>
 #include <codegen/exp.h>
+#include <codegen/generator.h>
 #include <cstdio>
 #include <util/debug.h>
 
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
         switch (e.int_ty->uint) {
-            case Uint::Tu8:
-                return 8;
-            case Uint::Tu16:
-                return 16;
-            case Uint::Tu32:
-                return 32;
-            case Uint::Tu64:
-                return 64;
-            case Uint::Tu128:
-                return 128;
+        case Uint::Tu8:
+            return 8;
+        case Uint::Tu16:
+            return 16;
+        case Uint::Tu32:
+            return 32;
+        case Uint::Tu64:
+            return 64;
+        case Uint::Tu128:
+            return 128;
         }
     } else {
         switch (e.int_ty->sint) {
-            case Sint::Ti8:
-                return 8;
-            case Sint::Ti16:
-                return 16;
-            case Sint::Ti32:
-                return 32;
-            case Sint::Ti64:
-                return 64;
-            case Sint::Ti128:
-                return 128;
+        case Sint::Ti8:
+            return 8;
+        case Sint::Ti16:
+            return 16;
+        case Sint::Ti32:
+            return 32;
+        case Sint::Ti64:
+            return 64;
+        case Sint::Ti128:
+            return 128;
         }
     }
 }
 
 static llvm::APInt makeAPInt128(unsigned numBits, unsigned __int128 v) {
-    uint64_t words[2] = {
-        (uint64_t)v,
-        (uint64_t)(v >> 64)
-    };
+    uint64_t words[2] = {(uint64_t)v, (uint64_t)(v >> 64)};
     return llvm::APInt(numBits, 2, words);
 }
 
 static llvm::APInt makeAPSInt128(unsigned numBits, __int128 v) {
-    uint64_t words[2] = {
-        (uint64_t)v,
-        (uint64_t)(v >> 64)
-    };
+    uint64_t words[2] = {(uint64_t)v, (uint64_t)(v >> 64)};
     return llvm::APInt(numBits, 2, words);
 }
 
@@ -57,9 +51,7 @@ Value* ExpToLLVisitor::operator()(const EInt& e) {
         else
             return llvm::ConstantInt::get(*gen.ctxt, llvm::APInt(int_sz, e.s));
     } else {
-        llvm::APInt ap = (e.int_ty->tag == IntTyTag::Unsigned)
-        ? makeAPInt128(int_sz, e.u)
-        : makeAPSInt128(int_sz, e.s);
+        llvm::APInt ap = (e.int_ty->tag == IntTyTag::Unsigned) ? makeAPInt128(int_sz, e.u) : makeAPSInt128(int_sz, e.s);
 
         return llvm::ConstantInt::get(*gen.ctxt, ap);
     }
@@ -74,21 +66,21 @@ Value* ExpToLLVisitor::operator()(const EId& e) {
     if (it == gen.varEnv.end()) {
         llvm_unreachable("Unknown identifier");
     }
-    return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());    
+    return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
 }
 
 Value* ExpToLLVisitor::operator()(const EFloat& e) {
     llvm::APFloat ap(e.value);
 
     switch (e.float_ty) {
-        case FloatTy::Tf32:
+    case FloatTy::Tf32:
         // TODO check this
-            ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
-            break;
-        case FloatTy::Tf64:
-            break;
-        default:
-            llvm_unreachable("Unknown float type");
+        ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
+        break;
+    case FloatTy::Tf64:
+        break;
+    default:
+        llvm_unreachable("Unknown float type");
     }
 
     return llvm::ConstantFP::get(*gen.ctxt, ap);
@@ -108,7 +100,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 
     bool lhsUnsigned = isUnsignedIntTy(getExpTy(*e.left));
     bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
-    
+
     bool bothUnsigned = lhsUnsigned && rhsUnsigned;
 
     auto addWrapFlags = [&](Value* inst) {
@@ -121,65 +113,59 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     };
 
     switch (e.op) {
-        case BinOp::Add: {
-            auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
-            return addWrapFlags(inst);
-        }
+    case BinOp::Add: {
+        auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
+        return addWrapFlags(inst);
+    }
 
-        case BinOp::Sub: {
-            auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
-            return addWrapFlags(inst);
-        }
+    case BinOp::Sub: {
+        auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
+        return addWrapFlags(inst);
+    }
 
-        case BinOp::Mul: {
-            auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
-            return addWrapFlags(inst);
-        }
+    case BinOp::Mul: {
+        auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
+        return addWrapFlags(inst);
+    }
 
-        case BinOp::Div:
-            return bothUnsigned
-                ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
-                : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
+    case BinOp::Div:
+        return bothUnsigned ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
+                            : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
 
-        case BinOp::Mod:
-            return bothUnsigned
-                ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
-                : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
+    case BinOp::Mod:
+        return bothUnsigned ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
+                            : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
 
-        case BinOp::Eqeq:
-            return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+    case BinOp::Eqeq:
+        return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
 
-        case BinOp::Neq:
-            return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
+    case BinOp::Neq:
+        return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
 
-        case BinOp::Lt:
-            return bothUnsigned
-                ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
-                : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
+    case BinOp::Lt:
+        return bothUnsigned ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
+                            : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
 
-        case BinOp::Lte:
-            return bothUnsigned
-                ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
-                : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
+    case BinOp::Lte:
+        return bothUnsigned ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
+                            : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
 
-        case BinOp::Gt:
-            return bothUnsigned
-                ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
-                : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
+    case BinOp::Gt:
+        return bothUnsigned ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
+                            : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
 
-        case BinOp::Gte:
-            return bothUnsigned
-                ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
-                : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
+    case BinOp::Gte:
+        return bothUnsigned ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
+                            : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
 
-        case BinOp::And:
-            return gen.builder->CreateAnd(lhs, rhs, "andtmp");
+    case BinOp::And:
+        return gen.builder->CreateAnd(lhs, rhs, "andtmp");
 
-        case BinOp::Or:
-            return gen.builder->CreateOr(lhs, rhs, "ortmp");
+    case BinOp::Or:
+        return gen.builder->CreateOr(lhs, rhs, "ortmp");
 
-        default:
-            llvm_unreachable("Unsupported binary operator");
+    default:
+        llvm_unreachable("Unsupported binary operator");
     }
 }
 
@@ -187,37 +173,36 @@ Value* ExpToLLVisitor::operator()(const EUop& e) {
     throw new std::runtime_error("not supported yet");
 }
 
-Value* ExpToLLVisitor::operator()(const EStr& e) { 
+Value* ExpToLLVisitor::operator()(const EStr& e) {
     throw new std::runtime_error("not supported yet");
 }
 
-Value* ExpToLLVisitor::operator()(const ECall& e) { 
+Value* ExpToLLVisitor::operator()(const ECall& e) {
     std::vector<Value*> args;
     args.reserve(e.args.size());
 
-    for (const auto& arg: e.args) {
+    for (const auto& arg : e.args) {
         Value* val = gen.codegenExp(*arg);
-        if (!val) 
+        if (!val)
             llvm_unreachable("Failed to create LL argument.");
-        
+
         args.push_back(val);
     }
 
-    if (!std::holds_alternative<EId>(e.callee->val)) 
+    if (!std::holds_alternative<EId>(e.callee->val))
         llvm_unreachable("We do not currently support chained/higher order function calls.");
-    
 
     const EId& idNode = std::get<EId>(e.callee->val);
 
     llvm::Function* callee = gen.mod->getFunction(idNode.id);
 
-    if (!callee) 
+    if (!callee)
         throw std::runtime_error("Calling unknown function: " + idNode.id);
-    
+
     return gen.builder->CreateCall(callee, args, "call");
 }
 
-Value* ExpToLLVisitor::operator()(const EIndex& e) { 
+Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
     llvm::Type* resultTy = gen.codegenType(e.ty);
@@ -231,37 +216,37 @@ Value* ExpToLLVisitor::operator()(const EIndex& e) {
     }
 }
 
-Value* ExpToLLVisitor::operator()(const EArray& e) { 
+Value* ExpToLLVisitor::operator()(const EArray& e) {
     llvm::Type* arrTy = gen.codegenType(e.ty);
 
     Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
-    Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
+    Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
 
-    llvm::Type* innerTy = arrTy->getArrayElementType();
-    bool isAggregate = innerTy->isAggregateType();
+    llvm::Type* innerTy     = arrTy->getArrayElementType();
+    bool        isAggregate = innerTy->isAggregateType();
 
-    llvm::DataLayout dl = gen.mod->getDataLayout();
-    Value* size = nullptr;
-    unsigned align = 0;
-    Value* isVolatile = nullptr;
+    llvm::DataLayout dl         = gen.mod->getDataLayout();
+    Value*           size       = nullptr;
+    unsigned         align      = 0;
+    Value*           isVolatile = nullptr;
 
     if (isAggregate) {
         uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
-        size = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
-        align = (unsigned) dl.getABITypeAlign(innerTy).value();
-        isVolatile = llvm::ConstantInt::getFalse(*gen.ctxt);
+        size                  = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
+        align                 = (unsigned)dl.getABITypeAlign(innerTy).value();
+        isVolatile            = llvm::ConstantInt::getFalse(*gen.ctxt);
     }
 
     for (size_t i = 0; i < e.elements.size(); i++) {
         Value* val = gen.codegenExp(*e.elements[i]);
         Value* idx = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), i);
 
-        Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, { zero, idx }, "elem_ptr");
+        Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, {zero, idx}, "elem_ptr");
 
         if (isAggregate) {
             Value* dest = gen.builder->CreateBitCast(elemPtr, llvm::Type::getInt8PtrTy(*gen.ctxt), "DestI8Ptr");
-            Value* src = gen.builder->CreateBitCast(val, llvm::Type::getInt8PtrTy(*gen.ctxt), "SrcI8Ptr");
-            
+            Value* src  = gen.builder->CreateBitCast(val, llvm::Type::getInt8PtrTy(*gen.ctxt), "SrcI8Ptr");
+
             gen.builder->CreateMemCpy(dest, llvm::MaybeAlign(align), src, llvm::MaybeAlign(align), size, isVolatile);
         } else {
             gen.builder->CreateStore(val, elemPtr);
@@ -271,11 +256,11 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     return arrPtr;
 }
 
-Value* ExpToLLVisitor::operator()(const ECast& e) { 
+Value* ExpToLLVisitor::operator()(const ECast& e) {
     throw new std::runtime_error("not supported yet");
 }
 
-Value* ExpToLLVisitor::operator()(const EProj& e) { 
+Value* ExpToLLVisitor::operator()(const EProj& e) {
     Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
     llvm::Type* fieldTy = gen.codegenType(e.ty);
@@ -289,34 +274,24 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         throw std::runtime_error("Unknown class: " + e.id);
     }
 
-    llvm::StructType* structTy = it->second;
+    llvm::StructType*  structTy    = it->second;
     llvm::PointerType* structPtrTy = llvm::PointerType::getUnqual(structTy);
 
-    const llvm::DataLayout& dl = gen.mod->getDataLayout();
-    uint64_t size = dl.getTypeAllocSize(structTy);
+    const llvm::DataLayout& dl   = gen.mod->getDataLayout();
+    uint64_t                size = dl.getTypeAllocSize(structTy);
 
-    llvm::Type* i64Ty = llvm::Type::getInt64Ty(*gen.ctxt);
-    Value* sizeVal = llvm::ConstantInt::get(i64Ty, size);
+    llvm::Type* i64Ty   = llvm::Type::getInt64Ty(*gen.ctxt);
+    Value*      sizeVal = llvm::ConstantInt::get(i64Ty, size);
 
     // TODO add malloc to blink's stdlib
     llvm::Function* mallocFn = gen.mod->getFunction("malloc");
     if (!mallocFn) {
-        llvm::FunctionType* mallocFTy =
-            llvm::FunctionType::get(
-                llvm::Type::getInt8PtrTy(*gen.ctxt),
-                { i64Ty },
-                false
-            );
+        llvm::FunctionType* mallocFTy = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(*gen.ctxt), {i64Ty}, false);
 
-        mallocFn = llvm::Function::Create(
-            mallocFTy,
-            llvm::Function::ExternalLinkage,
-            "malloc",
-            gen.mod.get()
-        );
+        mallocFn = llvm::Function::Create(mallocFTy, llvm::Function::ExternalLinkage, "malloc", gen.mod.get());
     }
 
-    Value* rawPtr = gen.builder->CreateCall(mallocFn, { sizeVal }, "rawmem");
+    Value* rawPtr = gen.builder->CreateCall(mallocFn, {sizeVal}, "rawmem");
 
     Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
 
@@ -329,11 +304,11 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     const CDecl& classDecl = *gen.classEnv.at(e.id);
 
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
-        const Field& fd = classDecl.fields[idx];
-        llvm::Type* fty = gen.codegenType(fd.ftyp);
+        const Field& fd  = classDecl.fields[idx];
+        llvm::Type*  fty = gen.codegenType(fd.ftyp);
 
         for (auto& stmtPtr : fd.prelude) {
-            gen.codegenStmt(*stmtPtr); 
+            gen.codegenStmt(*stmtPtr);
         }
 
         Value* storedVal = nullptr;
@@ -346,8 +321,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
             storedVal = llvm::Constant::getNullValue(fty);
         }
 
-        Value* fieldPtr =
-            gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
+        Value* fieldPtr = gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
 
         gen.builder->CreateStore(storedVal, fieldPtr);
     }

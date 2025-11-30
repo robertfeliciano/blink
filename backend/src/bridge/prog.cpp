@@ -1,11 +1,9 @@
-#include <sstream>
-#include <iostream>
-
-#include <caml/mlvalues.h>
-#include <caml/memory.h>
-
-#include <bridge/prog.h>
 #include <bridge/decl.h>
+#include <bridge/prog.h>
+#include <caml/memory.h>
+#include <caml/mlvalues.h>
+#include <iostream>
+#include <sstream>
 
 Program convert_program(value prog) {
     Program program;
@@ -31,7 +29,7 @@ Program convert_program(value prog) {
     }
 
     program.functions = std::move(funs);
-    program.classes = std::move(cls);
+    program.classes   = std::move(cls);
 
     return program;
 }

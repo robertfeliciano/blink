@@ -80,7 +80,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
       (* TODO dont call proj - just call method direectly (like after desugaring it) *)
-      let cond = D.Call (Proj (coll', Methods.hasNext,  TBool), [], TBool) in
+      let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in
       let of_ty = convert_ty of_ty in
       let set_iter =
         D.Assn
@@ -154,6 +154,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let s, e' = desugar_exp e in
       (s, D.Uop (convert_unop op, e', convert_ty ty))
   | Index (arr, idx, ty) ->
+      (* TODO split up things like `call(..)[i]` to turn into let tmp0 = call(..); tmp0[i]. also x.y[i] -> tmp = x.y ; tmp[i]*)
       let sa, arr' = desugar_exp arr in
       let si, idx' = desugar_exp idx in
       (sa @ si, D.Index (arr', idx', convert_ty ty))
@@ -164,6 +165,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))
   | Proj (inst, field, _cname, t) ->
+      (* add similar thing as index simplification *)
       let s, inst' = desugar_exp inst in
       (s, D.Proj (inst', field, convert_ty t))
   | ObjInit (cn, fields) ->
@@ -182,7 +184,8 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       (* let mangled_name =
         mangle_name ~enclosing_class:cname pname tys (RetVal ty)
       in *)
-      (si @ sa, D.Call (D.Id (pname, convert_ty t), inst' :: args', convert_ty ty))
+      ( si @ sa,
+        D.Call (D.Id (pname, convert_ty t), inst' :: args', convert_ty ty) )
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in

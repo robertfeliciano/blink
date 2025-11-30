@@ -1,50 +1,51 @@
-#include <codegen/generator.h>
-#include <codegen/lvalue.h>
-#include <codegen/exp.h>
-
 #include "llvm/IR/Value.h"
 
+#include <codegen/exp.h>
+#include <codegen/generator.h>
+#include <codegen/lvalue.h>
+
 Value* LValueCreator::codegenLValue(const Exp& e) {
-    return std::visit([&](auto const& node) -> Value* {
+    return std::visit(
+        [&](auto const& node) -> Value* {
+            using T = std::decay_t<decltype(node)>;
 
-        using T = std::decay_t<decltype(node)>;
-
-        if constexpr (std::is_same_v<T, EId>) {
-            auto it = gen.varEnv.find(node.id);
-            if (it == gen.varEnv.end()) {
-                throw std::runtime_error("Unknown variable (lvalue): " + node.id);
+            if constexpr (std::is_same_v<T, EId>) {
+                auto it = gen.varEnv.find(node.id);
+                if (it == gen.varEnv.end()) {
+                    throw std::runtime_error("Unknown variable (lvalue): " + node.id);
+                }
+                return it->second; // allocaInst*
             }
-            return it->second; // allocaInst*
-        }
 
-        else if constexpr (std::is_same_v<T, EProj>) {
-            return getStructFieldPtr(node);
-        }
-
-        else if constexpr (std::is_same_v<T, EIndex>) {
-            return getArrayElemPtr(node);
-        }
-
-        else if constexpr (std::is_same_v<T, ECall>) {
-            const Ty& retTy = gen.getExpTy(e);
-            
-            if (retTy.tag == TyTag::TRef && retTy.ref_ty->tag == RefTyTag::RClass) {
-                return gen.codegenExp(e); 
-            } else {
-                throw std::runtime_error("Attempting to use call result as lvalue");
+            else if constexpr (std::is_same_v<T, EProj>) {
+                return getStructFieldPtr(node);
             }
-        }
 
-        else {
-            throw std::runtime_error("Expression is not assignable");
-        }
+            else if constexpr (std::is_same_v<T, EIndex>) {
+                return getArrayElemPtr(node);
+            }
 
-    }, e.val);
+            else if constexpr (std::is_same_v<T, ECall>) {
+                const Ty& retTy = gen.getExpTy(e);
+
+                if (retTy.tag == TyTag::TRef &&
+                    (retTy.ref_ty->tag == RefTyTag::RClass || retTy.ref_ty->tag == RefTyTag::RArray)) {
+                    return gen.codegenExp(e);
+                } else {
+                    throw std::runtime_error("Attempting to use call result as lvalue");
+                }
+            }
+
+            else {
+                throw std::runtime_error("Expression is not assignable");
+            }
+        },
+        e.val);
 }
 
 Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
     Value* arrPtr = codegenLValue(*e.collection);
-    
+
     Value* idx = gen.codegenExp(*e.index);
 
     llvm::Type* llArrayTy = gen.codegenType(gen.getExpTy(*e.collection));
@@ -56,23 +57,14 @@ Value* LValueCreator::getArrayElemPtr(const EIndex& e) {
     Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
 
     Value* finalPtr = arrPtr;
-    
+
     if (std::holds_alternative<EId>(e.collection->val)) {
         llvm::Type* loadType = llvm::PointerType::getUnqual(*gen.ctxt);
 
-        finalPtr = gen.builder->CreateLoad(
-            loadType,
-            arrPtr,
-            "arr_ptr_load"
-        );
-    }    
-    
-    return gen.builder->CreateInBoundsGEP(
-        llArrayTy,
-        finalPtr,
-        { zero, idx },
-        "idx_lvalue"
-    );
+        finalPtr = gen.builder->CreateLoad(loadType, arrPtr, "arr_ptr_load");
+    }
+
+    return gen.builder->CreateInBoundsGEP(llArrayTy, finalPtr, {zero, idx}, "idx_lvalue");
 }
 
 Value* LValueCreator::getStructFieldPtr(const EProj& e) {
@@ -80,13 +72,13 @@ Value* LValueCreator::getStructFieldPtr(const EProj& e) {
 
     const Ty& objTy = gen.getExpTy(*e.obj);
 
-    if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass) 
+    if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass)
         throw std::runtime_error("Expected reference type (class)");
 
     const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
 
-    unsigned idx = 0;
-    bool found = false;
+    unsigned idx   = 0;
+    bool     found = false;
     for (; idx < cd.fields.size(); ++idx) {
         if (cd.fields[idx].fieldName == e.field) {
             found = true;
@@ -94,27 +86,19 @@ Value* LValueCreator::getStructFieldPtr(const EProj& e) {
         }
     }
 
-    if (!found) throw std::runtime_error("Unknown field: " + e.field);
+    if (!found)
+        throw std::runtime_error("Unknown field: " + e.field);
 
     llvm::StructType* structTy = llvm::cast<llvm::StructType>(gen.codegenType(objTy));
-    Value* finalPtr = objPtr;
-    
+    Value*            finalPtr = objPtr;
+
     // check if the original expression was an EId (a variable stored as ptr-to-ptr on stack/heap)
     // the EId case is the ONLY case where we need the extra load/dereference.
     if (std::holds_alternative<EId>(e.obj->val)) {
-        llvm::Type* loadType = llvm::PointerType::getUnqual(*gen.ctxt); 
+        llvm::Type* loadType = llvm::PointerType::getUnqual(*gen.ctxt);
 
-        finalPtr = gen.builder->CreateLoad(
-            loadType, 
-            objPtr, 
-            "struct_ptr_load"
-        );
+        finalPtr = gen.builder->CreateLoad(loadType, objPtr, "struct_ptr_load");
     }
 
-    return gen.builder->CreateStructGEP(
-        structTy,
-        finalPtr, 
-        idx,
-        "fieldptr"
-    );
+    return gen.builder->CreateStructGEP(structTy, finalPtr, idx, "fieldptr");
 }

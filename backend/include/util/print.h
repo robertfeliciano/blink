@@ -1,13 +1,12 @@
 #pragma once
 
+#include <bridge/decl.h>
+#include <bridge/exp.h>
+#include <bridge/prog.h>
+#include <bridge/stmt.h>
+#include <bridge/types.h>
 #include <string>
 #include <vector>
-
-#include <bridge/types.h>
-#include <bridge/exp.h>
-#include <bridge/stmt.h>
-#include <bridge/decl.h>
-#include <bridge/prog.h>
 
 // Type printing
 std::string tyToString(const Ty& ty);

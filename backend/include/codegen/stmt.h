@@ -1,12 +1,11 @@
 #pragma once
 
-#include <iostream>
-#include <string>
-
 #include "llvm/IR/Value.h"
 
 #include <bridge/stmt.h>
 #include <codegen/exp.h>
+#include <iostream>
+#include <string>
 
 using llvm::Value;
 
@@ -15,7 +14,7 @@ struct Generator;
 class StmtToLLVisitor {
     Generator& gen;
 
-public:
+  public:
     explicit StmtToLLVisitor(Generator& g) : gen(g) {}
 
     llvm::Value* operator()(const Assn& s);

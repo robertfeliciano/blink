@@ -1,24 +1,17 @@
 #pragma once
 
-#include <vector>
+#include <caml/mlvalues.h>
 #include <memory>
 #include <string>
-
-#include <caml/mlvalues.h>
+#include <vector>
 
 struct Ty;
 
-enum class Sint {
-    Ti8, Ti16, Ti32, Ti64, Ti128
-};
+enum class Sint { Ti8, Ti16, Ti32, Ti64, Ti128 };
 
-enum class Uint {
-    Tu8, Tu16, Tu32, Tu64, Tu128
-};
+enum class Uint { Tu8, Tu16, Tu32, Tu64, Tu128 };
 
-enum class FloatTy {
-    Tf32, Tf64
-};
+enum class FloatTy { Tf32, Tf64 };
 
 enum class IntTyTag { Signed, Unsigned };
 
@@ -30,13 +23,10 @@ struct IntTy {
     };
 };
 
-enum class RetTyTag {
-    RetVoid,
-    RetVal
-};
+enum class RetTyTag { RetVoid, RetVal };
 
 struct RetTy {
-    RetTyTag tag;
+    RetTyTag            tag;
     std::unique_ptr<Ty> val; // for RetVal
 };
 
@@ -47,28 +37,23 @@ struct RefTy {
 
     // for RFun
     std::vector<Ty> args;
-    RetTy ret;
+    RetTy           ret;
 
     // for RArray
     std::unique_ptr<Ty> inner;
-    int64_t size = 0;
+    int64_t             size = 0;
 
     // for RClass
     std::string cname;
 };
 
-enum class TyTag {
-    TBool,
-    TInt,
-    TFloat,
-    TRef
-};
+enum class TyTag { TBool, TInt, TFloat, TRef };
 
 struct Ty {
-    TyTag tag;
-    std::unique_ptr<IntTy> int_ty;
+    TyTag                    tag;
+    std::unique_ptr<IntTy>   int_ty;
     std::unique_ptr<FloatTy> float_ty;
-    std::unique_ptr<RefTy> ref_ty;
+    std::unique_ptr<RefTy>   ref_ty;
 };
 
 IntTy convert_int_ty(value v);

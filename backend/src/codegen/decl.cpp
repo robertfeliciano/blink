@@ -1,18 +1,18 @@
+#include <codegen/decl.h>
+#include <codegen/generator.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/IR/DataLayout.h>
-
-#include <codegen/generator.h>
-#include <codegen/decl.h>
 
 void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     std::vector<llvm::Type*> argTys;
     for (auto& arg : fn.args) {
         const Ty& argTy = arg.first;
 
-        if (argTy.tag == TyTag::TRef && argTy.ref_ty->tag == RefTyTag::RClass) {
-            // take structs as pointers
+        if (argTy.tag == TyTag::TRef &&
+            (argTy.ref_ty->tag == RefTyTag::RClass || argTy.ref_ty->tag == RefTyTag::RArray)) {
+            // take structs/arrays as pointers
             argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
         } else {
             llvm::Type* baseTy = gen.codegenType(argTy);
@@ -21,14 +21,15 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     }
 
     const RetTy& retTy = fn.frtyp;
-    llvm::Type* llRetTy;
+    llvm::Type*  llRetTy;
 
-    if (retTy.tag == RetTyTag::RetVal && retTy.val->tag == TyTag::TRef && retTy.val->ref_ty->tag == RefTyTag::RClass) {
+    if (retTy.tag == RetTyTag::RetVal && retTy.val->tag == TyTag::TRef &&
+        (retTy.val->ref_ty->tag == RefTyTag::RClass || retTy.val->ref_ty->tag == RefTyTag::RArray)) {
         llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
     } else {
         llRetTy = gen.codegenRetType(fn.frtyp);
     }
-    
+
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
     llvm::Function* llfn = llvm::Function::Create(ftyp, llvm::Function::ExternalLinkage, fn.fname, gen.mod.get());
@@ -47,8 +48,8 @@ void DeclToLLVisitor::codegenFunctionPrototypes(const std::vector<FDecl>& fns) {
 }
 
 void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
-    llvm::Function* llFun = gen.mod->getFunction(f.fname);
-    llvm::BasicBlock *entryBlock = llvm::BasicBlock::Create(*gen.ctxt, f.fname+"_entry", llFun);
+    llvm::Function*   llFun      = gen.mod->getFunction(f.fname);
+    llvm::BasicBlock* entryBlock = llvm::BasicBlock::Create(*gen.ctxt, f.fname + "_entry", llFun);
 
     gen.builder->SetInsertPoint(entryBlock);
 
@@ -72,7 +73,7 @@ void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
             gen.builder->CreateRetVoid();
         }
     }
-  
+
     llvm::verifyFunction(*llFun);
 }
 
@@ -90,6 +91,5 @@ void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
     st->setBody(llvmFields, /*isPacked=*/false);
 
     gen.structTypes[cd.cname] = st;
-    gen.classEnv[cd.cname] = &cd;
+    gen.classEnv[cd.cname]    = &cd;
 }
-

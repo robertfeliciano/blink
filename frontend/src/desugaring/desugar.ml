@@ -30,7 +30,7 @@ let desugar_program (prog : Typed.program) (dbg : bool) : program =
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
   Prog (List.flatten extracted_methods @ desugared_fns, structs)
 
-let desugar_prog?(dbg = false) (prog : Typed.program)  :
+let desugar_prog ?(dbg = false) (prog : Typed.program) :
     (program, Core.Error.t) result =
   try Ok (desugar_program prog dbg)
   with DesugarError msg ->

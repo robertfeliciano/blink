@@ -11,7 +11,7 @@ struct Generator;
 class LValueCreator {
     Generator& gen;
 
-public:
+  public:
     explicit LValueCreator(Generator& g) : gen(g) {}
 
     Value* codegenLValue(const Exp& e);

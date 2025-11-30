@@ -1,0 +1,11 @@
+fun abc(x: [i32; 3]) => [i32;3] {
+    x[0] += 1;
+    x[1] += 1;
+    x[2] += 1;
+    return x;
+}
+
+fun main() => i32 {
+    let a = [1,2,3];
+    return abc(a)[0];
+}

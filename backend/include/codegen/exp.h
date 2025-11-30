@@ -11,7 +11,7 @@ struct Generator;
 class ExpToLLVisitor {
     Generator& gen;
 
-public:
+  public:
     explicit ExpToLLVisitor(Generator& g) : gen(g) {}
 
     Value* operator()(const EBool& e);
@@ -29,8 +29,6 @@ public:
     Value* operator()(const EObjInit& e);
 
     static const Ty& getExpTy(const Exp& exp) {
-        return std::visit([](const auto& node) -> const Ty& {
-            return node.ty;
-        }, exp.val);
+        return std::visit([](const auto& node) -> const Ty& { return node.ty; }, exp.val);
     };
 };

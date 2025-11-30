@@ -129,7 +129,9 @@ let rec show_exp ?(lvl = 0) = function
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
   | Proj (e, i, cname, t) ->
-      Printf.sprintf "Proj(%s : %s, %s : %s)" (show_exp ~lvl:(lvl + 1) e) cname i (show_ty t)
+      Printf.sprintf "Proj(%s : %s, %s : %s)"
+        (show_exp ~lvl:(lvl + 1) e)
+        cname i (show_ty t)
   | ObjInit (cn, fields) ->
       let fs =
         String.concat ";\n"

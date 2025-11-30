@@ -1,11 +1,9 @@
 #pragma once
 
-#include <vector>
-#include <string>
-
-#include <caml/mlvalues.h>
-
 #include <bridge/decl.h>
+#include <caml/mlvalues.h>
+#include <string>
+#include <vector>
 
 struct Program {
     std::vector<FDecl> functions;

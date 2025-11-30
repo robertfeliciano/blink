@@ -1,17 +1,10 @@
-#include <codegen/generator.h>
 #include <codegen/decl.h>
+#include <codegen/generator.h>
 
 Generator::Generator()
-    : ctxt(std::make_unique<llvm::LLVMContext>()),
-      builder(std::make_unique<llvm::IRBuilder<>>(*ctxt)),
-      mod(std::make_unique<llvm::Module>("Module", *ctxt)),
-      expVisitor(*this),
-      stmtVisitor(*this),
-      typeGen(*this),
-      declVisitor(*this),
-      lvalueCreator(*this)
-{
-}
+    : ctxt(std::make_unique<llvm::LLVMContext>()), builder(std::make_unique<llvm::IRBuilder<>>(*ctxt)),
+      mod(std::make_unique<llvm::Module>("Module", *ctxt)), expVisitor(*this), stmtVisitor(*this), typeGen(*this),
+      declVisitor(*this), lvalueCreator(*this) {}
 
 void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.classes) {
@@ -29,7 +22,7 @@ void Generator::configureTarget() {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
-    
+
     auto triple = llvm::sys::getDefaultTargetTriple();
     mod->setTargetTriple(triple);
 }
@@ -37,10 +30,10 @@ void Generator::configureTarget() {
 void Generator::optimize() {
     llvm::PassBuilder passBuilder;
 
-    llvm::LoopAnalysisManager lam;
+    llvm::LoopAnalysisManager     lam;
     llvm::FunctionAnalysisManager fam;
-    llvm::CGSCCAnalysisManager cgam;
-    llvm::ModuleAnalysisManager mam;
+    llvm::CGSCCAnalysisManager    cgam;
+    llvm::ModuleAnalysisManager   mam;
 
     passBuilder.registerModuleAnalyses(mam);
     passBuilder.registerCGSCCAnalyses(cgam);
@@ -62,7 +55,7 @@ void Generator::optimize() {
 }
 
 void Generator::dumpLL(const std::string& filename) {
-    std::error_code EC;
+    std::error_code      EC;
     llvm::raw_fd_ostream outFile(filename, EC);
 
     if (EC) {

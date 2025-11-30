@@ -57,7 +57,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
   | LambdaDecl _ -> type_lambda tc stmt_n
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
-      | Id _ -> ()
+      | Id _ | Proj _ | Index _ -> ()
       | _ -> type_error lhs "cannot assign to this expression");
       let tlhs, lhsty = type_exp tc lhs in
       let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
@@ -418,8 +418,15 @@ and type_method (proj : exp) (args : exp node list) (from_exp : bool)
               match type_func args temp_func from_exp tc with
               | Error msg -> Error msg
               | Ok (arg_types, typed_args, rt) ->
-                  Ok (Typed_ast.Proj (tobj, mth, cid, (TRef (RFun (List.map fst argheaders, rt)))), arg_types, typed_args, rt)
-              )
+                  Ok
+                    ( Typed_ast.Proj
+                        ( tobj,
+                          mth,
+                          cid,
+                          TRef (RFun (List.map fst argheaders, rt)) ),
+                      arg_types,
+                      typed_args,
+                      rt ))
           | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."
@@ -431,7 +438,7 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       type_error en
         "Could not infer type of empty array. Please provide type annotation."
   | Array [], Some (TRef (RArray (elt_ty, len))) ->
-    let ty_of_array = Typed_ast.TRef (RArray (elt_ty, len)) in
+      let ty_of_array = Typed_ast.TRef (RArray (elt_ty, len)) in
       (Typed_ast.Array ([], ty_of_array), ty_of_array)
   | Array [], Some other ->
       type_error en

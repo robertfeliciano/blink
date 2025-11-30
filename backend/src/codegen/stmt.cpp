@@ -6,7 +6,6 @@ Value* StmtToLLVisitor::operator()(const Assn& s) {
     Value* lhsPtr = gen.lvalueCreator.codegenLValue(*s.lhs);
     if (!lhsPtr)
         throw std::runtime_error("Assignment to invalid lvalue");
-    
 
     Value* rhsVal = gen.codegenExp(*s.rhs);
     if (!rhsVal)
@@ -15,7 +14,6 @@ Value* StmtToLLVisitor::operator()(const Assn& s) {
     gen.builder->CreateStore(rhsVal, lhsPtr);
 
     return rhsVal;
-    
 }
 
 Value* StmtToLLVisitor::operator()(const VDecl& s) {
@@ -24,15 +22,11 @@ Value* StmtToLLVisitor::operator()(const VDecl& s) {
     }
     Value* init = gen.codegenExp(*s.init);
 
-    llvm::Type* llTy = init->getType();
-    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
-    llvm::IRBuilder<> tmp(
-        &(parent->getEntryBlock()),
-        parent->getEntryBlock().begin()
-    );
-    llvm::AllocaInst* var = tmp.CreateAlloca(init->getType(), nullptr,
-                        llvm::Twine(s.id));
-    gen.varEnv[s.id] = var;
+    llvm::Type*       llTy   = init->getType();
+    llvm::Function*   parent = gen.builder->GetInsertBlock()->getParent();
+    llvm::IRBuilder<> tmp(&(parent->getEntryBlock()), parent->getEntryBlock().begin());
+    llvm::AllocaInst* var = tmp.CreateAlloca(init->getType(), nullptr, llvm::Twine(s.id));
+    gen.varEnv[s.id]      = var;
     gen.builder->CreateStore(init, var);
     return init;
 }
@@ -58,8 +52,8 @@ Value* StmtToLLVisitor::operator()(const If& s) {
     }
     llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
 
-    llvm::BasicBlock* thenBlock = llvm::BasicBlock::Create(*gen.ctxt, "then", parent);
-    llvm::BasicBlock* elseBlock = llvm::BasicBlock::Create(*gen.ctxt, "else", parent);
+    llvm::BasicBlock* thenBlock    = llvm::BasicBlock::Create(*gen.ctxt, "then", parent);
+    llvm::BasicBlock* elseBlock    = llvm::BasicBlock::Create(*gen.ctxt, "else", parent);
     llvm::BasicBlock* finallyBlock = llvm::BasicBlock::Create(*gen.ctxt, "finally", parent);
 
     gen.builder->CreateCondBr(cond, thenBlock, elseBlock);
@@ -72,7 +66,7 @@ Value* StmtToLLVisitor::operator()(const If& s) {
 
     thenBlock = gen.builder->GetInsertBlock();
     gen.builder->CreateBr(finallyBlock);
-    
+
     parent->getBasicBlockList().push_back(elseBlock);
     gen.builder->SetInsertPoint(elseBlock);
 
@@ -82,7 +76,7 @@ Value* StmtToLLVisitor::operator()(const If& s) {
 
     elseBlock = gen.builder->GetInsertBlock();
     gen.builder->CreateBr(finallyBlock);
-    
+
     parent->getBasicBlockList().push_back(finallyBlock);
     gen.builder->SetInsertPoint(finallyBlock);
 
@@ -97,7 +91,7 @@ Value* StmtToLLVisitor::operator()(const While& s) {
 
     llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
 
-    llvm::BasicBlock* loop = llvm::BasicBlock::Create(*gen.ctxt, "loop");
+    llvm::BasicBlock* loop    = llvm::BasicBlock::Create(*gen.ctxt, "loop");
     llvm::BasicBlock* loopEnd = llvm::BasicBlock::Create(*gen.ctxt, "loop_end");
 
     gen.builder->CreateCondBr(cond, loop, loopEnd);
@@ -108,13 +102,13 @@ Value* StmtToLLVisitor::operator()(const While& s) {
     for (auto& stmt : s.body) {
         gen.codegenStmt(*stmt);
     }
-    
+
     loop = gen.builder->GetInsertBlock();
     gen.builder->CreateCondBr(cond, loop, loopEnd);
 
     parent->getBasicBlockList().push_back(loopEnd);
     gen.builder->SetInsertPoint(loopEnd);
-    
+
     return llvm::Constant::getNullValue(llvm::Type::getInt32Ty(*gen.ctxt));
 }
 

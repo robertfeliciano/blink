@@ -27,10 +27,17 @@ let test_desugar_call_proj _ =
   o.m(2) -> m(o, 2)
   *)
   let arg = Int (Z.of_int 2, TSigned Ti32) in
-  let arg_tys = [TInt (TSigned Ti32)] in
+  let arg_tys = [ TInt (TSigned Ti32) ] in
   let call =
     SCall
-      (Proj (Id ("o", TRef (RClass "clazz")), "m", "clazz", TRef (RFun (arg_tys, RetVoid))), [ arg ], arg_tys, RetVoid)
+      ( Proj
+          ( Id ("o", TRef (RClass "clazz")),
+            "m",
+            "clazz",
+            TRef (RFun (arg_tys, RetVoid)) ),
+        [ arg ],
+        arg_tys,
+        RetVoid )
   in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
   let prog = Prog ([ fn ], []) in
