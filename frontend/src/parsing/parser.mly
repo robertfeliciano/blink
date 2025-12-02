@@ -134,6 +134,10 @@ program:
    Function & Class decls
    ----------------------- *)
 
+// TODO allow default initialization of vars: `let x: i8;` `let arr: [i32, 4];` `let clazz: Class;`
+// allow these in functions and class field specs
+// then allow obj init to not require ALL fields
+
 fdecl_list:
   | /* empty */ { [] }
   | hd=fdecl tl=fdecl_list { hd :: tl }
@@ -320,6 +324,8 @@ postfix:
    ----------------------- *)
 lhs:
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
+  | p=postfix DOT i=IDENT 
+      { loc $startpos $endpos @@ Proj (p, i) }
   | e=postfix LBRACKET i=exp RBRACKET
       { loc $startpos $endpos @@ Index (e, i) }
 

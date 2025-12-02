@@ -41,8 +41,28 @@ Value* StmtToLLVisitor::operator()(const Ret& ret) {
 }
 
 Value* StmtToLLVisitor::operator()(const SCall& s) {
-    throw std::runtime_error("SCall not implemented yet.");
-    // llvm::Function* callee = gen.mod->getFunction(*s.callee);
+    std::vector<Value*> args;
+    args.reserve(s.args.size());
+
+    for (const auto& arg : s.args) {
+        Value* val = gen.codegenExp(*arg);
+        if (!val)
+            llvm_unreachable("Failed to create LL argument.");
+
+        args.push_back(val);
+    }
+
+    if (!std::holds_alternative<EId>(s.callee->val))
+        llvm_unreachable("We do not currently support higher-order functions.");
+
+    const EId& idNode = std::get<EId>(s.callee->val);
+
+    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+
+    if (!callee)
+        llvm_unreachable("Calling unknown function.");
+
+    return gen.builder->CreateCall(callee, args);
 }
 
 Value* StmtToLLVisitor::operator()(const If& s) {

@@ -188,7 +188,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
     }
 
     if (!std::holds_alternative<EId>(e.callee->val))
-        llvm_unreachable("We do not currently support chained/higher-order functions.");
+        llvm_unreachable("We do not currently support higher-order functions.");
 
     const EId& idNode = std::get<EId>(e.callee->val);
 

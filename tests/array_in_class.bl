@@ -1,21 +1,35 @@
+/*
 class List {
     let x: [i32; 4] = [0,0,0,0];
 }
+*/
 
-/*
 class Point {
     let x: i32 = 0;
     let y: i32 = 9;
+
+    fun set_x(nx: i32) => void {
+        this.x = nx;
+    }
+
+    fun set_y(ny: i32) => void {
+        this.y = ny;
+    }
 }
-*/
+
 
 fun main() => i32 {
-    
+    /*
     let l = new List { x = [1,2,3,4] };
     let tmp1 = l.x;
     //return new Point { x = 1, y = 4 }.y;
     //return tmp1[2];
     return l.x[0];
+    */
+    let p = new Point { x = 2, y = 1 };
+    p.set_x(44);
+    p.set_y(92);
+    return p.y;
     //return [1,2,3,4][0];
     /*
     let temp = extra();
