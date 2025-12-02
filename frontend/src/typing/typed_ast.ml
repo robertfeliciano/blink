@@ -8,7 +8,7 @@ type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
 
 and ref_ty =
   | RString
-  | RArray of ty * int64
+  | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
 
@@ -54,6 +54,7 @@ type exp =
       exp * id * id * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
+  | Null of ref_ty
 
 and vdecl = id * ty * exp * bool
 and ldecl = id * ref_ty * exp

@@ -28,7 +28,7 @@ let show_int_ty = function
 (* Manual show for ref_ty *)
 let rec show_ref_ty = function
   | RString -> "string"
-  | RArray (t, sz) -> Printf.sprintf "%s_x_%Ld" (show_ty t) sz
+  | RArray (t, sz) -> Printf.sprintf "%s_x_%d" (show_ty t) sz
   | RClass cn -> Printf.sprintf "%s" cn
   | RFun (tys, r) -> (
       String.concat "_" (List.map show_ty tys)
@@ -71,6 +71,7 @@ let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" i (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
+  | Null t -> Printf.sprintf "Null(%s)" (show_ref_ty t)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id (id, t) -> Printf.sprintf "Id(%s : %s)" id (show_ty t)
   | Call (fn, args, ty) ->

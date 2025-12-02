@@ -22,7 +22,7 @@ let rec analyze_lambda (params : (id * ty) list) (body : block) : result =
 
 and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
   match e with
-  | Bool _ | Int _ | Float _ | Str _ -> empty_result
+  | Bool _ | Int _ | Float _ | Str _ | Null _ -> empty_result
   | Id (x, _) ->
       if StringSet.mem x locals then empty_result
       else if is_lhs then

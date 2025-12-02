@@ -85,6 +85,7 @@ rule read = parse
   | "f64" { Tf64 }
   | "string" { TSTRING }
   | "bool" { TBOOL }
+  | "null" { NULL }
   | "fun" { FUN }
   | "if" { IF }
   | "in" { IN }

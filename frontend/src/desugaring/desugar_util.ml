@@ -41,7 +41,7 @@ let rec mangle_ty = function
   | T.TFloat f -> mangle_float f
   | T.TRef (RClass cname) -> len_and_name cname
   | T.TRef RString -> "str"
-  | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int64.to_string sz
+  | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int.to_string sz
   | T.TRef (RFun (tys, r)) -> (
       String.concat "_" (List.map mangle_ty tys)
       ^

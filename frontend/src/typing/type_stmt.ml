@@ -14,11 +14,16 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
     (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
-  | Decl (i, None, en, const) ->
+  | Decl (_, None, None, _) -> type_error stmt_n "Must provide type for default variable initialization"
+  | Decl (_i, Some _ty, None, _const) -> type_error stmt_n "Default initialization not allowed yet."
+    (* let resolved_ty = convert_ty ty in 
+      let tc' = Tctxt.add_local tc i resolved_ty in 
+      (tc', Typed_ast.Decl (i, resolved_ty, )) *)
+  | Decl (i, None, Some en, const) ->
       let te, e_ty = type_exp tc en in
       let tc', resolved_ty = (Tctxt.add_local tc i e_ty, e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  | Decl (i, Some given_ty_ast, en, const) ->
+  | Decl (i, Some given_ty_ast, Some en, const) ->
       let given_ty = convert_ty given_ty_ast in
       let te, e_ty = type_exp ~expected:given_ty tc en in
       let tc', resolved_ty =
@@ -214,6 +219,12 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         type_error e
           ("Float literal " ^ Float.to_string f ^ " does not fit in type "
           ^ Printer.show_ty (TFloat target_ty))
+  | Null -> 
+    let t = match expected with 
+    | Some (TRef ty) -> ty
+    | Some _ -> type_error e "Null only allowed to reference types, not primitives"
+    | None -> type_error e "Expected type for null"
+    in (Typed_ast.Null t, TRef t)
   | Str s ->
       check_expected_ty expected (TRef RString) e;
       Typed_ast.(Str s, TRef RString)
@@ -470,12 +481,12 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
           t
       in
       let all_elems = th :: typed_elems in
-      let len = Int64.of_int (List.length all_elems) in
+      let len = (List.length all_elems) in
       (match exp_len with
       | Some elen when elen <> len ->
           type_error en
-            ("Array length mismatch. Expected " ^ Int64.to_string elen
-           ^ " but got " ^ Int64.to_string len)
+            ("Array length mismatch. Expected " ^ Int.to_string elen
+           ^ " but got " ^ Int.to_string len)
       | _ -> ());
       let arr_ty = Typed_ast.(TRef (RArray (h_ty, len))) in
       (match exp_opt with
@@ -553,6 +564,23 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
       let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type) in
       (tc', Typed_ast.LambdaDecl (lname.elt, lambda_type, typed_lambda), false)
   | _ -> type_error stmt_n "Even more impossible state"
+
+and create_default_init (stmt_n: stmt node) = function 
+  | TBool -> Typed_ast.Bool false 
+  | TInt it -> Typed_ast.Int (Z.of_int 0, convert_int_ty it)
+  | TFloat ft -> Typed_ast.Float (0.0, convert_float_ty ft)
+  | TRef RString -> Typed_ast.Null RString
+  | TRef (RClass _) -> 
+    (* if given null, set to null. otherwise default constructor *)
+    type_error stmt_n "Default classes not allowed yet"
+  | TRef (RFun _) ->
+    (* set to null *)
+    type_error stmt_n "Default functions not allowed yet"
+  | TRef (RArray (t, sz)) -> 
+    let sz' = Z.to_int sz in 
+    let lst = List.init sz' (fun _ -> create_default_init stmt_n t) in
+    let t' = Typed_ast.TRef (RArray (convert_ty t, sz')) in
+    Typed_ast.Array (lst, t')
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
     (stmts : stmt node list) (in_loop : bool) :

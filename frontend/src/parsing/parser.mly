@@ -286,6 +286,7 @@ unary:
 primary:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
   | FALSE                           { loc $startpos $endpos @@ Bool false }
+  | NULL                            { loc $startpos $endpos @@ Null }
   | i=INT                           { loc $startpos $endpos @@ Int i }
   | f=FLOAT                         { loc $startpos $endpos @@ Float f }
   | s=STRING                        { loc $startpos $endpos @@ Str s }
@@ -334,9 +335,11 @@ lhs:
    ----------------------- *)
 vdecl:
   | LET id=IDENT t=ty_spec? EQUAL init=exp
-      { (id, t, init, false) }
+      { (id, t, Some init, false) }
+  | LET id=IDENT t=ty_spec?
+      { (id, t, None, false) }
   | CONST id=IDENT t=ty_spec? EQUAL init=exp
-      { (id, t, init, true) }
+      { (id, t, Some init, true) }
 
 
 lambda: 

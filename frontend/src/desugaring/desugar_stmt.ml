@@ -146,6 +146,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Bool b -> ([], D.Bool b)
   | Int (i, ity) -> ([], D.Int (Z.to_string i, convert_int_ty ity))
   | Float (f, fty) -> ([], D.Float (f, convert_float_ty fty))
+  | Null t -> ([], D.Null (convert_ref_ty t))
   | Str s -> ([], D.Str s)
   | Id (id, t) -> ([], D.Id (id, convert_ty t))
   | Bop (op, e1, e2, ty) ->

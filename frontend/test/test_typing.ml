@@ -43,7 +43,7 @@ let test_simple_err _ =
 
 let test_stmt _ =
   let e = Bop (Add, mk_node (Int (of_int 1)), mk_node (Int (of_int 4))) in
-  let s = Decl ("x", None, mk_node e, false) in
+  let s = Decl ("x", None, Some (mk_node e), false) in
   let _, ts, _ = Ts.type_stmt Tc.empty RetVoid (mk_node s) false in
   let ty_s =
     match ts with
@@ -71,7 +71,7 @@ let test_array_and_index _ =
   (* array should be RArray of TInt and length 2 *)
   (match aty with
   | Typing.Typed_ast.TRef (Typing.Typed_ast.RArray (_, len)) ->
-      assert_equal len (Int64.of_int 2)
+      assert_equal len 2
   | _ -> assert_failure "expected array type");
   let idx = Index (arr_node, mk_node (Int (of_int 1))) in
   let _, ity = Ts.type_exp Tc.empty (mk_node idx) in

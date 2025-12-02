@@ -63,8 +63,9 @@ type exp =
   | ObjInit of id node * (id node * exp node) list
   | Lambda of id list * block
   | TypedLambda of (id * ty) list * ret_ty * block
+  | Null
 
-and vdecl = id * ty option * exp node * bool
+and vdecl = id * ty option * exp node option * bool
 and ldecl = id node * ref_ty option * exp node
 
 and stmt =
@@ -164,6 +165,7 @@ let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int i -> Printf.sprintf "Int(%s)" (Z.to_string i)
   | Float f -> Printf.sprintf "Float(%f)" f
+  | Null -> Printf.sprintf "Null"
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id id -> Printf.sprintf "Id(%s)" id
   | Call (fn, args) ->
@@ -243,12 +245,12 @@ let rec show_exp ?(lvl = 0) = function
 
 (* Variable declarations *)
 
-and show_vdecl ?(lvl = 0) (id, ty_opt, exp, is_const) =
+and show_vdecl ?(lvl = 0) (id, ty_opt, exp_opt, is_const) =
   Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
     (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
     is_const
     (indent (lvl + 1))
-    (show_node show_exp exp)
+    (if Option.is_some exp_opt then (show_node show_exp (Option.get exp_opt)) else "<default>")
 
 and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)

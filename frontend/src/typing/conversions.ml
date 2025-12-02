@@ -37,7 +37,7 @@ and convert_ty (t : Ast.ty) : Typed_ast.ty =
 and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   match r with
   | Ast.RString -> Typed_ast.RString
-  | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int64 sz)
+  | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int sz)
   | Ast.RClass cn -> Typed_ast.RClass cn
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
