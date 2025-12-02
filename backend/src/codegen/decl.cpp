@@ -10,9 +10,7 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     for (auto& arg : fn.args) {
         const Ty& argTy = arg.first;
 
-        if (argTy.tag == TyTag::TRef &&
-            (argTy.ref_ty->tag == RefTyTag::RClass || argTy.ref_ty->tag == RefTyTag::RArray)) {
-            // take structs/arrays as pointers
+        if (is_obj_ty(argTy)) {
             argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
         } else {
             llvm::Type* baseTy = gen.codegenType(argTy);
@@ -23,8 +21,7 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     const RetTy& retTy = fn.frtyp;
     llvm::Type*  llRetTy;
 
-    if (retTy.tag == RetTyTag::RetVal && retTy.val->tag == TyTag::TRef &&
-        (retTy.val->ref_ty->tag == RefTyTag::RClass || retTy.val->ref_ty->tag == RefTyTag::RArray)) {
+    if (retTy.tag == RetTyTag::RetVal && is_obj_ty(*retTy.val)) {
         llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
     } else {
         llRetTy = gen.codegenRetType(fn.frtyp);
@@ -82,8 +79,13 @@ void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
     llvmFields.reserve(cd.fields.size());
 
     for (auto& fld : cd.fields) {
-        llvm::Type* fty = gen.codegenType(fld.ftyp);
-        llvmFields.push_back(fty);
+        if (is_obj_ty(fld.ftyp)) {
+            // obj types (structs/arrays) are stored as ptrs
+            llvmFields.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
+        } else {
+            // primitives are stored directly
+            llvmFields.push_back(gen.codegenType(fld.ftyp));
+        }
     }
 
     llvm::StructType* st = llvm::StructType::create(*gen.ctxt, cd.cname);

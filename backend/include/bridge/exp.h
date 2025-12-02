@@ -99,7 +99,6 @@ struct Exp {
 
 Exp convert_exp(value v);
 
-template<typename... Alts, typename... Ts>
-constexpr bool holds_any_of(const std::variant<Ts...>& v) noexcept {
+template <typename... Alts, typename... Ts> constexpr bool holds_any_of(const std::variant<Ts...>& v) noexcept {
     return (std::holds_alternative<Alts>(v) || ...);
 }

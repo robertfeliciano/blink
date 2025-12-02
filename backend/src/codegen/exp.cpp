@@ -43,16 +43,16 @@ static llvm::APInt makeAPSInt128(unsigned numBits, __int128 v) {
 }
 
 Value* ExpToLLVisitor::operator()(const EInt& e) {
-    short int_sz = getIntSize(e);
+    short       int_sz = getIntSize(e);
     llvm::APInt ap;
-    bool isUnsigned = e.int_ty->tag == IntTyTag::Unsigned;
+    bool        isUnsigned = e.int_ty->tag == IntTyTag::Unsigned;
 
     if (int_sz < 128) {
         ap = llvm::APInt(int_sz, isUnsigned ? e.u : e.s);
     } else {
         ap = isUnsigned ? makeAPInt128(int_sz, e.u) : makeAPSInt128(int_sz, e.s);
     }
-    
+
     return llvm::ConstantInt::get(*gen.ctxt, ap);
 }
 
@@ -231,7 +231,7 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     if (isAggregate) {
         uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
         size                  = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
-        align                 = (unsigned) dl.getABITypeAlign(innerTy).value();
+        align                 = (unsigned)dl.getABITypeAlign(innerTy).value();
         isVolatile            = llvm::ConstantInt::getFalse(*gen.ctxt);
     }
 
@@ -261,7 +261,13 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
 Value* ExpToLLVisitor::operator()(const EProj& e) {
     Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
-    llvm::Type* fieldTy = gen.codegenType(e.ty);
+    llvm::Type* fieldTy;
+    if (is_obj_ty(e.ty)) {
+        // load a pointer for obj (struct/array) types
+        fieldTy = llvm::PointerType::getUnqual(*gen.ctxt);
+    } else {
+        fieldTy = gen.codegenType(e.ty);
+    }
 
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
@@ -302,8 +308,14 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     const CDecl& classDecl = *gen.classEnv.at(e.id);
 
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
-        const Field& fd  = classDecl.fields[idx];
-        llvm::Type*  fty = gen.codegenType(fd.ftyp);
+        const Field& fd = classDecl.fields[idx];
+        
+        llvm::Type* storageTy;
+        if (is_obj_ty(fd.ftyp)) {
+            storageTy = llvm::PointerType::getUnqual(*gen.ctxt);
+        } else {
+            storageTy = gen.codegenType(fd.ftyp);
+        }
 
         for (auto& stmtPtr : fd.prelude) {
             gen.codegenStmt(*stmtPtr);
@@ -316,7 +328,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         } else if (fd.init) {
             storedVal = gen.codegenExp(*fd.init);
         } else {
-            storedVal = llvm::Constant::getNullValue(fty);
+            storedVal = llvm::Constant::getNullValue(storageTy);
         }
 
         Value* fieldPtr = gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");

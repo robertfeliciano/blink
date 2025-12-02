@@ -132,3 +132,7 @@ RetTy convert_ret_ty(value v) {
 
     return ret;
 }
+
+bool is_obj_ty(const Ty& t) {
+    return t.tag == TyTag::TRef && (t.ref_ty->tag == RefTyTag::RClass || t.ref_ty->tag == RefTyTag::RClass);
+}

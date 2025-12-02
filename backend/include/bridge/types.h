@@ -63,3 +63,5 @@ FloatTy convert_float_ty(value v);
 Ty convert_ty(value v);
 
 RetTy convert_ret_ty(value v);
+
+bool is_obj_ty(const Ty& t);
