@@ -7,6 +7,6 @@ class Outer {
 }
 
 fun main() => i32 {
-    let o = new Outer { inside = new Innter { i = 55 } };
+    let o = new Outer { inside = new Inner { i = 55 } };
     return o.inside.i;
 }

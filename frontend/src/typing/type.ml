@@ -89,7 +89,7 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
                   match fn.elt with
                   | { fieldName; ftyp; init = Some init } ->
                       let _tinit, init_ty =
-                        type_exp ~expected:(convert_ty ftyp) Tctxt.empty init
+                        type_exp ~expected:(convert_ty ftyp) tc init
                       in
                       (fieldName, init_ty, true)
                   | { fieldName; ftyp; init = None } ->

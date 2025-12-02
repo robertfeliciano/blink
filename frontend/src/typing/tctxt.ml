@@ -1,4 +1,5 @@
 open Typed_ast
+module Printer = Pprint_typed_ast
 
 type ctxt = (id * ty) list
 type method_header = id * ret_ty * (ty * id) list
@@ -8,6 +9,22 @@ type class_ctxt = (id * ((id * ty * bool) list * method_header list)) list
 type t = { locals : ctxt; globals : ctxt; classes : class_ctxt }
 
 let empty = { locals = []; globals = []; classes = [] }
+
+let show_tys tctxt =
+  String.concat "\n"
+    (List.map
+       (fun (i, t) -> Printf.sprintf "%s: %s" i (Printer.show_ty t))
+       tctxt)
+
+let show_classes tc =
+  "Classes:\n"
+  ^ String.concat "\n"
+      (List.map
+         (fun (cname, (_fields, _mthds)) -> Printf.sprintf "%s" cname)
+         tc.classes)
+
+let show_tctxt tc =
+  Printf.sprintf "Types:\n%s\n%s" (show_tys tc.locals) (show_classes tc)
 
 (* locals ------------------------------------------------------------------- *)
 let add_local (c : t) (id : id) (bnd : ty) : t =
