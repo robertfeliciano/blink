@@ -586,7 +586,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
               ("Default constructor for " ^ cname ^ " cannot return void.")
         | None ->
             type_error stmt_n
-              ("Must provide a default constructor for " ^ cname ^ ".")
+              ("Must provide a default constructor for " ^ cname ^ " class.")
       in
       constructor
   | TRef (RFun _) -> type_error stmt_n "Default functions not allowed yet"
