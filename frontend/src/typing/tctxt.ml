@@ -39,7 +39,6 @@ let lookup_local_option id c : ty option =
 let add_global (c : t) (id : id) (bnd : ty) : t =
   { c with globals = (id, bnd) :: c.globals }
 
-(* TODO need to add lookup for functions/methods and find all with a name to allow overloading *)
 let lookup_global (id : id) (c : t) : ty = List.assoc id c.globals
 
 let lookup_global_option id c : ty option =

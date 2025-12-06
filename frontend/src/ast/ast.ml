@@ -102,7 +102,7 @@ type field = { fieldName : id; ftyp : ty; init : exp node option }
 type cdecl = {
   cname : id;
   impls : id list;
-  fields : field node list;
+  fields : vdecl node list;
   methods : fdecl node list;
 }
 
@@ -250,7 +250,8 @@ and show_vdecl ?(lvl = 0) (id, ty_opt, exp_opt, is_const) =
     (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
     is_const
     (indent (lvl + 1))
-    (if Option.is_some exp_opt then (show_node show_exp (Option.get exp_opt)) else "<default>")
+    (if Option.is_some exp_opt then show_node show_exp (Option.get exp_opt)
+     else "<default>")
 
 and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)
@@ -352,7 +353,7 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
 let show_cdecl ?(lvl = 0) { elt = { cname; impls; fields; methods }; loc = _ } =
   let fields_s =
     String.concat ";\n"
-      (List.map (show_node (show_field ~lvl:(lvl + 2))) fields)
+      (List.map (show_node (show_vdecl ~lvl:(lvl + 2))) fields)
   in
   let methods_s =
     String.concat "\n"

@@ -134,10 +134,6 @@ program:
    Function & Class decls
    ----------------------- *)
 
-// TODO allow default initialization of vars: `let x: i8;` `let arr: [i32, 4];` `let clazz: Class;`
-// allow these in functions and class field specs
-// then allow obj init to not require ALL fields
-
 fdecl_list:
   | /* empty */ { [] }
   | hd=fdecl tl=fdecl_list { hd :: tl }
@@ -167,10 +163,8 @@ field_list:
   | hd=field tl=field_list { hd :: tl }
 
 field:
-  | LET id=IDENT COLON t=ty EQUAL e=exp SEMI
-      { ( loc $startpos $endpos { fieldName = id; ftyp = t; init = Some e } ) }
-  | LET id=IDENT COLON t=ty SEMI
-      { ( loc $startpos $endpos { fieldName = id; ftyp = t; init = None } ) }
+  | v=vdecl SEMI
+    { (loc $startpos $endpos v )}
 
 (* -----------------------
    arguments (function parameters)

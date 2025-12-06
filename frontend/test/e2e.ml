@@ -84,7 +84,9 @@ let test_e2e_manual_ast_success _ =
 
 let test_e2e_manual_ast_type_error _ =
   (* declare x: i32 = "str" should error *)
-  let vdecl = ("x", Some (TInt (TSigned Ti32)), Some (no_loc (Str "s")), false) in
+  let vdecl =
+    ("x", Some (TInt (TSigned Ti32)), Some (no_loc (Str "s")), false)
+  in
   let stmt = Decl vdecl in
   let fn =
     {

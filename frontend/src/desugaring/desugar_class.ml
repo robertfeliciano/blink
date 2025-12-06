@@ -8,8 +8,10 @@ module D = Desugared_ast
 let desugar_method (m : fdecl) (cname : id) : D.fdecl =
   let desugared_body = List.map desugar_stmt m.body |> List.flatten in
   let desugared_args =
-    (D.TRef (RClass cname), "this")
-    :: List.map (fun (t, i) -> (convert_ty t, i)) m.args
+    if m.fname <> cname then
+      (D.TRef (RClass cname), "this")
+      :: List.map (fun (t, i) -> (convert_ty t, i)) m.args
+    else []
   in
   (* let mangled_name =
     mangle_name ~enclosing_class:cname m.fname

@@ -78,16 +78,17 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
             [ step_inc ] )
       in
       prelude @ [ step_decl; iter_decl; zero_check ]
-      (* TODO add types to the rest of the ast *)
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
       (* TODO dont call proj - just call method direectly (like after desugaring it) *)
-      let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in
+      (* let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in *)
+      let cond = D.Call (Id (Methods.hasNext, TBool), [], TBool) in
       let of_ty = convert_ty of_ty in
       let set_iter =
         D.Assn
           ( Id (iter, of_ty),
-            Call (Proj (coll', Methods.iterate, of_ty), [], of_ty),
+            Call (Id (Methods.iterate, of_ty), [ coll' ], of_ty),
+            (* Call (Proj (coll', Methods.iterate, of_ty), [], of_ty), *)
             TBool )
       in
       let body' = set_iter :: desugar_block body in

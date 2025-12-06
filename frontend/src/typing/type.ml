@@ -25,23 +25,44 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
       ("missing return statement for " ^ fname);
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
-let type_field (tc : Tctxt.t) (fn : field node) : Typed_ast.field =
-  let { elt = { fieldName; ftyp; init }; loc = _ } = fn in
-  let tinit, init_ty =
+let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
+  let { elt = vd; loc } = fn in
+  let fieldName, fty_opt, en_opt, _const = vd in
+  let stmt_n = { elt = Decl vd; loc } in
+  let te, e_ty =
+    match (fty_opt, en_opt) with
+    | Some t, Some e -> type_exp ~expected:(convert_ty t) tc e
+    | None, Some e -> type_exp tc e
+    | Some t, None ->
+        let e = create_default_init stmt_n tc t in
+        (e, convert_ty t)
+    | None, None -> type_error stmt_n "Must provide type or initial value."
+  in
+  (* let tinit, init_ty =
     match init with
     | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
     | None -> type_error fn "default initializers not yet allowed."
-  in
-  { fieldName; ftyp = init_ty; init = tinit }
+  in *)
+  { fieldName; ftyp = e_ty; init = te }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   let { elt = { cname; impls; fields; methods }; loc = _ } = cn in
-  (* TODO fold tc so later fields can reference earlier ones maybe *)
+  let () =
+    match
+      List.find_opt (fun { elt = fn; loc = _ } -> fn.fname = cname) methods
+    with
+    | Some { elt = constructor; loc = _ } ->
+        if constructor.frtyp = RetVoid then
+          type_error cn "Constructor cannot return void."
+        else ()
+    | None -> ()
+  in
   let tfields = List.map (type_field tc) fields in
   let globals' =
     List.map (fun (f : Typed_ast.field) -> (f.fieldName, f.ftyp)) tfields
   in
   let tc' =
+    (* TODO remove this from locals for constructor *)
     {
       tc with
       locals = ("this", Typed_ast.(TRef (RClass cname))) :: tc.locals;
@@ -86,14 +107,9 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
             let fields =
               List.map
                 (fun fn ->
-                  match fn.elt with
-                  | { fieldName; ftyp; init = Some init } ->
-                      let _tinit, init_ty =
-                        type_exp ~expected:(convert_ty ftyp) tc init
-                      in
-                      (fieldName, init_ty, true)
-                  | { fieldName; ftyp; init = None } ->
-                      (fieldName, convert_ty ftyp, false))
+                  (* TODO figure out how to not call type_field twice... *)
+                  let fld = type_field tc fn in
+                  (fld.fieldName, fld.ftyp, false))
                 cn.elt.fields
             in
             let method_headers =
