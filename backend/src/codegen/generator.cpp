@@ -35,6 +35,9 @@ void Generator::optimize() {
     llvm::CGSCCAnalysisManager    cgam;
     llvm::ModuleAnalysisManager   mam;
 
+    llvm::TargetLibraryInfoImpl tlii(llvm::Triple(mod->getTargetTriple()));
+    fam.registerPass([&] { return llvm::TargetLibraryAnalysis(tlii); });
+
     passBuilder.registerModuleAnalyses(mam);
     passBuilder.registerCGSCCAnalyses(cgam);
     passBuilder.registerFunctionAnalyses(fam);
@@ -43,6 +46,7 @@ void Generator::optimize() {
 
     llvm::FunctionPassManager fpm;
 
+    fpm.addPass(llvm::VerifierPass());
     fpm.addPass(llvm::PromotePass());
     fpm.addPass(llvm::InstCombinePass());
     fpm.addPass(llvm::ReassociatePass());
@@ -50,7 +54,9 @@ void Generator::optimize() {
     fpm.addPass(llvm::SimplifyCFGPass());
 
     for (auto& func : *mod) {
-        fpm.run(func, fam);
+        if (!func.isDeclaration()) {
+            fpm.run(func, fam);
+        }
     }
 }
 

@@ -66,76 +66,122 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
 }
 
 Value* StmtToLLVisitor::operator()(const If& s) {
-    Value* cond = gen.codegenExp(*s.cond);
-    if (cond == nullptr) {
-        throw std::runtime_error("null if condition! what gives?");
+    Value* condVal = gen.codegenExp(*s.cond);
+
+    if (!condVal)
+        throw std::runtime_error("If condition produced null value");
+
+    if (condVal->getType()->isIntegerTy(1) == false) {
+        condVal = gen.builder->CreateICmpNE(condVal, llvm::ConstantInt::get(condVal->getType(), 0), "ifcond");
     }
-    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
 
-    llvm::BasicBlock* thenBlock    = llvm::BasicBlock::Create(*gen.ctxt, "then", parent);
-    llvm::BasicBlock* elseBlock    = llvm::BasicBlock::Create(*gen.ctxt, "else", parent);
-    llvm::BasicBlock* finallyBlock = llvm::BasicBlock::Create(*gen.ctxt, "finally", parent);
+    llvm::Function* parentFunc = gen.builder->GetInsertBlock()->getParent();
 
-    gen.builder->CreateCondBr(cond, thenBlock, elseBlock);
+    llvm::BasicBlock* thenBB  = llvm::BasicBlock::Create(*gen.ctxt, "then", nullptr, nullptr);
+    llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*gen.ctxt, "ifmerge", nullptr, nullptr);
 
-    gen.builder->SetInsertPoint(thenBlock);
+    llvm::BasicBlock* elseBB = nullptr;
+    if (!s.else_branch.empty()) {
+        elseBB = llvm::BasicBlock::Create(*gen.ctxt, "else", nullptr, nullptr);
+    } else {
+        elseBB = mergeBB;
+    }
 
-    for (auto& stmt : s.then_branch) {
+    gen.builder->CreateCondBr(condVal, thenBB, elseBB);
+
+    thenBB->insertInto(parentFunc);
+
+    gen.builder->SetInsertPoint(thenBB);
+
+    for (const auto& stmt : s.then_branch) {
         gen.codegenStmt(*stmt);
     }
 
-    thenBlock = gen.builder->GetInsertBlock();
-    gen.builder->CreateBr(finallyBlock);
-
-    parent->getBasicBlockList().push_back(elseBlock);
-    gen.builder->SetInsertPoint(elseBlock);
-
-    for (auto& stmt : s.else_branch) {
-        gen.codegenStmt(*stmt);
+    if (gen.builder->GetInsertBlock()->getTerminator() == nullptr) {
+        gen.builder->CreateBr(mergeBB);
     }
 
-    elseBlock = gen.builder->GetInsertBlock();
-    gen.builder->CreateBr(finallyBlock);
+    if (!s.else_branch.empty()) {
+        elseBB->insertInto(parentFunc);
+        gen.builder->SetInsertPoint(elseBB);
 
-    parent->getBasicBlockList().push_back(finallyBlock);
-    gen.builder->SetInsertPoint(finallyBlock);
+        for (const auto& stmt : s.else_branch) {
+            gen.codegenStmt(*stmt);
+        }
 
-    return llvm::Constant::getNullValue(llvm::Type::getInt32Ty(*gen.ctxt));
+        if (gen.builder->GetInsertBlock()->getTerminator() == nullptr) {
+            gen.builder->CreateBr(mergeBB);
+        }
+    }
+
+    mergeBB->insertInto(parentFunc);
+    gen.builder->SetInsertPoint(mergeBB);
+
+    return nullptr;
 }
 
 Value* StmtToLLVisitor::operator()(const While& s) {
-    Value* cond = gen.codegenExp(*s.cond);
-    if (cond == nullptr) {
-        throw std::runtime_error("null loop condition! what??");
+    llvm::Function* parentFunc = gen.builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* condBB  = llvm::BasicBlock::Create(*gen.ctxt, "while_cond", parentFunc);
+    llvm::BasicBlock* bodyBB  = llvm::BasicBlock::Create(*gen.ctxt, "while_body", parentFunc);
+    llvm::BasicBlock* afterBB = llvm::BasicBlock::Create(*gen.ctxt, "while_after", parentFunc);
+
+    gen.builder->CreateBr(condBB);
+
+    gen.continueTargets.push_back(condBB);
+
+    gen.breakTargets.push_back(afterBB);
+
+    gen.builder->SetInsertPoint(condBB);
+
+    Value* condVal = gen.codegenExp(*s.cond);
+
+    if (!condVal)
+        throw std::runtime_error("While condition produced null value");
+
+    if (!condVal->getType()->isIntegerTy(1)) {
+        condVal = gen.builder->CreateICmpNE(condVal, llvm::ConstantInt::get(condVal->getType(), 0), "loopcond");
     }
 
-    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
+    gen.builder->CreateCondBr(condVal, bodyBB, afterBB);
 
-    llvm::BasicBlock* loop    = llvm::BasicBlock::Create(*gen.ctxt, "loop");
-    llvm::BasicBlock* loopEnd = llvm::BasicBlock::Create(*gen.ctxt, "loop_end");
+    gen.builder->SetInsertPoint(bodyBB);
 
-    gen.builder->CreateCondBr(cond, loop, loopEnd);
-
-    parent->getBasicBlockList().push_back(loop);
-    gen.builder->SetInsertPoint(loop);
-
-    for (auto& stmt : s.body) {
+    for (const auto& stmt : s.body) {
         gen.codegenStmt(*stmt);
     }
 
-    loop = gen.builder->GetInsertBlock();
-    gen.builder->CreateCondBr(cond, loop, loopEnd);
+    if (gen.builder->GetInsertBlock()->getTerminator() == nullptr) {
+        gen.builder->CreateBr(condBB);
+    }
 
-    parent->getBasicBlockList().push_back(loopEnd);
-    gen.builder->SetInsertPoint(loopEnd);
+    gen.continueTargets.pop_back();
+    gen.breakTargets.pop_back();
 
-    return llvm::Constant::getNullValue(llvm::Type::getInt32Ty(*gen.ctxt));
+    gen.builder->SetInsertPoint(afterBB);
+
+    return nullptr;
 }
 
 Value* StmtToLLVisitor::operator()(const Break& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(Break) not supported yet");
+    if (gen.breakTargets.empty()) {
+        throw std::runtime_error("Break statement outside of a loop.");
+    }
+    llvm::BasicBlock* breakTo = gen.breakTargets.back();
+
+    gen.builder->CreateBr(breakTo);
+
+    return nullptr;
 }
 
 Value* StmtToLLVisitor::operator()(const Continue& s) {
-    throw std::runtime_error("StmtToLLVisitor::operator()(Continue) not supported yet");
+    if (gen.continueTargets.empty()) {
+        throw std::runtime_error("Continue statement outside of a loop.");
+    }
+    llvm::BasicBlock* contTo = gen.continueTargets.back();
+
+    gen.builder->CreateBr(contTo);
+
+    return nullptr;
 }
