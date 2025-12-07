@@ -1,12 +1,12 @@
 class Point {
-    let x = 99;
+    let x: i32 = 42;
     let y: i32;
 
-/*
+
     fun Point() => Point {
-        return new Point { x = 12 };
+        return new Point { y = 14 };
     }
-    */
+    
 }
 
 

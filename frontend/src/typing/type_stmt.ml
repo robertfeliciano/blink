@@ -19,11 +19,11 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
   | Decl (i, Some ty, None, const) ->
       let e = create_default_init stmt_n tc ty in
       let e_ty = convert_ty ty in
-      let tc' = Tctxt.add_local tc i e_ty in
+      let tc' = Tctxt.add_local tc i (e_ty, const) in
       (tc', Typed_ast.Decl (i, e_ty, e, const), false)
   | Decl (i, None, Some en, const) ->
       let te, e_ty = type_exp tc en in
-      let tc', resolved_ty = (Tctxt.add_local tc i e_ty, e_ty) in
+      let tc', resolved_ty = (Tctxt.add_local tc i (e_ty, const), e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Decl (i, Some given_ty_ast, Some en, const) ->
       let given_ty = convert_ty given_ty_ast in
@@ -32,7 +32,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         match (e_ty, given_ty, te) with
         | Typed_ast.TInt _, Typed_ast.TInt given_num_ty, Typed_ast.Int (n, _) ->
             if fits_in_int_ty n given_num_ty then
-              (Tctxt.add_local tc i given_ty, given_ty)
+              (Tctxt.add_local tc i (given_ty, const), given_ty)
             else
               type_error stmt_n
                 ("Integer literal " ^ Z.to_string n ^ " does not fit in type "
@@ -41,20 +41,21 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             Typed_ast.TFloat given_float_ty,
             Typed_ast.Float (f, _) ) ->
             if fits_in_float_ty f given_float_ty then
-              (Tctxt.add_local tc i given_ty, given_ty)
+              (Tctxt.add_local tc i (given_ty, const), given_ty)
             else type_error stmt_n "Float literal out of range for f32"
         | Typed_ast.TInt _, Typed_ast.TFloat given_float_ty, Typed_ast.Int (n, _)
           ->
             (* trying to auto upcast int to float *)
             if int_in_float n given_float_ty then
-              (Tctxt.add_local tc i given_ty, given_ty)
+              (Tctxt.add_local tc i (given_ty, const), given_ty)
             else
               type_error stmt_n
                 ("Integer literal " ^ Z.to_string n
                ^ " does not fit in float type " ^ Printer.show_ty given_ty)
         (* note - we will not auto downcast, i.e. `let x: u8 = 12.14` is not valid *)
         | _ ->
-            if given_ty = e_ty then (Tctxt.add_local tc i given_ty, given_ty)
+            if given_ty = e_ty then
+              (Tctxt.add_local tc i (given_ty, const), given_ty)
             else
               type_error stmt_n
                 ("Provided type " ^ show_ty given_ty_ast
@@ -64,7 +65,14 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
   | LambdaDecl _ -> type_lambda tc stmt_n
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
-      | Id _ | Proj _ | Index _ -> ()
+      | Id i -> (
+          match Tctxt.lookup_option i tc with
+          | Some (_, is_const) ->
+              if is_const then
+                type_error stmt_n
+                  "Attempting to assign to a variable marked as constant."
+          | None -> type_error stmt_n ("variable " ^ i ^ " is not defined"))
+      | Proj _ | Index _ -> ()
       | _ -> type_error lhs "cannot assign to this expression");
       let tlhs, lhsty = type_exp tc lhs in
       let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
@@ -154,7 +162,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             (ts, s_ty)
         | None -> (default_step start_ty stmt_n, Typed_ast.TInt (TSigned Ti32))
       in
-      let tc_loop = Tctxt.add_local tc i_node.elt start_ty in
+      let tc_loop = Tctxt.add_local tc i_node.elt (start_ty, false) in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
       ( tc,
         Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, s_ty, t_body),
@@ -177,7 +185,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             type_error iter_exp
               "For-loop must iterate over an array, string, or iterable class."
       in
-      let tc_loop = Tctxt.add_local tc i_node.elt elem_ty in
+      let tc_loop = Tctxt.add_local tc i_node.elt (elem_ty, false) in
       let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
       (tc, Typed_ast.ForEach (i_node.elt, titer, iter_ty, t_body), for_ret)
   | Break ->
@@ -235,7 +243,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       Typed_ast.(Str s, TRef RString)
   | Id i -> (
       match Tctxt.lookup_option i tc with
-      | Some t ->
+      | Some (t, _) ->
           check_expected_ty expected t e;
           (Id (i, t), t)
       | None -> type_error e ("variable " ^ i ^ " is not defined"))
@@ -336,7 +344,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       match e_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
           match Tctxt.lookup_field_option cid f tc with
-          | Some fty ->
+          | Some (fty, _) ->
               check_expected_ty expected fty e;
               (Typed_ast.Proj (tec, f, cid, fty), fty)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
@@ -359,8 +367,11 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           inits
       in
       let missing_fields =
-        List.filter (fun (fname, _, _) -> not (initializes_field fname)) cfields
-        |> List.map (fun (fname, _, _) -> fname)
+        List.filter_map
+          (fun (fname, _, _, has_default) ->
+            if not (initializes_field fname || has_default) then Some fname
+            else None)
+          cfields
       in
       if missing_fields <> [] then
         type_error e
@@ -373,8 +384,8 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           type_error fname_node ("Already initialized field " ^ fname);
         Hashtbl.add field_set fname ();
         try
-          let _, fty, _ =
-            List.find (fun (fieldName, _, _) -> fieldName = fname) cfields
+          let _, fty, _, _ =
+            List.find (fun (fieldName, _, _, _) -> fieldName = fname) cfields
           in
           let tinit, _init_ty = type_exp ~expected:fty tc init in
           (fname, tinit)
@@ -556,7 +567,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
       let converted_ret = convert_ret_ty ret in
       let lambda_tc =
         List.fold_left
-          (fun tc' (i, t) -> Tctxt.add_local tc' i t)
+          (fun tc' (i, t) -> Tctxt.add_local tc' i (t, false))
           tc converted_args
       in
       let _, typed_body, _ = type_block lambda_tc converted_ret body false in
@@ -566,7 +577,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
       let typed_lambda =
         Typed_ast.Lambda (converted_args, converted_ret, typed_body)
       in
-      let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type) in
+      let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type, false) in
       (tc', Typed_ast.LambdaDecl (lname.elt, lambda_type, typed_lambda), false)
   | _ -> type_error stmt_n "Even more impossible state"
 

@@ -13,7 +13,7 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
     List.fold_left
       (fun acc (t, a) ->
         typecheck_ty fn acc t;
-        add_local acc a (convert_ty t))
+        add_local acc a (convert_ty t, false))
       tc args
   in
   let frtyp' = convert_ret_ty frtyp in
@@ -59,17 +59,24 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   in
   let tfields = List.map (type_field tc) fields in
   let globals' =
-    List.map (fun (f : Typed_ast.field) -> (f.fieldName, f.ftyp)) tfields
+    List.map (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false))) tfields
   in
   let tc' =
-    (* TODO remove this from locals for constructor *)
     {
       tc with
-      locals = ("this", Typed_ast.(TRef (RClass cname))) :: tc.locals;
+      locals = ("this", Typed_ast.(TRef (RClass cname), true)) :: tc.locals;
       globals = globals' @ tc.globals;
     }
   in
-  let tmethods = List.map (type_fn tc') methods in
+  let type_mthd method_node =
+    let { elt = mthd; loc = _ } = method_node in
+    let tc' =
+      if mthd.fname = cname then { tc with globals = globals' @ tc.globals }
+      else tc'
+    in
+    type_fn tc' method_node
+  in
+  let tmethods = List.map type_mthd methods in
   { cname; impls; fields = tfields; methods = tmethods }
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
@@ -83,7 +90,7 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
         | None ->
             let func_type = get_fdecl_type fn tc in
             let new_tc =
-              Tctxt.add_global tc fn.elt.fname (convert_ty func_type)
+              Tctxt.add_global tc fn.elt.fname (convert_ty func_type, false)
             in
             aux new_tc t)
     | [] -> tc
@@ -107,9 +114,10 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
             let fields =
               List.map
                 (fun fn ->
+                  let { elt = _id, _ty_opt, en_opt, const; loc = _ } = fn in
                   (* TODO figure out how to not call type_field twice... *)
                   let fld = type_field tc fn in
-                  (fld.fieldName, fld.ftyp, false))
+                  (fld.fieldName, fld.ftyp, const, Option.is_some en_opt))
                 cn.elt.fields
             in
             let method_headers =

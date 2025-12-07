@@ -80,7 +80,6 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       prelude @ [ step_decl; iter_decl; zero_check ]
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
-      (* TODO dont call proj - just call method direectly (like after desugaring it) *)
       (* let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in *)
       let cond = D.Call (Id (Methods.hasNext, TBool), [], TBool) in
       let of_ty = convert_ty of_ty in
