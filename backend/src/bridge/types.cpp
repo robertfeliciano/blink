@@ -68,7 +68,7 @@ RefTy convert_ref_ty(value v) {
         case Constants::REFTY_Array: {
             ref.tag   = RefTyTag::RArray;
             ref.inner = std::make_unique<Ty>(convert_ty(Field(v, 0)));
-            ref.size  = Int64_val(Field(v, 1));
+            ref.size  = Int_val(Field(v, 1));
             break;
         }
         case Constants::REFTY_Class: {
