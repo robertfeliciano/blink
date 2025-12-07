@@ -201,7 +201,7 @@ Exp convert_exp(value v) {
         result.val = EIndex{std::move(collection), std::move(index), std::move(ty)};
         break;
     }
-    case Constants::EXP_Array: { // Array of exp list * ty * int64
+    case Constants::EXP_Array: { // Array of exp list * ty
         value                             elems_v = Field(v, 0);
         std::vector<std::unique_ptr<Exp>> elements;
         while (elems_v != Val_emptylist) {
@@ -210,7 +210,6 @@ Exp convert_exp(value v) {
             elems_v = Field(elems_v, 1);
         }
         Ty       ty   = convert_ty(Field(v, 1));
-        uint64_t size = static_cast<int64_t>(Long_val(Field(v, 2)));
 
         EArray ea;
         ea.elements = std::move(elements);
