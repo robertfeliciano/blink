@@ -340,6 +340,10 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const ENull& e) {
-    throw new std::runtime_error("not supported yet");
+    llvm::Type* llty = gen.codegenType(e.ty);
 
+    llvm::PointerType* PtrTy = llvm::PointerType::get(llty, 0); 
+    //todo check this works for classes and stuff
+
+    return llvm::ConstantPointerNull::get(PtrTy);
 }

@@ -14,12 +14,8 @@ type uint = Tu8 | Tu16 | Tu32 | Tu64 | Tu128 [@@deriving show]
 type float_ty = Tf32 | Tf64 [@@deriving show]
 type int_ty = TSigned of sint | TUnsigned of uint [@@deriving show]
 
-type ty = 
-  | TBool 
-  | TInt of int_ty 
-  | TFloat of float_ty 
-  | TRef of ref_ty
-  (* | TOpt of ty *)
+type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
+(* | TOpt of ty *)
 
 and ref_ty =
   | RString
@@ -167,7 +163,7 @@ and show_ty ?(lvl = 0) = function
   | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
   | TRef rt -> Printf.sprintf "TRef(%s)" (show_ref_ty ~lvl:(lvl + 1) rt)
-  (* | TOpt t -> Printf.sprintf "TOpt(%s)" (show_ty t) *)
+(* | TOpt t -> Printf.sprintf "TOpt(%s)" (show_ty t) *)
 
 let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
