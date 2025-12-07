@@ -41,6 +41,7 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   | Ast.RClass cn -> Typed_ast.RClass cn
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
+  | Ast.RGeneric _ -> failwith "bleh"
 
 let convert_unop : Ast.unop -> Typed_ast.unop = function
   | Ast.Neg -> Typed_ast.Neg

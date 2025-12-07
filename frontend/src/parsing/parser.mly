@@ -46,6 +46,9 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTE       /* <= */
 %token GT        /* > */
 %token GTE       /* >= */
+%token LT_TYPE   /* < */
+%token GT_TYPE   /* > */
+// %token OPT_TYPE  /* ? */
 %token NEQ       /* != */
 %token EQEQ      /* == */
 %token AND       /* and */
@@ -83,18 +86,18 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token RETURN    /* return */
 %token TRUE      /* true */
 %token FALSE     /* false */
-%token WHERE     /* where */
-%token IMPORT    /* import */
-%token ENABLE    /* enable */
+// %token WHERE     /* where */
+// %token IMPORT    /* import */
+// %token ENABLE    /* enable */
 %token CLASS     /* class */
 %token IMPLS     /* impls */
-%token GLOBAL    /* global */
-%token QMARK     /* ? */
+// %token GLOBAL    /* global */
+// %token QMARK     /* ? */
 %token AS        /* as */
 %token BAR       /* | */
 %token FN        /* fn */
 
-%right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
+// %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
 %left AND
 %left EQEQ NEQ
@@ -103,12 +106,12 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left MULT DIV MOD
 %right POW
 %left AT
-%left DOT
-%left RANGE RANGE_INCL
-%right THIN_ARROW
-%nonassoc LOW
-%nonassoc QMARK
-%nonassoc NOT
+// %left DOT
+// %left RANGE RANGE_INCL
+// %right THIN_ARROW
+// %nonassoc LOW
+// %nonassoc QMARK
+// %nonassoc NOT
 
 %start program
 
@@ -182,10 +185,11 @@ arg_list:
 
 ty:
   | ti=int_ty { TInt ti }
-  | r=ref_ty { TRef r } %prec LOW
+  | r=ref_ty { TRef r } 
   | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
   | LPAREN t=ty RPAREN { t }
+  // | t=ty OPT_TYPE { TOpt t }
 
 int_ty:
   | Ti8 { TSigned Ti8 }
@@ -216,6 +220,8 @@ ref_ty:
   | cname=IDENT { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
   | fun_ty=fun_ty { fun_ty }
+  | gname=IDENT LT_TYPE params=separated_list(COMMA, ty) GT_TYPE
+    { RGeneric (gname, params) }
 
 fun_ty:
   | LBRACKET arg_tys=separated_list(COMMA, ty) RBRACKET THIN_ARROW rty=ret_ty 

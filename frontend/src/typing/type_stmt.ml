@@ -601,6 +601,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
       in
       constructor
   | TRef (RFun _) -> type_error stmt_n "Default functions not allowed yet"
+  | TRef (RGeneric _) -> type_error stmt_n "Generic default init to come some"
   | TRef (RArray (t, sz)) ->
       let sz' = Z.to_int sz in
       let lst = List.init sz' (fun _ -> create_default_init stmt_n tc t) in
