@@ -82,6 +82,7 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   { cname; impls; fields = tfields; methods = tmethods }
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
+  let tc = Tctxt.add_global tc "printf" (convert_ty (TRef (RFun ([TRef RString], RetVoid))), false) in
   let rec aux (tc : Tctxt.t) = function
     | fn :: t -> (
         match lookup_global_option fn.elt.fname tc with

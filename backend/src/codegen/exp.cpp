@@ -168,11 +168,46 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EUop& e) {
-    throw new std::runtime_error("not supported yet");
+    Value* argVal = gen.codegenExp(*e.arg);
+    if (!argVal)
+        throw new std::runtime_error("Unary operation argument is null.");
+
+    llvm::Type* argTy = argVal->getType();
+
+    switch (e.op) {
+        case UnOp::Neg:
+            if (argTy->isIntegerTy()) {
+                return gen.builder->CreateNeg(argVal, "negtmp");
+            } else if (argTy->isFloatingPointTy()) {
+                return gen.builder->CreateFNeg(argVal, "fnegtmp");
+            } else {
+                llvm_unreachable("Negation operator applied to unsupported type.");
+            }
+
+        case UnOp::Not:
+            return gen.builder->CreateNot(argVal, "nottmp");
+
+        default:
+            llvm_unreachable("Unsupported unary operator");
+    }
 }
 
 Value* ExpToLLVisitor::operator()(const EStr& e) {
-    throw new std::runtime_error("not supported yet");
+    llvm::Constant* strConstant = llvm::ConstantDataArray::getString(*gen.ctxt, e.value, true);
+
+    llvm::Type* arrayTy = strConstant->getType();
+
+    std::string varName = "str_lit_" + std::to_string(gen.mod->global_size());
+
+    llvm::GlobalVariable* globalStr = new llvm::GlobalVariable(*gen.mod, arrayTy, true,
+                                                               llvm::GlobalValue::PrivateLinkage, strConstant, varName);
+
+    llvm::Value* indices[] = {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0),
+                              llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
+
+    llvm::Value* strPtr = gen.builder->CreateInBoundsGEP(arrayTy, globalStr, indices, "str_ptr");
+
+    return strPtr;
 }
 
 Value* ExpToLLVisitor::operator()(const ECall& e) {

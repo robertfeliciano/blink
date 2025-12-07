@@ -14,5 +14,5 @@ fun main() => i32 {
     let y: Point;
     let x: i32;
     //let x: i32;
-    return x;
+    return y.x;
 }

@@ -49,6 +49,7 @@ struct Generator {
     std::vector<llvm::BasicBlock*> breakTargets;
     std::vector<llvm::BasicBlock*> continueTargets;
 
+    void codegenStdlib();
     void configureTarget();
     void optimize();
     Generator();

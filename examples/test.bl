@@ -37,12 +37,19 @@ fun main(argc: i32) => i32 {
     return x;
     */
 
+    while not true {
+        let a = 0;
+    }
+
+    let s = "hello world\n";
+    printf(s);
+
     let x = 10;
     for i in 10..20 {
         if i == 12 {
             break;
         }
-        x += 1;
+        x = x + -1;
     }
     return x;
 }

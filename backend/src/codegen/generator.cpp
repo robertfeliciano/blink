@@ -10,12 +10,28 @@ void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.classes) {
         codegenCDecl(decl);
     }
+    codegenStdlib();
     codegenFunctionProtos(p);
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }
     // TODO put flag in ocaml side for optimization level
     // optimize();
+}
+
+void Generator::codegenStdlib() {
+    llvm::FunctionType* printf_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*this->ctxt), 
+        {llvm::Type::getInt8PtrTy(*this->ctxt)},
+        true
+    );
+    
+    llvm::Function* printf_func = llvm::Function::Create(
+        printf_type, 
+        llvm::Function::ExternalLinkage,
+        "printf", 
+        this->mod.get()
+    );
 }
 
 void Generator::configureTarget() {
