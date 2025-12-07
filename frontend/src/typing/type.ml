@@ -59,7 +59,9 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   in
   let tfields = List.map (type_field tc) fields in
   let globals' =
-    List.map (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false))) tfields
+    List.map
+      (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false)))
+      tfields
   in
   let tc' =
     {
