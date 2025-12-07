@@ -36,14 +36,16 @@ fun main(argc: i32) => i32 {
     }
     return x;
     */
-
+/*
     while not true {
         let a = 0;
     }
+    */
 
     let s = "hello world\n";
     printf(s);
-
+    return 1;
+/*
     let x = 10;
     for i in 10..20 {
         if i == 12 {
@@ -52,4 +54,5 @@ fun main(argc: i32) => i32 {
         x = x + -1;
     }
     return x;
+    */
 }
