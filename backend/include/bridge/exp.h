@@ -90,8 +90,12 @@ struct EObjInit {
     Ty                                                        ty;
 };
 
+struct ENull {
+    Ty ty;
+};
+
 using ExpVariant =
-    std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj, EObjInit>;
+    std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj, EObjInit, ENull>;
 
 struct Exp {
     ExpVariant val;

@@ -256,6 +256,11 @@ Exp convert_exp(value v) {
     case Constants::EXP_Lambda: { // Lambda of (id * ty) list * ret_ty * block
         throw std::runtime_error("Lambdas not supported yet!");
     }
+    case Constants::EXP_Null: { // Null of ref_ty
+        Ty null_ty = convert_ty(Field(v, 0));
+        result.val = ENull{.ty=std::move(null_ty)};
+        break;
+    }
     default: {
         throw std::runtime_error("Unsupported exp variant in bridge conversion");
     }

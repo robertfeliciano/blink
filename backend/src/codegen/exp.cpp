@@ -338,3 +338,8 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
     return objPtr;
 }
+
+Value* ExpToLLVisitor::operator()(const ENull& e) {
+    throw new std::runtime_error("not supported yet");
+
+}

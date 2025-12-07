@@ -49,7 +49,7 @@ type exp =
   | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * ret_ty * block
-  | Null of ref_ty
+  | Null of ty
 
 and vdecl = id * ty * exp * bool
 and ldecl = id * ref_ty * exp

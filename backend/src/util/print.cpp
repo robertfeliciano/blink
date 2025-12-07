@@ -227,6 +227,9 @@ struct ExpToStringVisitor {
         res += "}";
         return res;
     }
+    std::string operator()(const ENull& e) const {
+        return "nullptr to " + tyToString(e.ty);
+    }
 };
 
 std::string expToString(const Exp& exp) {

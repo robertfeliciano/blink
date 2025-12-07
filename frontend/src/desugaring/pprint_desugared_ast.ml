@@ -71,7 +71,7 @@ let rec show_exp ?(lvl = 0) = function
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" i (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)
-  | Null t -> Printf.sprintf "Null(%s)" (show_ref_ty t)
+  | Null t -> Printf.sprintf "Null(%s)" (show_ty t)
   | Str s -> Printf.sprintf "Str(%S)" s
   | Id (id, t) -> Printf.sprintf "Id(%s : %s)" id (show_ty t)
   | Call (fn, args, ty) ->

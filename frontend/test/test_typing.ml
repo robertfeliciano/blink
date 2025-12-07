@@ -82,7 +82,7 @@ let test_fn_call_ok _ =
   let fn_ty =
     TRef (RFun ([ TInt (TSigned Ti32) ], RetVal (TInt (TSigned Ti32))))
   in
-  let tc = Tc.add_global Tc.empty "f" fn_ty in
+  let tc = Tc.add_global Tc.empty "f" (fn_ty, false) in
   let call = Ast.(Call (mk_node (Id "f"), [ mk_node (Int (of_int 42)) ])) in
   let _, ty = Ts.type_exp tc (mk_node call) in
   assert_equal ty (TInt (TSigned Ti32))
@@ -99,7 +99,7 @@ let test_method_call_ok _ =
     ("m", RetVal (TInt (TSigned Ti32)), [ (TInt (TSigned Ti32), "x") ])
   in
   let tc1 = Tc.add_class Tc.empty "C" [] [ method_hdr ] in
-  let tc2 = Tc.add_global tc1 "c" (TRef (RClass "C")) in
+  let tc2 = Tc.add_global tc1 "c" (TRef (RClass "C"), false) in
   let call =
     Ast.(
       Call (mk_node (Proj (mk_node (Id "c"), "m")), [ mk_node (Int (of_int 7)) ]))
