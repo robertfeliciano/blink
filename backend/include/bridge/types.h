@@ -41,7 +41,7 @@ struct RefTy {
 
     // for RArray
     std::unique_ptr<Ty> inner;
-    int             size = 0;
+    int                 size = 0;
 
     // for RClass
     std::string cname;

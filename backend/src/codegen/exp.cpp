@@ -5,29 +5,29 @@
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
         switch (e.int_ty->uint) {
-        case Uint::Tu8:
-            return 8;
-        case Uint::Tu16:
-            return 16;
-        case Uint::Tu32:
-            return 32;
-        case Uint::Tu64:
-            return 64;
-        case Uint::Tu128:
-            return 128;
+            case Uint::Tu8:
+                return 8;
+            case Uint::Tu16:
+                return 16;
+            case Uint::Tu32:
+                return 32;
+            case Uint::Tu64:
+                return 64;
+            case Uint::Tu128:
+                return 128;
         }
     } else {
         switch (e.int_ty->sint) {
-        case Sint::Ti8:
-            return 8;
-        case Sint::Ti16:
-            return 16;
-        case Sint::Ti32:
-            return 32;
-        case Sint::Ti64:
-            return 64;
-        case Sint::Ti128:
-            return 128;
+            case Sint::Ti8:
+                return 8;
+            case Sint::Ti16:
+                return 16;
+            case Sint::Ti32:
+                return 32;
+            case Sint::Ti64:
+                return 64;
+            case Sint::Ti128:
+                return 128;
         }
     }
 }
@@ -72,13 +72,13 @@ Value* ExpToLLVisitor::operator()(const EFloat& e) {
     llvm::APFloat ap(e.value);
 
     switch (e.float_ty) {
-    case FloatTy::Tf32:
-        ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
-        break;
-    case FloatTy::Tf64:
-        break;
-    default:
-        llvm_unreachable("Unknown float type");
+        case FloatTy::Tf32:
+            ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
+            break;
+        case FloatTy::Tf64:
+            break;
+        default:
+            llvm_unreachable("Unknown float type");
     }
 
     return llvm::ConstantFP::get(*gen.ctxt, ap);
@@ -111,59 +111,59 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     };
 
     switch (e.op) {
-    case BinOp::Add: {
-        auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
-        return addWrapFlags(inst);
-    }
+        case BinOp::Add: {
+            auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
+            return addWrapFlags(inst);
+        }
 
-    case BinOp::Sub: {
-        auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
-        return addWrapFlags(inst);
-    }
+        case BinOp::Sub: {
+            auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
+            return addWrapFlags(inst);
+        }
 
-    case BinOp::Mul: {
-        auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
-        return addWrapFlags(inst);
-    }
+        case BinOp::Mul: {
+            auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
+            return addWrapFlags(inst);
+        }
 
-    case BinOp::Div:
-        return bothUnsigned ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
-                            : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
+        case BinOp::Div:
+            return bothUnsigned ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
+                                : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
 
-    case BinOp::Mod:
-        return bothUnsigned ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
-                            : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
+        case BinOp::Mod:
+            return bothUnsigned ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
+                                : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
 
-    case BinOp::Eqeq:
-        return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
+        case BinOp::Eqeq:
+            return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
 
-    case BinOp::Neq:
-        return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
+        case BinOp::Neq:
+            return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
 
-    case BinOp::Lt:
-        return bothUnsigned ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
-                            : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
+        case BinOp::Lt:
+            return bothUnsigned ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
+                                : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
 
-    case BinOp::Lte:
-        return bothUnsigned ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
-                            : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
+        case BinOp::Lte:
+            return bothUnsigned ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
+                                : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
 
-    case BinOp::Gt:
-        return bothUnsigned ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
-                            : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
+        case BinOp::Gt:
+            return bothUnsigned ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
+                                : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
 
-    case BinOp::Gte:
-        return bothUnsigned ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
-                            : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
+        case BinOp::Gte:
+            return bothUnsigned ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
+                                : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
 
-    case BinOp::And:
-        return gen.builder->CreateAnd(lhs, rhs, "andtmp");
+        case BinOp::And:
+            return gen.builder->CreateAnd(lhs, rhs, "andtmp");
 
-    case BinOp::Or:
-        return gen.builder->CreateOr(lhs, rhs, "ortmp");
+        case BinOp::Or:
+            return gen.builder->CreateOr(lhs, rhs, "ortmp");
 
-    default:
-        llvm_unreachable("Unsupported binary operator");
+        default:
+            llvm_unreachable("Unsupported binary operator");
     }
 }
 
@@ -309,7 +309,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
         const Field& fd = classDecl.fields[idx];
-        
+
         llvm::Type* storageTy;
         if (is_obj_ty(fd.ftyp)) {
             storageTy = llvm::PointerType::getUnqual(*gen.ctxt);
@@ -342,8 +342,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 Value* ExpToLLVisitor::operator()(const ENull& e) {
     llvm::Type* llty = gen.codegenType(e.ty);
 
-    llvm::PointerType* PtrTy = llvm::PointerType::get(llty, 0); 
-    //todo check this works for classes and stuff
+    llvm::PointerType* PtrTy = llvm::PointerType::get(llty, 0);
 
     return llvm::ConstantPointerNull::get(PtrTy);
 }

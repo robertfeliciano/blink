@@ -4,6 +4,7 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
+IndentCaseLabels: true
 
 # --- Line Length ---
 ColumnLimit: 120

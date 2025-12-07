@@ -55,122 +55,122 @@ static std::string indent(int level) {
 
 std::string tyToString(const Ty& ty) {
     switch (ty.tag) {
-    case TyTag::TBool:
-        return "bool";
-    case TyTag::TInt: {
-        const IntTy& it = *ty.int_ty;
-        if (it.tag == IntTyTag::Signed) {
-            switch (it.sint) {
-            case Sint::Ti8:
-                return "i8";
-            case Sint::Ti16:
-                return "i16";
-            case Sint::Ti32:
-                return "i32";
-            case Sint::Ti64:
-                return "i64";
-            case Sint::Ti128:
-                return "i128";
+        case TyTag::TBool:
+            return "bool";
+        case TyTag::TInt: {
+            const IntTy& it = *ty.int_ty;
+            if (it.tag == IntTyTag::Signed) {
+                switch (it.sint) {
+                    case Sint::Ti8:
+                        return "i8";
+                    case Sint::Ti16:
+                        return "i16";
+                    case Sint::Ti32:
+                        return "i32";
+                    case Sint::Ti64:
+                        return "i64";
+                    case Sint::Ti128:
+                        return "i128";
+                }
+            } else {
+                switch (it.uint) {
+                    case Uint::Tu8:
+                        return "u8";
+                    case Uint::Tu16:
+                        return "u16";
+                    case Uint::Tu32:
+                        return "u32";
+                    case Uint::Tu64:
+                        return "u64";
+                    case Uint::Tu128:
+                        return "u128";
+                }
             }
-        } else {
-            switch (it.uint) {
-            case Uint::Tu8:
-                return "u8";
-            case Uint::Tu16:
-                return "u16";
-            case Uint::Tu32:
-                return "u32";
-            case Uint::Tu64:
-                return "u64";
-            case Uint::Tu128:
-                return "u128";
+            break;
+        }
+        case TyTag::TFloat: {
+            switch (*ty.float_ty) {
+                case FloatTy::Tf32:
+                    return "f32";
+                case FloatTy::Tf64:
+                    return "f64";
             }
+            break;
         }
-        break;
-    }
-    case TyTag::TFloat: {
-        switch (*ty.float_ty) {
-        case FloatTy::Tf32:
-            return "f32";
-        case FloatTy::Tf64:
-            return "f64";
-        }
-        break;
-    }
-    case TyTag::TRef: {
-        const RefTy& r = *ty.ref_ty;
-        switch (r.tag) {
-        case RefTyTag::RString:
-            return "string";
-        case RefTyTag::RArray: {
-            return "[" + std::to_string(r.size) + " x " + tyToString(*r.inner) + "]";
-            // return tyToString(*r.inner) + "[" + std::to_string(r.size) + "]";
-        }
-        case RefTyTag::RClass:
-            return r.cname;
-        case RefTyTag::RFun: {
-            std::string s = "(";
-            for (size_t i = 0; i < r.args.size(); ++i) {
-                s += tyToString(r.args[i]);
-                if (i + 1 < r.args.size())
-                    s += ", ";
+        case TyTag::TRef: {
+            const RefTy& r = *ty.ref_ty;
+            switch (r.tag) {
+                case RefTyTag::RString:
+                    return "string";
+                case RefTyTag::RArray: {
+                    return "[" + std::to_string(r.size) + " x " + tyToString(*r.inner) + "]";
+                    // return tyToString(*r.inner) + "[" + std::to_string(r.size) + "]";
+                }
+                case RefTyTag::RClass:
+                    return r.cname;
+                case RefTyTag::RFun: {
+                    std::string s = "(";
+                    for (size_t i = 0; i < r.args.size(); ++i) {
+                        s += tyToString(r.args[i]);
+                        if (i + 1 < r.args.size())
+                            s += ", ";
+                    }
+                    s += ") -> ";
+                    if (r.ret.tag == RetTyTag::RetVoid)
+                        s += "void";
+                    else
+                        s += tyToString(*r.ret.val);
+                    return s;
+                }
             }
-            s += ") -> ";
-            if (r.ret.tag == RetTyTag::RetVoid)
-                s += "void";
-            else
-                s += tyToString(*r.ret.val);
-            return s;
+            break;
         }
-        }
-        break;
-    }
     }
     return "<unknown>";
 }
 
 std::string toString(BinOp op) {
     switch (op) {
-    case BinOp::Add:
-        return "+";
-    case BinOp::Sub:
-        return "-";
-    case BinOp::Mul:
-        return "*";
-    case BinOp::Div:
-        return "/";
-    case BinOp::At:
-        return "@";
-    case BinOp::Mod:
-        return "%";
-    case BinOp::Pow:
-        return "**";
-    case BinOp::Eqeq:
-        return "==";
-    case BinOp::Neq:
-        return "!=";
-    case BinOp::Lt:
-        return "<";
-    case BinOp::Lte:
-        return "<=";
-    case BinOp::Gt:
-        return ">";
-    case BinOp::Gte:
-        return ">=";
-    case BinOp::And:
-        return "&&";
-    case BinOp::Or:
-        return "||";
+        case BinOp::Add:
+            return "+";
+        case BinOp::Sub:
+            return "-";
+        case BinOp::Mul:
+            return "*";
+        case BinOp::Div:
+            return "/";
+        case BinOp::At:
+            return "@";
+        case BinOp::Mod:
+            return "%";
+        case BinOp::Pow:
+            return "**";
+        case BinOp::Eqeq:
+            return "==";
+        case BinOp::Neq:
+            return "!=";
+        case BinOp::Lt:
+            return "<";
+        case BinOp::Lte:
+            return "<=";
+        case BinOp::Gt:
+            return ">";
+        case BinOp::Gte:
+            return ">=";
+        case BinOp::And:
+            return "&&";
+        case BinOp::Or:
+            return "||";
     }
     throw std::runtime_error("Unknown BinOp");
 }
 
 std::string toString(UnOp op) {
     switch (op) {
-    case UnOp::Neg:
-        return "-";
-    case UnOp::Not:
-        return "!";
+        case UnOp::Neg:
+            return "-";
+        case UnOp::Not:
+            return "!";
     }
     throw std::runtime_error("Unknown UnOp");
 }
@@ -227,9 +227,7 @@ struct ExpToStringVisitor {
         res += "}";
         return res;
     }
-    std::string operator()(const ENull& e) const {
-        return "nullptr to " + tyToString(e.ty);
-    }
+    std::string operator()(const ENull& e) const { return "nullptr to " + tyToString(e.ty); }
 };
 
 std::string expToString(const Exp& exp) {
@@ -298,12 +296,12 @@ std::string fdeclToString(const FDecl& f) {
     }
     oss << ") -> ";
     switch (f.frtyp.tag) {
-    case RetTyTag::RetVoid:
-        oss << "void";
-        break;
-    case RetTyTag::RetVal:
-        oss << tyToString(*f.frtyp.val);
-        break;
+        case RetTyTag::RetVoid:
+            oss << "void";
+            break;
+        case RetTyTag::RetVal:
+            oss << tyToString(*f.frtyp.val);
+            break;
     }
     oss << " {\n";
     for (auto& st : f.body) {
