@@ -16,9 +16,9 @@ let digit = ['0'-'9']
 let alpha = ['a'-'z' 'A'-'Z']
 
 (* Regexes for tokens *)
-let int = digit+
-let decimal = digit+ '.' digit+
-let scientific = digit+ ('E'|'e') '-'? digit+
+let int = '-'? digit+
+let decimal = '-'? digit+ '.' digit+
+let scientific = '-'? digit+ ('E'|'e') '-'? digit+
 let id = alpha (alpha | digit | '_')*
 let generic_type_param = ['A'-'Z']
 

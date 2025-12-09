@@ -45,7 +45,8 @@ fun main(argc: i32) => i32 {
     let s = "hello world\n";
     printf(s);
     let g = -4.5;
-    return (g + 4.5) as i32;
+    return -2.5 as i32;
+    //return (g + 4.5) as i32;
 /*
     let x = 10;
     for i in 10..20 {
