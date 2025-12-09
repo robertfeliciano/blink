@@ -112,6 +112,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 
     switch (e.op) {
         case BinOp::Add: {
+            // TODO look at test.bl and figure out why that doesnt work
             auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
             return addWrapFlags(inst);
         }
@@ -199,8 +200,8 @@ Value* ExpToLLVisitor::operator()(const EStr& e) {
 
     std::string varName = "str_lit_" + std::to_string(gen.mod->global_size());
 
-    llvm::GlobalVariable* globalStr = new llvm::GlobalVariable(*gen.mod, arrayTy, true,
-                                                               llvm::GlobalValue::PrivateLinkage, strConstant, varName);
+    llvm::GlobalVariable* globalStr =
+        new llvm::GlobalVariable(*gen.mod, arrayTy, true, llvm::GlobalValue::PrivateLinkage, strConstant, varName);
 
     llvm::Value* indices[] = {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0),
                               llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
@@ -290,7 +291,70 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const ECast& e) {
-    throw new std::runtime_error("not supported yet");
+    Value* source = gen.codegenExp(*e.expr);
+    if (!source) {
+        throw new std::runtime_error("Cast argument produced null value.");
+    }
+
+    llvm::Type* sourceTy = source->getType();
+    llvm::Type* destTy   = gen.codegenType(e.ty);
+
+    if (sourceTy == destTy) {
+        return source;
+    }
+
+    const Ty& source_ty_info = gen.getExpTy(*e.expr);
+    bool      sourceIsSigned = (source_ty_info.tag == TyTag::TInt) && (source_ty_info.int_ty->tag == IntTyTag::Signed);
+
+    bool srcIsFloat  = sourceTy->isFloatingPointTy();
+    bool destIsFloat = destTy->isFloatingPointTy();
+
+    bool destIsSigned = (e.ty.tag == TyTag::TInt) && (e.ty.int_ty->tag == IntTyTag::Signed);
+
+    if (sourceTy->isIntegerTy() && destTy->isIntegerTy()) {
+        // both ints
+        if (sourceTy->getIntegerBitWidth() > destTy->getIntegerBitWidth()) {
+            // truncating bits
+            return gen.builder->CreateTrunc(source, destTy, "trunctmp");
+        } else {
+            // widening bits
+            if (sourceIsSigned) {
+                return gen.builder->CreateSExt(source, destTy, "sexttmp");
+            } else {
+                return gen.builder->CreateZExt(source, destTy, "zexttmp");
+            }
+        }
+    } else if (srcIsFloat && destIsFloat) {
+        // both floats
+        return gen.builder->CreateFPCast(source, destTy, "fpcmp");
+    } else if (sourceTy->isIntegerTy() && destIsFloat) {
+        // int to float
+        if (sourceIsSigned) {
+            // signed int to float
+            return gen.builder->CreateSIToFP(source, destTy, "sitofptmp");
+        } else {
+            // unsigned into to float
+            return gen.builder->CreateUIToFP(source, destTy, "uitofptmp");
+        }
+    } else if (srcIsFloat && destTy->isIntegerTy()) {
+        // float to int
+        if (destIsSigned) {
+            // float to signed int
+            return gen.builder->CreateFPToSI(source, destTy, "fptositmp");
+        } else {
+            // float to unsigned int
+            return gen.builder->CreateFPToUI(source, destTy, "fptouitmp");
+        }
+    }
+
+    else if (sourceTy->isPointerTy() && destTy->isPointerTy()) {
+        // TODO this will require thorough testing
+        return gen.builder->CreateBitCast(source, destTy, "ptrbitcast");
+    }
+
+    else {
+        throw std::runtime_error("Unsupported cast operation detected in codegen.");
+    }
 }
 
 Value* ExpToLLVisitor::operator()(const EProj& e) {
@@ -377,7 +441,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 Value* ExpToLLVisitor::operator()(const ENull& e) {
     llvm::Type* llty = gen.codegenType(e.ty);
 
-    llvm::PointerType* PtrTy = llvm::PointerType::get(llty, 0);
+    llvm::PointerType* ptrTy = llvm::PointerType::get(llty, 0);
 
-    return llvm::ConstantPointerNull::get(PtrTy);
+    return llvm::ConstantPointerNull::get(ptrTy);
 }
