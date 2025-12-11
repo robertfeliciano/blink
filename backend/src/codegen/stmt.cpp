@@ -77,12 +77,12 @@ Value* StmtToLLVisitor::operator()(const If& s) {
 
     llvm::Function* parentFunc = gen.builder->GetInsertBlock()->getParent();
 
-    llvm::BasicBlock* thenBB  = llvm::BasicBlock::Create(*gen.ctxt, "then", nullptr, nullptr);
-    llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*gen.ctxt, "ifmerge", nullptr, nullptr);
+    llvm::BasicBlock* thenBB  = llvm::BasicBlock::Create(*gen.ctxt, "then", parentFunc);
+    llvm::BasicBlock* mergeBB = llvm::BasicBlock::Create(*gen.ctxt, "ifmerge");
 
     llvm::BasicBlock* elseBB = nullptr;
     if (!s.else_branch.empty()) {
-        elseBB = llvm::BasicBlock::Create(*gen.ctxt, "else", nullptr, nullptr);
+        elseBB = llvm::BasicBlock::Create(*gen.ctxt, "else");
     } else {
         elseBB = mergeBB;
     }
@@ -97,10 +97,13 @@ Value* StmtToLLVisitor::operator()(const If& s) {
         gen.codegenStmt(*stmt);
     }
 
-    if (gen.builder->GetInsertBlock()->getTerminator() == nullptr) {
+    bool then_terminated = gen.builder->GetInsertBlock()->getTerminator() != nullptr;
+
+    if (!then_terminated) {
         gen.builder->CreateBr(mergeBB);
     }
 
+    bool else_terminated = false;
     if (!s.else_branch.empty()) {
         elseBB->insertInto(parentFunc);
         gen.builder->SetInsertPoint(elseBB);
@@ -109,14 +112,16 @@ Value* StmtToLLVisitor::operator()(const If& s) {
             gen.codegenStmt(*stmt);
         }
 
-        if (gen.builder->GetInsertBlock()->getTerminator() == nullptr) {
+        else_terminated = gen.builder->GetInsertBlock()->getTerminator() != nullptr;
+        if (!else_terminated) {
             gen.builder->CreateBr(mergeBB);
         }
     }
 
-    mergeBB->insertInto(parentFunc);
-    gen.builder->SetInsertPoint(mergeBB);
-
+    if (!then_terminated && !else_terminated) {
+        mergeBB->insertInto(parentFunc);
+        gen.builder->SetInsertPoint(mergeBB);
+    }
     return nullptr;
 }
 
