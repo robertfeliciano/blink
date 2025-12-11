@@ -1,6 +1,6 @@
 class Point { 
-    let x: i32 = 0;
-    let y: i32 = 0;
+    let x: i32;
+    let y: i32;
 /*
     fun distance_squared(other: Point) => i32 {
         return (this.x - other.x)**2 - (this.y - other.y)**2;
@@ -20,12 +20,8 @@ class Point {
 }
 
 fun main(argv: [string; 2]) => i32 {
-    let x = 10;
-    x += 5;
-
-    let z: Point = null;
-    
     let p = new Point { x = 2, y = 4 };
     let p2 = new Point { x = 4, y = 9 };
+    printf("Hello sir kamal");
     return p.midpoint(p2).sumX(p2);   
 }
