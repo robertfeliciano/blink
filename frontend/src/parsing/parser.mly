@@ -39,10 +39,10 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTLT      /* << */
 %token GTGT      /* >> */
 %token GTGTGT    /* >>> */
-// %token BXOR      /* ^ */
-// %token BAND      /* & */
+// %token CARET     /* ^ */
+// %token AMP       /* & */
 // %token BOR       /* | */
-// %token BNEG      /* ~ */
+// %token TILDE      /* ~ */
 %token XOR       /* xor */
 %token PLUEQ     /* += */
 %token MINEQ     /* -= */
@@ -117,13 +117,16 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left EQEQ NEQ
 %left LT LTE GT GTE
 
-// %left BAR
-// %left BXOR
-// %left BAND
+// %left BOR
+// %left CARET
+// %left AMP
 
 %left PLUS MINUS
 %left MULT DIV MOD LTLT GTGT GTGTGT
 %right POW
+
+// %nonassoc TILDE
+
 %left AT
 // %left DOT
 // %left RANGE RANGE_INCL

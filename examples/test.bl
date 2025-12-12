@@ -62,7 +62,8 @@ fun main(argc: i32) => i32 {
     } else {
         x >>>= 2;
     }
-    return x;
+    //return x;
+    return 5 + (-3);
     //return fib(8);
     //return -2.5 as i32;
     //return (g + 4.5) as i32;

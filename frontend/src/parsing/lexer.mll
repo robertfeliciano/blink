@@ -55,7 +55,7 @@ rule read = parse
   | "<<" { LTLT }
   | ">>" { GTGT }
   | ">>>" { GTGTGT }
-  (* | "^"  { CAROT }
+  (* | "^"  { CARET }
   | "&"  { AMP }
   | "|"  { BOR }
   | "~"  { TILDE } *)
