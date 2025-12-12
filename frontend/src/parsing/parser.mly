@@ -36,6 +36,10 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token AT        /* @ */
 %token MOD       /* % */
 %token POW       /* ** */
+%token LTLT      /* << */
+%token GTGT      /* >> */
+%token GTGTGT    /* >>> */
+%token XOR       /* ^ */
 %token PLUEQ     /* += */
 %token MINEQ     /* -= */
 %token TIMEQ     /* *= */
@@ -100,10 +104,11 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
 %left AND
+%left XOR
 %left EQEQ NEQ
 %left LT LTE GT GTE
 %left PLUS MINUS
-%left MULT DIV MOD
+%left MULT DIV MOD LTLT GTGT GTGTGT
 %right POW
 %left AT
 // %left DOT
@@ -237,12 +242,16 @@ fun_ty:
   | POW   { Pow }
   | LT    { Lt }
   | LTE   { Lte }
+  | LTLT  { Shl }
+  | GTGT  { Lshr }
+  | GTGTGT{ Ashr }
   | GT    { Gt }
   | GTE   { Gte }
   | NEQ   { Neq }
   | EQEQ  { Eqeq }
   | AND   { And }
   | OR    { Or }
+  | XOR   { Xor }
 
 %inline uop:
   | MINUS { Neg }

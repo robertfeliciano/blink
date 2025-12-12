@@ -63,6 +63,10 @@ let convert_binop : Ast.binop -> Typed_ast.binop = function
   | Ast.Gte -> Typed_ast.Gte
   | Ast.And -> Typed_ast.And
   | Ast.Or -> Typed_ast.Or
+  | Ast.Xor -> Typed_ast.Xor
+  | Ast.Shl -> Typed_ast.Shl
+  | Ast.Lshr -> Typed_ast.Lshr
+  | Ast.Ashr -> Typed_ast.Ashr
 
 let convert_aop : Ast.aop -> Typed_ast.aop = function
   | Ast.Eq -> Typed_ast.Eq

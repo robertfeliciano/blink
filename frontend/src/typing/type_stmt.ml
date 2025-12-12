@@ -268,6 +268,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let te2, rty = type_exp tc e2 in
       match eval_const_exp e with
       | Some ev ->
+        (* TODO have this work for floats too *)
           let inferred_int_ty = infer_integer_ty ev e in
           (Typed_ast.Int (ev, inferred_int_ty), TInt inferred_int_ty)
       | None ->
@@ -279,7 +280,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
                 else
                   type_error e
                     "== or != used with non type-compatible arguments"
-            | And | Or ->
+            | And | Or | Xor ->
                 if lty = Typed_ast.TBool && rty = Typed_ast.TBool then
                   Typed_ast.TBool
                 else type_error e "boolean operator used on non-bool arguments"

@@ -58,6 +58,9 @@ let show_binop = function
   | At -> "At"
   | Mod -> "Mod"
   | Pow -> "Pow"
+  | Shl -> "<<"
+  | Lshr -> ">>"
+  | Ashr -> ">>>"
   | Eqeq -> "Eqeq"
   | Neq -> "Neq"
   | Lt -> "Lt"
@@ -66,6 +69,7 @@ let show_binop = function
   | Gte -> "Gte"
   | And -> "And"
   | Or -> "Or"
+  | Xor -> "Xor"
 
 let show_aop = function
   | Eq -> "Eq"

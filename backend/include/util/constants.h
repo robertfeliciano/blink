@@ -48,7 +48,11 @@ namespace Constants {
         BINOP_Gt   = 11,
         BINOP_Gte  = 12,
         BINOP_And  = 13,
-        BINOP_Or   = 14
+        BINOP_Or   = 14,
+        BINOP_Shl   = 15,
+        BINOP_Lshr   = 16,
+        BINOP_Ashr   = 17,
+        BINOP_Xor   = 18
     };
 
     enum StmtVariant {

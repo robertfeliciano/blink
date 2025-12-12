@@ -150,7 +150,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
   | Str s -> ([], D.Str s)
   | Id (id, t) -> ([], D.Id (id, convert_ty t))
   | Bop (op, e1, e2, ty) ->
-    (* TODO desugar pow to function call *)
+      (* TODO desugar pow to function call *)
       let s1, e1' = desugar_exp e1 in
       let s2, e2' = desugar_exp e2 in
       (s1 @ s2, D.Bop (convert_binop op, e1', e2', convert_ty ty))

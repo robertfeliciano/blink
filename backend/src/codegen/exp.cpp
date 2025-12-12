@@ -163,6 +163,19 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
         case BinOp::Or:
             return gen.builder->CreateOr(lhs, rhs, "ortmp");
 
+        case BinOp::Shl:
+            return gen.builder->CreateShl(lhs, rhs, "shltmp");
+        
+        case BinOp::Lshr:
+            return gen.builder->CreateLShr(lhs, rhs, "lshrtmp");
+
+        case BinOp::Ashr:
+            return gen.builder->CreateAShr(lhs, rhs, "ashrtmp");
+
+        case BinOp::Xor:
+        // lhs and rhs for xor are guaranteed to be bools (i1) at this point
+            return gen.builder->CreateXor(lhs, rhs, "xortmp");
+
         default:
             llvm_unreachable("Unsupported binary operator");
     }

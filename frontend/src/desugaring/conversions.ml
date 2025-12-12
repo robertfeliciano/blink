@@ -57,3 +57,7 @@ let convert_binop = function
   | Gte -> D.Gte
   | And -> D.And
   | Or -> D.Or
+  | Shl -> D.Shl
+  | Lshr -> D.Lshr
+  | Ashr -> D.Ashr
+  | Xor -> D.Xor

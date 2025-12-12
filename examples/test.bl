@@ -53,9 +53,15 @@ fun main(argc: i32) => i32 {
     let s = "hello world\n";
     printf(s);
     let g = -4.5;
-    return 2e2 as i32;
+    //return 2e2 as i32;
     */
-    return fib(8);
+    let x = 12;
+    if true xor false {
+        return x << 3;
+    } else {
+        return x >> 2;
+    }
+    //return fib(8);
     //return -2.5 as i32;
     //return (g + 4.5) as i32;
 /*

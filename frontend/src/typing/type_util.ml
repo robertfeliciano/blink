@@ -263,6 +263,27 @@ let rec eval_const_exp (e : exp node) : Z.t option =
       match (eval_const_exp e1, eval_const_exp e2) with
       | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
       | _ -> None)
+  | Bop (Shl, e1, e2) -> (
+      match (eval_const_exp e1, eval_const_exp e2) with
+      | Some v1, Some v2 ->
+          if Z.(lt v2 (of_int 0)) then
+            type_error e2 "Shl operator cannot be negative"
+          else Some Z.(shift_left v1 (to_int v2))
+      | _ -> None)
+  | Bop (Lshr, e1, e2) -> (
+      match (eval_const_exp e1, eval_const_exp e2) with
+      | Some v1, Some v2 ->
+          if Z.(lt v2 (of_int 0)) then
+            type_error e2 "Lshr operator cannot be negative"
+          else Some Z.(shift_right_trunc v1 (to_int v2))
+      | _ -> None)
+  | Bop (Ashr, e1, e2) -> (
+      match (eval_const_exp e1, eval_const_exp e2) with
+      | Some v1, Some v2 ->
+          if Z.(lt v2 (of_int 0)) then
+            type_error e2 "Ashr operator cannot be negative"
+          else Some Z.(shift_right v1 (to_int v2))
+      | _ -> None)
   | _ -> None
 
 let unexpected_ty expected e =

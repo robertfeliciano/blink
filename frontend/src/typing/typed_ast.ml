@@ -24,6 +24,9 @@ type binop =
   | At
   | Mod
   | Pow
+  | Shl
+  | Lshr
+  | Ashr
   | Eqeq
   | Neq
   | Lt
@@ -32,6 +35,7 @@ type binop =
   | Gte
   | And
   | Or
+  | Xor
 [@@deriving show]
 
 type aop = Eq | PluEq | MinEq | TimEq | DivEq | AtEq | PowEq | ModEq

@@ -52,6 +52,9 @@ rule read = parse
   | "@" { AT }
   | "%" { MOD }
   | "**" { POW }
+  | "<<" { LTLT }
+  | ">>" { GTGT }
+  | ">>>" { GTGTGT }
   | "+=" { PLUEQ }
   | "-=" { MINEQ }
   | "*=" { TIMEQ }
@@ -66,6 +69,7 @@ rule read = parse
   | "==" { EQEQ }
   | "and" { AND }
   | "or" { OR }
+  | "xor" { XOR }
   | "not" { NOT }
   | "let" { LET }
   | "new" { NEW }

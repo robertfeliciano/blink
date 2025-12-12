@@ -161,6 +161,14 @@ std::string toString(BinOp op) {
             return "&&";
         case BinOp::Or:
             return "||";
+        case BinOp::Shl:
+            return "<<";
+        case BinOp::Lshr:
+            return ">>";
+        case BinOp::Ashr:
+            return ">>>";
+        case BinOp::Xor:
+            return "xor";
     }
     throw std::runtime_error("Unknown BinOp");
 }

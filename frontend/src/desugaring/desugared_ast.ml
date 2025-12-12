@@ -32,6 +32,10 @@ type binop =
   | Gte
   | And
   | Or
+  | Shl
+  | Lshr
+  | Ashr
+  | Xor
 [@@deriving show]
 
 type exp =

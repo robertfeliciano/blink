@@ -54,6 +54,14 @@ BinOp convert_binop(value v) {
             return BinOp::And;
         case Constants::BINOP_Or:
             return BinOp::Or;
+        case Constants::BINOP_Shl:
+            return BinOp::Shl;
+        case Constants::BINOP_Lshr:
+            return BinOp::Lshr;
+        case Constants::BINOP_Ashr:
+            return BinOp::Ashr;
+        case Constants::BINOP_Xor:
+            return BinOp::Xor;
         default:
             throw std::runtime_error("Unknown BinOp");
     }
