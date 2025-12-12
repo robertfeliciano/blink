@@ -173,7 +173,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
             return gen.builder->CreateAShr(lhs, rhs, "ashrtmp");
 
         case BinOp::Xor:
-        // lhs and rhs for xor are guaranteed to be bools (i1) at this point
+            // lhs and rhs for xor are guaranteed to be bools (i1) at this point
             return gen.builder->CreateXor(lhs, rhs, "xortmp");
 
         default:

@@ -80,6 +80,9 @@ let show_aop = function
   | AtEq -> "AtEq"
   | PowEq -> "PowEq"
   | ModEq -> "ModEq"
+  | ShlEq -> "ShlEq"
+  | LShrEq -> "LShrEq"
+  | AShrEq -> "AShrEq"
 
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function

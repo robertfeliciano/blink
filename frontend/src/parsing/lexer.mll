@@ -55,12 +55,21 @@ rule read = parse
   | "<<" { LTLT }
   | ">>" { GTGT }
   | ">>>" { GTGTGT }
+  (* | "^"  { CAROT }
+  | "&"  { AMP }
+  | "|"  { BOR }
+  | "~"  { TILDE } *)
+  (* TODO add btwise and/or/xor *)
   | "+=" { PLUEQ }
   | "-=" { MINEQ }
   | "*=" { TIMEQ }
   | "/=" { DIVEQ }
   | "@=" { ATEQ }
   | "**=" { POWEQ }
+  | "<<=" { LTLTEQ }
+  | ">>=" { GTGTEQ }
+  | ">>>=" { GTGTGTEQ }
+  (* | "^=" { BXOREQ } *)
   | "<" { LT }
   | "<=" { LTE }
   | ">" { GT }

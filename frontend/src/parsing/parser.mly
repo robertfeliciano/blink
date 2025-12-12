@@ -39,13 +39,21 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTLT      /* << */
 %token GTGT      /* >> */
 %token GTGTGT    /* >>> */
-%token XOR       /* ^ */
+// %token BXOR      /* ^ */
+// %token BAND      /* & */
+// %token BOR       /* | */
+// %token BNEG      /* ~ */
+%token XOR       /* xor */
 %token PLUEQ     /* += */
 %token MINEQ     /* -= */
 %token TIMEQ     /* *= */
 %token DIVEQ     /* /= */
 %token ATEQ      /* @= */
 %token POWEQ     /* **= */
+%token LTLTEQ    /* <<= */
+%token GTGTEQ    /* >>= */
+%token GTGTGTEQ  /* >>>= */
+// %token BXOREQ    /* ^= */
 %token LT        /* < */
 %token LTE       /* <= */
 %token GT        /* > */
@@ -105,8 +113,14 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left OR
 %left AND
 %left XOR
+
 %left EQEQ NEQ
 %left LT LTE GT GTE
+
+// %left BAR
+// %left BXOR
+// %left BAND
+
 %left PLUS MINUS
 %left MULT DIV MOD LTLT GTGT GTGTGT
 %right POW
@@ -252,6 +266,7 @@ fun_ty:
   | AND   { And }
   | OR    { Or }
   | XOR   { Xor }
+  // | BXOR  { BXor }
 
 %inline uop:
   | MINUS { Neg }
@@ -265,6 +280,10 @@ fun_ty:
   | DIVEQ { DivEq }
   | ATEQ  { AtEq }
   | POWEQ { PowEq }
+  | LTLTEQ { ShlEq }
+  | GTGTEQ { LShrEq }
+  | GTGTGTEQ { AShrEq }
+  // | BXOREQ
 
 %inline ty_spec:
   | COLON t=ty { t }

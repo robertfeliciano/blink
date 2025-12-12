@@ -47,10 +47,24 @@ type binop =
   | Gte
   | And
   | Or
-  | Xor
+  | Xor 
+  (* | BXor 
+  | BAnd 
+  | BOr *)
 [@@deriving show]
 
-type aop = Eq | PluEq | MinEq | TimEq | DivEq | AtEq | PowEq | ModEq
+type aop =
+  | Eq
+  | PluEq
+  | MinEq
+  | TimEq
+  | DivEq
+  | AtEq
+  | PowEq
+  | ModEq
+  | ShlEq
+  | LShrEq
+  | AShrEq
 [@@deriving show]
 
 type exp =
