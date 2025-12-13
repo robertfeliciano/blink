@@ -102,17 +102,17 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     bool bothUnsigned = lhsUnsigned && rhsUnsigned;
 
     auto addWrapFlags = [&](Value* inst) {
-        auto* op = llvm::cast<llvm::BinaryOperator>(inst);
-        if (bothUnsigned)
-            op->setHasNoUnsignedWrap(true);
-        else
-            op->setHasNoSignedWrap(true);
+        if (auto* op = llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
+            if (bothUnsigned)
+                op->setHasNoUnsignedWrap(true);
+            else
+                op->setHasNoSignedWrap(true);
+        }
         return inst;
     };
 
     switch (e.op) {
         case BinOp::Add: {
-            // TODO look at test.bl and figure out why that doesnt work
             auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
             return addWrapFlags(inst);
         }
