@@ -39,7 +39,7 @@ and convert_ref_ty = function
   | RClass cn -> D.RClass cn
   | RFun (args, ret) -> D.RFun (List.map convert_ty args, convert_ret_ty ret)
 
-let convert_unop = function Neg -> D.Neg | Not -> D.Not
+let convert_unop = function Neg -> D.Neg | Not -> D.Not | BNeg -> D.BNeg
 
 let convert_binop = function
   | Add -> D.Add
@@ -61,3 +61,6 @@ let convert_binop = function
   | Lshr -> D.Lshr
   | Ashr -> D.Ashr
   | Xor -> D.Xor
+  | BXor -> D.BXor
+  | BAnd -> D.BAnd
+  | BOr -> D.BOr

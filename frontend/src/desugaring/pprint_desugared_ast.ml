@@ -47,7 +47,7 @@ and show_ty = function
   | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
   | TRef rt -> Printf.sprintf "%s" (show_ref_ty rt)
 
-let show_unop = function Neg -> "Neg" | Not -> "Not"
+let show_unop = function Neg -> "Neg" | Not -> "Not" | BNeg -> "~"
 
 let show_binop = function
   | Add -> "Add"
@@ -69,6 +69,9 @@ let show_binop = function
   | And -> "And"
   | Or -> "Or"
   | Xor -> "Xor"
+  | BXor -> "^"
+  | BAnd -> "&"
+  | BOr -> "|"
 
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function

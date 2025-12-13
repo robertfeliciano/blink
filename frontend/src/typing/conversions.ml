@@ -46,6 +46,7 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
 let convert_unop : Ast.unop -> Typed_ast.unop = function
   | Ast.Neg -> Typed_ast.Neg
   | Ast.Not -> Typed_ast.Not
+  | Ast.BNeg -> Typed_ast.BNeg
 
 let convert_binop : Ast.binop -> Typed_ast.binop = function
   | Ast.Add -> Typed_ast.Add
@@ -67,6 +68,9 @@ let convert_binop : Ast.binop -> Typed_ast.binop = function
   | Ast.Shl -> Typed_ast.Shl
   | Ast.Lshr -> Typed_ast.Lshr
   | Ast.Ashr -> Typed_ast.Ashr
+  | Ast.BXor -> Typed_ast.BXor
+  | Ast.BAnd -> Typed_ast.BAnd
+  | Ast.BOr -> Typed_ast.BOr
 
 let convert_aop : Ast.aop -> Typed_ast.aop = function
   | Ast.Eq -> Typed_ast.Eq

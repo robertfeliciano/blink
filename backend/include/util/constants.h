@@ -31,7 +31,7 @@ namespace Constants {
         EXP_Null    = 14
     };
 
-    enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1 };
+    enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1, UNOP_BNeg = 2 };
 
     enum BinOpTag {
         BINOP_Add  = 0,
@@ -52,7 +52,10 @@ namespace Constants {
         BINOP_Shl  = 15,
         BINOP_Lshr = 16,
         BINOP_Ashr = 17,
-        BINOP_Xor  = 18
+        BINOP_Xor  = 18, 
+        BINOP_BXor = 19,
+        BINOP_BAnd = 20,
+        BINOP_BOr = 21
     };
 
     enum StmtVariant {

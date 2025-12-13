@@ -14,7 +14,7 @@ and ref_ty =
 
 and ret_ty = RetVoid | RetVal of ty
 
-type unop = Neg | Not [@@deriving show]
+type unop = Neg | Not | BNeg [@@deriving show]
 
 type binop =
   | Add
@@ -36,6 +36,9 @@ type binop =
   | Lshr
   | Ashr
   | Xor
+  | BXor 
+  | BAnd 
+  | BOr
 [@@deriving show]
 
 type exp =

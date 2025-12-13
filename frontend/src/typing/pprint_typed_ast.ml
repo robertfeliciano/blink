@@ -48,7 +48,7 @@ and show_ty = function
   | TRef rt -> Printf.sprintf "%s" (show_ref_ty rt)
 
 (* Unary and binary operators *)
-let show_unop = function Neg -> "Neg" | Not -> "Not"
+let show_unop = function Neg -> "Neg" | Not -> "Not" | BNeg -> "~"
 
 let show_binop = function
   | Add -> "Add"
@@ -70,6 +70,9 @@ let show_binop = function
   | And -> "And"
   | Or -> "Or"
   | Xor -> "Xor"
+  | BXor -> "^"
+  | BAnd -> "&"
+  | BOr -> "|"
 
 let show_aop = function
   | Eq -> "Eq"

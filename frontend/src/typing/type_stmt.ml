@@ -313,6 +313,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             | Some (TInt (TUnsigned _)) ->
                 type_error e "Cannot assign negative number to unsigned int."
             | _ -> t)
+        | BNeg, t when is_number t -> t
         | Not, t when t = TBool -> TBool
         | _, t ->
             type_error e ("bad operand type, received " ^ Printer.show_ty t)

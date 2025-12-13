@@ -55,10 +55,10 @@ rule read = parse
   | "<<" { LTLT }
   | ">>" { GTGT }
   | ">>>" { GTGTGT }
-  (* | "^"  { CARET }
+  | "^"  { CARET }
   | "&"  { AMP }
   | "|"  { BOR }
-  | "~"  { TILDE } *)
+  | "~"  { TILDE }
   (* TODO add btwise and/or/xor *)
   | "+=" { PLUEQ }
   | "-=" { MINEQ }

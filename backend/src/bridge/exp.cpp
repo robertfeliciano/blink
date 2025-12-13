@@ -17,6 +17,8 @@ UnOp convert_unop(value v) {
             return UnOp::Neg;
         case Constants::UNOP_Not:
             return UnOp::Not;
+        case Constants::UNOP_BNeg:
+            return UnOp::BNeg;
         default:
             throw std::runtime_error("Unknown UnOp");
     }
@@ -62,6 +64,12 @@ BinOp convert_binop(value v) {
             return BinOp::Ashr;
         case Constants::BINOP_Xor:
             return BinOp::Xor;
+        case Constants::BINOP_BXor: 
+            return BinOp::BXor;
+        case Constants::BINOP_BAnd: 
+            return BinOp::BAnd;
+        case Constants::BINOP_BOr: 
+            return BinOp::BOr;
         default:
             throw std::runtime_error("Unknown BinOp");
     }

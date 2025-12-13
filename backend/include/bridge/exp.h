@@ -13,9 +13,9 @@ using u128 = unsigned __int128;
 
 struct Exp;
 
-enum class UnOp { Neg, Not };
+enum class UnOp { Neg, Not, BNeg };
 
-enum class BinOp { Add, Sub, Mul, Div, At, Mod, Pow, Shl, Lshr, Ashr, Eqeq, Neq, Lt, Lte, Gt, Gte, And, Or, Xor };
+enum class BinOp { Add, Sub, Mul, Div, At, Mod, Pow, Shl, Lshr, Ashr, Eqeq, Neq, Lt, Lte, Gt, Gte, And, Or, Xor, BXor, BAnd, BOr };
 
 struct EBool {
     bool value;
@@ -30,6 +30,9 @@ struct EInt {
     Ty ty;
 };
 struct EFloat {
+    // tag for using float or double
+    // float f_val
+    // double d_val
     double  value;
     FloatTy float_ty;
     Ty      ty;

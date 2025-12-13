@@ -26,7 +26,7 @@ and ref_ty =
 
 and ret_ty = RetVoid | RetVal of ty
 
-type unop = Neg | Not [@@deriving show]
+type unop = Neg | Not | BNeg [@@deriving show]
 
 type binop =
   | Add
@@ -47,9 +47,10 @@ type binop =
   | Gte
   | And
   | Or
-  | Xor (* | BXor 
+  | Xor 
+  | BXor 
   | BAnd 
-  | BOr *)
+  | BOr
 [@@deriving show]
 
 type aop =

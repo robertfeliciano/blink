@@ -186,6 +186,15 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
             // lhs and rhs for xor are guaranteed to be bools (i1) at this point
             return gen.builder->CreateXor(lhs, rhs, "xortmp");
 
+        case BinOp::BXor: 
+            return gen.builder->CreateXor(lhs, rhs, "bwxortmp");
+
+        case BinOp::BAnd:
+            return gen.builder->CreateAnd(lhs, rhs, "bwandtmp");
+
+        case BinOp::BOr:
+            return gen.builder->CreateOr(lhs, rhs, "bwortmp");
+
         default:
             llvm_unreachable("Unsupported binary operator");
     }
@@ -210,6 +219,9 @@ Value* ExpToLLVisitor::operator()(const EUop& e) {
 
         case UnOp::Not:
             return gen.builder->CreateNot(argVal, "nottmp");
+
+        case UnOp::BNeg:
+            return gen.builder->CreateNot(argVal, "bwnottmp");
 
         default:
             llvm_unreachable("Unsupported unary operator");

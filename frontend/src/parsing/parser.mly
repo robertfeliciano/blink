@@ -39,10 +39,10 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTLT      /* << */
 %token GTGT      /* >> */
 %token GTGTGT    /* >>> */
-// %token CARET     /* ^ */
-// %token AMP       /* & */
-// %token BOR       /* | */
-// %token TILDE      /* ~ */
+%token CARET     /* ^ */
+%token AMP       /* & */
+%token BOR       /* | */
+%token TILDE      /* ~ */
 %token XOR       /* xor */
 %token PLUEQ     /* += */
 %token MINEQ     /* -= */
@@ -117,11 +117,11 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left EQEQ NEQ
 %left LT LTE GT GTE
 
-// %left BOR
-// %left CARET
-// %left AMP
+%left BOR
+%left CARET
+%left AMP
 
-%left PLUS MINUS
+%left PLUS MINUS TILDE
 %left MULT DIV MOD LTLT GTGT GTGTGT
 %right POW
 
@@ -269,11 +269,14 @@ fun_ty:
   | AND   { And }
   | OR    { Or }
   | XOR   { Xor }
-  // | BXOR  { BXor }
+  | CARET { BXor }
+  | AMP   { BAnd }
+  | BOR   { BOr }
 
 %inline uop:
   | MINUS { Neg }
   | NOT   { Not }
+  | TILDE { BNeg }
 
 %inline aop:
   | EQUAL { Eq }
