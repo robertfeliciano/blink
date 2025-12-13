@@ -268,7 +268,6 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let te2, rty = type_exp tc e2 in
       match eval_const_exp e with
       | Some ev ->
-          (* TODO have this work for floats too *)
           let inferred_int_ty = infer_integer_ty ev e in
           (Typed_ast.Int (ev, inferred_int_ty), TInt inferred_int_ty)
       | None ->
@@ -312,8 +311,6 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         | _, t ->
             type_error e ("bad operand type, received " ^ Printer.show_ty t)
       in
-      (* let const = eval_const_exp e in  *)
-      (* let te1 = if Option.is_some const then const else te1 in *)
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
       let t_iter, iter_ty = type_exp tc e_iter in

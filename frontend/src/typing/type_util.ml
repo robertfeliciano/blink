@@ -284,11 +284,11 @@ let rec eval_const_exp (e : exp node) : Z.t option =
             type_error e2 "Ashr operator cannot be negative"
           else Some Z.(shift_right v1 (to_int v2))
       | _ -> None)
-  (* | Uop (Neg, e1) -> (
+  | Uop (Neg, e1) -> (
     match (eval_const_exp e1) with 
     | Some v1 -> Some Z.(mul v1 (of_int (-1)))
     | _ -> None
-  ) *)
+  )
   | _ -> None
 
 let unexpected_ty expected e =
