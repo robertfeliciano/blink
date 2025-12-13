@@ -84,3 +84,6 @@ let convert_aop : Ast.aop -> Typed_ast.aop = function
   | Ast.ShlEq -> Typed_ast.ShlEq
   | Ast.LShrEq -> Typed_ast.LShrEq
   | Ast.AShrEq -> Typed_ast.AShrEq
+  | Ast.BXorEq -> Typed_ast.BXorEq
+  | Ast.BAndEq -> Typed_ast.BAndEq
+  | Ast.BOrEq -> Typed_ast.BOrEq

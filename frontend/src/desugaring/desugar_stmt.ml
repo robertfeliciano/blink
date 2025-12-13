@@ -17,6 +17,9 @@ let base_op = function
   | Typed.ShlEq -> D.Shl
   | Typed.LShrEq -> D.Lshr
   | Typed.AShrEq -> D.Ashr
+  | Typed.BXorEq -> D.BXor
+  | Typed.BAndEq -> D.BAnd
+  | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =

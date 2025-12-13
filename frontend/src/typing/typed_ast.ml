@@ -36,8 +36,8 @@ type binop =
   | And
   | Or
   | Xor
-  | BXor 
-  | BAnd 
+  | BXor
+  | BAnd
   | BOr
 [@@deriving show]
 
@@ -53,6 +53,9 @@ type aop =
   | ShlEq
   | LShrEq
   | AShrEq
+  | BXorEq
+  | BAndEq
+  | BOrEq
 [@@deriving show]
 
 type exp =

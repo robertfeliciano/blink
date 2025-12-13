@@ -53,7 +53,9 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTLTEQ    /* <<= */
 %token GTGTEQ    /* >>= */
 %token GTGTGTEQ  /* >>>= */
-// %token BXOREQ    /* ^= */
+%token CARETEQ   /* ^= */
+%token AMPEQ     /* &= */
+%token BOREQ     /* |= */
 %token LT        /* < */
 %token LTE       /* <= */
 %token GT        /* > */
@@ -121,7 +123,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %left CARET
 %left AMP
 
-%left PLUS MINUS TILDE
+%left PLUS MINUS
 %left MULT DIV MOD LTLT GTGT GTGTGT
 %right POW
 
@@ -289,7 +291,9 @@ fun_ty:
   | LTLTEQ { ShlEq }
   | GTGTEQ { LShrEq }
   | GTGTGTEQ { AShrEq }
-  // | BXOREQ
+  | CARETEQ { BXorEq }
+  | AMPEQ { BAndEq }
+  | BOREQ { BOrEq }
 
 %inline ty_spec:
   | COLON t=ty { t }

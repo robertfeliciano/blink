@@ -69,7 +69,9 @@ rule read = parse
   | "<<=" { LTLTEQ }
   | ">>=" { GTGTEQ }
   | ">>>=" { GTGTGTEQ }
-  (* | "^=" { BXOREQ } *)
+  | "^=" { CARETEQ }
+  | "&=" { AMPEQ }
+  | "|=" { BOREQ }
   | "<" { LT }
   | "<=" { LTE }
   | ">" { GT }

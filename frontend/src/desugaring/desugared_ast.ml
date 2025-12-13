@@ -36,8 +36,8 @@ type binop =
   | Lshr
   | Ashr
   | Xor
-  | BXor 
-  | BAnd 
+  | BXor
+  | BAnd
   | BOr
 [@@deriving show]
 
