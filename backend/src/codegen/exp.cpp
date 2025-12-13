@@ -135,6 +135,16 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
             return bothUnsigned ? gen.builder->CreateURem(lhs, rhs, "uremtmp")
                                 : gen.builder->CreateSRem(lhs, rhs, "sremtmp");
 
+        case BinOp::Pow: {
+            llvm::Value* args[] = {lhs, rhs};
+
+            llvm::Type* arg_ty = lhs->getType();
+
+            llvm::Function* pow_fn = llvm::Intrinsic::getDeclaration(gen.mod.get(), llvm::Intrinsic::pow, {arg_ty});
+
+            return gen.builder->CreateCall(pow_fn, args, "powtmp");
+        }
+
         case BinOp::Eqeq:
             return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
 
@@ -165,7 +175,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 
         case BinOp::Shl:
             return gen.builder->CreateShl(lhs, rhs, "shltmp");
-        
+
         case BinOp::Lshr:
             return gen.builder->CreateLShr(lhs, rhs, "lshrtmp");
 

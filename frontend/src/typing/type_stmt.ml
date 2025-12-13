@@ -286,15 +286,21 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             | At -> type_error e "@ not yet supported."
             | _ ->
                 let args_valid = all_numbers [ lty; rty ] in
-                if not args_valid then
-                  type_error e "using binary operator on non-number types"
-                else if is_hardcoded te1 || is_hardcoded te2 then
-                  meet_number e (lty, rty)
-                else if not (equal_ty lty rty) then
-                  type_error e
-                    ("no operator between " ^ Printer.show_ty lty ^ " and "
-                   ^ Printer.show_ty rty)
-                else meet_number e (lty, rty)
+                (if not args_valid then
+                   type_error e "using binary operator on non-number types"
+                 else if not (equal_ty lty rty) then
+                   type_error e
+                     ("no operator between " ^ Printer.show_ty lty ^ " and "
+                    ^ Printer.show_ty rty)
+                 else
+                   match binop with
+                   | Pow ->
+                       if not @@ is_float lty then
+                         type_error e1 "Base of pow must be float type."
+                       else if not @@ is_float rty then
+                         type_error e2 "Exponent of pow must be float type."
+                   | _ -> ());
+                meet_number e (lty, rty)
           in
           (Typed_ast.Bop (binop', te1, te2, res_ty), res_ty))
   | Uop (unop, e1) ->

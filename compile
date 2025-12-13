@@ -46,7 +46,7 @@ compile_ll_to_s() {
 }
 
 compile_s_to_o() {
-    if ! clang "$LLVM_S" -o "$LLVM_O"; then
+    if ! clang "$LLVM_S" -o "$LLVM_O" -lm; then
         printf "Error: clang failed\n" >&2
         return 1
     fi

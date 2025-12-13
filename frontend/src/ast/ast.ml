@@ -47,8 +47,7 @@ type binop =
   | Gte
   | And
   | Or
-  | Xor 
-  (* | BXor 
+  | Xor (* | BXor 
   | BAnd 
   | BOr *)
 [@@deriving show]

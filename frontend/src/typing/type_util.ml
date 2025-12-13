@@ -125,6 +125,9 @@ let is_number (t : Typed_ast.ty) : bool =
 
 let all_numbers (tl : Typed_ast.ty list) : bool = List.for_all is_number tl
 
+let is_float (t : Typed_ast.ty) : bool =
+  match t with Typed_ast.TFloat _ -> true | _ -> false
+
 let rec equal_ty (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
   | TBool, TBool -> true
@@ -239,6 +242,7 @@ let int_in_float (n : Z.t) (t : Typed_ast.float_ty) : bool =
 let rec eval_const_exp (e : exp node) : Z.t option =
   match e.elt with
   | Int i -> Some i
+  | Float f -> Some (Z.of_float f)
   | Bop (Add, e1, e2) -> (
       match (eval_const_exp e1, eval_const_exp e2) with
       | Some v1, Some v2 -> Some Z.(v1 + v2)
@@ -285,10 +289,9 @@ let rec eval_const_exp (e : exp node) : Z.t option =
           else Some Z.(shift_right v1 (to_int v2))
       | _ -> None)
   | Uop (Neg, e1) -> (
-    match (eval_const_exp e1) with 
-    | Some v1 -> Some Z.(mul v1 (of_int (-1)))
-    | _ -> None
-  )
+      match eval_const_exp e1 with
+      | Some v1 -> Some Z.(mul v1 (of_int (-1)))
+      | _ -> None)
   | _ -> None
 
 let unexpected_ty expected e =

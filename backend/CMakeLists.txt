@@ -5,7 +5,7 @@ project(my_ast_project LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 execute_process(
@@ -74,5 +74,5 @@ set_target_properties(convert PROPERTIES
     PREFIX "dll"  # OCaml expects 'dllconvert.so'
 )
 
-target_link_libraries(convert PRIVATE ${llvm_libs})
-target_link_libraries(convert_static PRIVATE ${llvm_libs})
+target_link_libraries(convert PRIVATE ${llvm_libs} ${SYSTEM_LIBS})
+target_link_libraries(convert_static PRIVATE ${llvm_libs} ${SYSTEM_LIBS})

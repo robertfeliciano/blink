@@ -65,9 +65,10 @@ fun main(argc: i32) => i32 {
     }
     */
     //return x;
+    //let x: f64 = 3.0;
+    let x: f64 = 3.0;
+    return (x**4.0) as i32;
 
-    return 5 + (-3);
-    
     //return fib(8);
     //return -2.5 as i32;
     //return (g + 4.5) as i32;
