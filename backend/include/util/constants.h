@@ -52,10 +52,10 @@ namespace Constants {
         BINOP_Shl  = 15,
         BINOP_Lshr = 16,
         BINOP_Ashr = 17,
-        BINOP_Xor  = 18, 
+        BINOP_Xor  = 18,
         BINOP_BXor = 19,
         BINOP_BAnd = 20,
-        BINOP_BOr = 21
+        BINOP_BOr  = 21
     };
 
     enum StmtVariant {

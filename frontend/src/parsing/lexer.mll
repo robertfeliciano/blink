@@ -59,7 +59,6 @@ rule read = parse
   | "&"  { AMP }
   | "|"  { BOR }
   | "~"  { TILDE }
-  (* TODO add btwise and/or/xor *)
   | "+=" { PLUEQ }
   | "-=" { MINEQ }
   | "*=" { TIMEQ }

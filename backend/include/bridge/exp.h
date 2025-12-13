@@ -15,7 +15,30 @@ struct Exp;
 
 enum class UnOp { Neg, Not, BNeg };
 
-enum class BinOp { Add, Sub, Mul, Div, At, Mod, Pow, Shl, Lshr, Ashr, Eqeq, Neq, Lt, Lte, Gt, Gte, And, Or, Xor, BXor, BAnd, BOr };
+enum class BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    At,
+    Mod,
+    Pow,
+    Shl,
+    Lshr,
+    Ashr,
+    Eqeq,
+    Neq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    And,
+    Or,
+    Xor,
+    BXor,
+    BAnd,
+    BOr
+};
 
 struct EBool {
     bool value;

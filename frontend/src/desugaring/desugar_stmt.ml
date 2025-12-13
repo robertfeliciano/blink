@@ -80,7 +80,11 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let zero_check =
         D.If
           ( Bop (Eqeq, step_, zero, TBool),
-            [ SCall (Id ("panic", TRef (RFun ([], RetVoid))), []) ],
+            [
+              SCall
+                ( Id ("exit", TRef (RFun ([], RetVoid))),
+                  [ Int ("1", TSigned Ti32) ] );
+            ],
             [ step_inc ] )
       in
       prelude @ [ step_decl; iter_decl; zero_check ]

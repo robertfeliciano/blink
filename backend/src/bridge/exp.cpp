@@ -64,11 +64,11 @@ BinOp convert_binop(value v) {
             return BinOp::Ashr;
         case Constants::BINOP_Xor:
             return BinOp::Xor;
-        case Constants::BINOP_BXor: 
+        case Constants::BINOP_BXor:
             return BinOp::BXor;
-        case Constants::BINOP_BAnd: 
+        case Constants::BINOP_BAnd:
             return BinOp::BAnd;
-        case Constants::BINOP_BOr: 
+        case Constants::BINOP_BOr:
             return BinOp::BOr;
         default:
             throw std::runtime_error("Unknown BinOp");
