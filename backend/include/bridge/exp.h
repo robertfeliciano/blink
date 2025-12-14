@@ -12,6 +12,7 @@ using i128 = __int128;
 using u128 = unsigned __int128;
 
 struct Exp;
+struct Stmt;
 
 enum class UnOp { Neg, Not, BNeg };
 
@@ -111,6 +112,12 @@ struct EObjInit {
     std::string                                               id;
     std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
     Ty                                                        ty;
+};
+
+struct ELambda {
+    std::vector<std::pair<std::string, Ty>> params;
+    RetTy ret_ty;
+    std::vector<Stmt> body;
 };
 
 struct ENull {
