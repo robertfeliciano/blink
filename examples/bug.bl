@@ -1,0 +1,15 @@
+fun main() => i32 {
+    let x = 19;
+    let y: i32;
+    if x > 20 {
+        y = 8;
+    }
+        /*
+    } else if x < 10 {
+        y = 10;
+    } else {
+        y = x;
+    }
+    */
+    return y;
+}

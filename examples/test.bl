@@ -66,18 +66,9 @@ fun main(argc: i32) => i32 {
     */
     //return x;
     //let x: f64 = 3.0;
-    let x = 10;
-    /*
-    if x & 1 == 0 {
-        return 99;
-    } 
-    */
-    for i in 0..x by 2{
-        printf("jello\n");
-    }
-    return 9;
-    //let exp: f64 = 4.0;
-    //return (x**exp) as i32;
+    let x: f32 = 2.0;
+    let exp: f32 = 4.0;
+    return (x**exp) as i32;
 
     //return fib(8);
     //return -2.5 as i32;

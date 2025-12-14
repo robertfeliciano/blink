@@ -69,19 +69,20 @@ Value* ExpToLLVisitor::operator()(const EId& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EFloat& e) {
-    llvm::APFloat ap(e.value);
+    llvm::Type* ty = nullptr;
 
     switch (e.float_ty) {
         case FloatTy::Tf32:
-            ap.convert(llvm::APFloat::IEEEsingle(), llvm::APFloat::rmNearestTiesToEven, nullptr);
+            ty = llvm::Type::getFloatTy(*gen.ctxt);
             break;
         case FloatTy::Tf64:
+            ty = llvm::Type::getDoubleTy(*gen.ctxt);
             break;
         default:
             llvm_unreachable("Unknown float type");
     }
 
-    return llvm::ConstantFP::get(*gen.ctxt, ap);
+    return llvm::ConstantFP::get(ty, e.value);
 }
 
 Value* ExpToLLVisitor::operator()(const EBop& e) {

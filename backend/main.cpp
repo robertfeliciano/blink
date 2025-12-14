@@ -16,6 +16,9 @@ value convert_caml_ast(value p) {
     gen.configureTarget();
     gen.codegenProgram(prog);
     gen.dumpLL("new_output.ll");
+
+    llvm::llvm_shutdown();
+
     CAMLreturn(Val_unit);
 }
 }

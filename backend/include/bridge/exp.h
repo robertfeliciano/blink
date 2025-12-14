@@ -53,9 +53,6 @@ struct EInt {
     Ty ty;
 };
 struct EFloat {
-    // tag for using float or double
-    // float f_val
-    // double d_val
     double  value;
     FloatTy float_ty;
     Ty      ty;

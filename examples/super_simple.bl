@@ -15,13 +15,6 @@ fun nestedBrah(x: i32) => i32 {
     return x * 2;
 }
 
-/*
-one day we will print!
-*/
-fun printf(s: string) => void {
-    return;
-}
-
 fun otherFunc(a: i32, s: string, b: i32) => u8 { 
     printf(s);
     return (a+b) as u8;
