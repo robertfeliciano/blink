@@ -68,6 +68,7 @@ fun main(argc: i32) => i32 {
     //let x: f64 = 3.0;
     let x: f32 = 2.0;
     let exp: f32 = 4.0;
+    puts("Hello world!");
     return (x**exp) as i32;
 
     //return fib(8);

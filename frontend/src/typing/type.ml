@@ -83,7 +83,7 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
 
 let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let tc =
-    Tctxt.add_global tc "printf"
+    Tctxt.add_global tc "puts"
       (convert_ty (TRef (RFun ([ TRef RString ], RetVoid))), false)
   in
   let rec aux (tc : Tctxt.t) = function
