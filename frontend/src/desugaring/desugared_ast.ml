@@ -74,6 +74,8 @@ and stmt =
 
 and block = stmt list
 
+type annotation = id * exp list
+
 type fdecl = {
   frtyp : ret_ty;
   fname : id;
@@ -81,8 +83,15 @@ type fdecl = {
   mutable body : block;
 }
 
+type proto = {
+  annotations : annotation list;
+  frtyp: ret_ty;
+  fname: id;
+  args: ty list
+}
+
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
 type cdecl = { cname : id; fields : field list }
-type program = Prog of fdecl list * cdecl list [@@boxed]
+type program = Prog of fdecl list * cdecl list * proto list [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"

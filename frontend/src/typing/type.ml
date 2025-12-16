@@ -34,7 +34,11 @@ let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
       (fun (i, en) ->
         let e' =
           match en with
-          (* TODO create type_annotation and do specific things for that  *)
+          (* 
+          TODO create type_annotation and do specific things for that 
+          - check annotation ("@<anno>") is valid 
+          - check exp is valid (basic string, number)
+          *)
           | Some es -> Some (List.map (fun e -> type_exp tc e |> fst) es)
           | None -> None
         in

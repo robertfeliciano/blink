@@ -13,7 +13,7 @@ let test_compound_assignment _ =
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ stmt ] } in
   let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
-  | Ok (Prog (fns, _)) -> (
+  | Ok (Prog (fns, _, _)) -> (
       match fns with
       | fn' :: _ -> (
           match fn'.body with
@@ -42,7 +42,7 @@ let test_desugar_call_proj _ =
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
   let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
-  | Ok (Prog (fns, _)) -> (
+  | Ok (Prog (fns, _, _)) -> (
       match fns with
       | fn' :: _ -> (
           match List.hd fn'.body with
@@ -89,14 +89,14 @@ let test_desugar_if_and_while _ =
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ whilestmt ] } in
   let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
-  | Ok (Prog (fns, _)) -> assert_bool "desugared" (List.length fns = 1)
+  | Ok (Prog (fns, _, _)) -> assert_bool "desugared" (List.length fns = 1)
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
 let test_noop_desugar _ =
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [] } in
   let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
-  | Ok (Prog (fns, _)) -> assert_equal 1 (List.length fns)
+  | Ok (Prog (fns, _, _)) -> assert_equal 1 (List.length fns)
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
 (* run desugar on typed programs produced from parsing+typing of examples: basic smoke tests *)
@@ -186,7 +186,7 @@ let test_desugar_method_extraction _ =
   in
   let prog = Prog ([], [ cdecl ], []) in
   match D.desugar_prog prog with
-  | Ok (Prog (_, structs)) ->
+  | Ok (Prog (_, structs, _)) ->
       assert_bool "structs returned" (List.length structs >= 0)
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
