@@ -30,9 +30,9 @@ struct CDecl {
 
 struct Proto {
     std::vector<std::string> annotations;
-    RetTy           frtyp;
-    std::string     fname;
-    std::vector<Ty> args;
+    RetTy                    frtyp;
+    std::string              fname;
+    std::vector<Ty>          args;
 };
 
 FDecl convert_fdecl(value v);

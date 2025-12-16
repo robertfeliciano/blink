@@ -311,7 +311,7 @@ std::string protoToString(const Proto& p) {
         const auto& t = p.args[i];
         oss << tyToString(t);
         if (i + 1 < p.args.size())
-        oss << ", ";
+            oss << ", ";
     }
     oss << ") -> ";
     switch (p.frtyp.tag) {
@@ -372,7 +372,7 @@ std::string programToString(const Program& prog) {
     for (const auto& c : prog.classes) {
         oss << cdeclToString(c) << "\n\n";
     }
-    for (const auto& p : prog.protos) { 
+    for (const auto& p : prog.protos) {
         oss << protoToString(p) << "\n\n";
     }
     for (const auto& f : prog.functions) {

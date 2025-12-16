@@ -62,7 +62,7 @@ Proto convert_proto(value v) { // record proto = { annotations; frtyp; fname; ar
     value args_v = Field(v, 3);
     while (args_v != Val_emptylist) {
         value caml_ty = Field(args_v, 0);
-        Ty t = convert_ty(caml_ty);
+        Ty    t       = convert_ty(caml_ty);
         out.args.emplace_back(std::move(t));
         args_v = Field(args_v, 1);
     }

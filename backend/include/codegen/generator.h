@@ -62,7 +62,9 @@ struct Generator {
 
     llvm::Type* codegenRetType(const RetTy& ty) { return typeGen.codegenRetTy(ty); }
 
-    void codegenFunctionProtos(const Program& p) { return declVisitor.codegenFunctionPrototypes(p.protos, p.functions); }
+    void codegenFunctionProtos(const Program& p) {
+        return declVisitor.codegenFunctionPrototypes(p.protos, p.functions);
+    }
 
     void codegenFDecl(const FDecl& d) { return declVisitor.codegenFDecl(d); }
 

@@ -30,10 +30,10 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
     // bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
-    
+
     llvm::GlobalValue::LinkageTypes linkage = llvm::Function::InternalLinkage;
 
-    if (fn.fname == "main") 
+    if (fn.fname == "main")
         linkage = llvm::Function::ExternalLinkage;
 
     llvm::Function* llfn = llvm::Function::Create(ftyp, linkage, fn.fname, gen.mod.get());
@@ -66,17 +66,16 @@ void DeclToLLVisitor::codegenProto(const Proto& p) {
     }
 
     bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
-    
+
     llvm::GlobalValue::LinkageTypes linkage = llvm::Function::InternalLinkage;
 
-    if (C_fun) 
+    if (C_fun)
         linkage = llvm::Function::ExternalLinkage;
 
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
     llvm::Function* llfn = llvm::Function::Create(ftyp, linkage, p.fname, gen.mod.get());
 }
-
 
 void DeclToLLVisitor::codegenFunctionPrototypes(const std::vector<Proto>& ps, const std::vector<FDecl>& fns) {
     for (auto& proto : ps) {
