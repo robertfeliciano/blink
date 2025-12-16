@@ -1,0 +1,7 @@
+@test(1,2) fun xyz() => i32 {
+    return 1;
+}
+
+fun main() => i32 {
+    return xyz();
+}

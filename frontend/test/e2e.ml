@@ -60,6 +60,7 @@ let test_e2e_manual_ast_success _ =
     {
       elt =
         {
+          annotations = [];
           frtyp = RetVal (TInt (TSigned Ti32));
           fname = "main";
           args = [];
@@ -90,7 +91,14 @@ let test_e2e_manual_ast_type_error _ =
   let stmt = Decl vdecl in
   let fn =
     {
-      elt = { frtyp = RetVoid; fname = "f"; args = []; body = [ no_loc stmt ] };
+      elt =
+        {
+          annotations = [];
+          frtyp = RetVoid;
+          fname = "f";
+          args = [];
+          body = [ no_loc stmt ];
+        };
       loc = Range.norange;
     }
   in

@@ -8,7 +8,7 @@ open Conversions
 module Printer = Pprint_typed_ast
 
 let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
-  let { elt = { frtyp; fname; args; body }; loc = _ } = fn in
+  let { elt = { annotations = _; frtyp; fname; args; body }; loc = _ } = fn in
   let tc' =
     List.fold_left
       (fun acc (t, a) ->
@@ -46,7 +46,9 @@ let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
   { fieldName; ftyp = e_ty; init = te }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
-  let { elt = { cname; impls; fields; methods }; loc = _ } = cn in
+  let { elt = { annotations = _; cname; impls; fields; methods }; loc = _ } =
+    cn
+  in
   let () =
     match
       List.find_opt (fun { elt = fn; loc = _ } -> fn.fname = cname) methods

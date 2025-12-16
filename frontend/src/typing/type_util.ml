@@ -61,7 +61,9 @@ and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
 
 let get_fdecl_type (fn : fdecl node) (tc : Tctxt.t) : Ast.ty =
-  let { elt = { frtyp; fname = _; args; body = _ }; loc = _ } = fn in
+  let { elt = { annotations = _; frtyp; fname = _; args; body = _ }; loc = _ } =
+    fn
+  in
   let arg_types =
     List.map
       (fun (t, _) ->

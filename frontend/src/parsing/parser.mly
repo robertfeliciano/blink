@@ -153,29 +153,74 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
    Top-level
    ----------------------- *)
 
+tdecl:
+  | f=fdecl { `Fun f }
+  | c=cdecl { `Class c }
+  // | p=pdecl { `Proto p }
+
+
 program:
-  | cdecls=cdecl_list fdecls=fdecl_list EOF
-      { Prog(fdecls, cdecls) }
+  | decls=list(tdecl) EOF
+      {
+        let fdecls, cdecls =
+          List.fold_right
+            (fun d (fs, cs) ->
+              match d with
+              | `Fun f   -> (f :: fs, cs)
+              | `Class c -> (fs, c :: cs))
+            decls
+            ([], [])
+        in
+        Prog (fdecls, cdecls)
+      }
+
+// program:
+//   | decls=list(tdecl) EOF
+//       {
+//         let fdecls, cdecls, pdecls =
+//           List.fold_right
+//             (fun d (fs, cs) ->
+//               match d with
+//               | `Fun f   -> (f :: fs, cs, ps)
+//               | `Class c -> (fs, c :: cs, ps)
+//               | `Proto p -> (fs, cs, p :: ps))
+//             decls
+//             ([], [], [])
+//         in
+//         Prog (fdecls, cdecls, pdecls)
+//       }
 
 (* -----------------------
-   Function & Class decls
+   Function, Prototype, & Class decls
    ----------------------- *)
+
+annotation:
+  | AT id=IDENT args=annotation_args?
+      {
+        let id_node =
+          loc ($startpos(id)) ($endpos(id)) id
+        in
+        (id_node, args)
+      }
+
+annotation_args:
+  | LPAREN l=separated_list(COMMA, exp) RPAREN { l }
 
 fdecl_list:
   | /* empty */ { [] }
   | hd=fdecl tl=fdecl_list { hd :: tl }
 
 fdecl:
-  | FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $startpos $endpos { frtyp; fname; args; body }) }
+  | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
+      { (loc $startpos $endpos { annotations; frtyp; fname; args; body }) }
 
-cdecl_list:
-  | /* empty */ { [] }
-  | hd=cdecl tl=cdecl_list { hd :: tl }
+// pdecl:
+//   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
+//       { (loc $startpos $endpos { annotations; frtyp; fname; args }) }
 
 cdecl:
-  | CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
-      { (loc $startpos $endpos { cname; impls; fields; methods }) }
+  | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
+      { (loc $startpos $endpos { annotations; cname; impls; fields; methods }) }
 
 impls_spec:
   | IMPLS ids=id_ne_list { ids }
@@ -381,7 +426,7 @@ vdecl:
 
 
 lambda: 
-  | BAR args=untyped_lambda_args BAR stmts=block
+  | BAR args=untyped_lambda_args BAR THIN_ARROW stmts=block
       { loc $startpos $endpos @@ Lambda (args, stmts) }
   | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty stmts=block
       { loc $startpos $endpos @@ TypedLambda (args, rty, stmts) }

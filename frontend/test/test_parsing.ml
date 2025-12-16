@@ -34,6 +34,7 @@ let test_show_manual_ast _ =
     {
       elt =
         {
+          annotations = [];
           frtyp = RetVal (TInt (TSigned Ti32));
           fname = "f";
           args = [ (TInt (TSigned Ti32), "x") ];
@@ -82,7 +83,8 @@ let test_parse_object _ =
 let test_show_prog_complex _ =
   let fn1 =
     {
-      elt = { frtyp = RetVoid; fname = "a"; args = []; body = [] };
+      elt =
+        { annotations = []; frtyp = RetVoid; fname = "a"; args = []; body = [] };
       loc = Ast.Range.norange;
     }
   in
@@ -90,6 +92,7 @@ let test_show_prog_complex _ =
     {
       elt =
         {
+          annotations = [];
           frtyp = RetVal (TInt (TSigned Ti32));
           fname = "b";
           args = [];

@@ -13,6 +13,7 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
       :: List.map (fun (t, i) -> (convert_ty t, i)) m.args
     else []
   in
+  (* TODO name mangle class methods *)
   (* let mangled_name =
     mangle_name ~enclosing_class:cname m.fname
       (List.map (fun (t, _) -> t) m.args)

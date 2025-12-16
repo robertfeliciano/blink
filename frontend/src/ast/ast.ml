@@ -114,6 +114,7 @@ and block = stmt node list
 type gdecl = { name : id; init : exp node }
 
 type fdecl = {
+  annotations : (id node * exp node list option) list;
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
@@ -123,11 +124,19 @@ type fdecl = {
 type field = { fieldName : id; ftyp : ty; init : exp node option }
 
 type cdecl = {
+  annotations : (id node * exp node list option) list;
   cname : id;
   impls : id list;
   fields : vdecl node list;
   methods : fdecl node list;
 }
+
+(* type proto = {
+  annotations: id node list;
+  frtyp : ret_ty;
+  fname : id;
+  args : (ty * id) list;
+} *)
 
 type program = Prog of fdecl node list * cdecl node list
 
@@ -286,6 +295,7 @@ and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
     | None -> "None")
     (indent (lvl + 1))
     (show_node show_exp exp)
+
 (* Statements *)
 
 and show_stmt ?(lvl = 0) = function
@@ -354,15 +364,31 @@ and show_node_stmt ?(lvl = 0) stmt_node =
 
 (* Function declarations *)
 
-let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
+let show_annotations annos =
+  String.concat ",\n"
+    (List.map
+       (fun (i, e) ->
+         "@"
+         ^ show_node (fun i -> i) i
+         ^ "\n"
+         ^
+         match e with
+         | Some l -> String.concat "\n" (List.map (show_node show_exp) l)
+         | None -> "")
+       annos)
+  ^ "\n"
+
+let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
   let args_s =
     String.concat "; "
       (List.map
          (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
          args)
   in
-  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
-    (indent lvl) fname
+  Printf.sprintf "%s[%s]fdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+    (indent lvl)
+    (show_annotations annotations)
+    fname
     (show_ret_ty ~lvl:(lvl + 1) frtyp)
     args_s
     (String.concat "" (List.map (show_node_stmt ~lvl:(lvl + 1)) body))
@@ -375,7 +401,8 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
     (show_ty ~lvl:(lvl + 1) ftyp)
     (match init with Some e -> show_node show_exp e | None -> "None")
 
-let show_cdecl ?(lvl = 0) { elt = { cname; impls; fields; methods }; loc = _ } =
+let show_cdecl ?(lvl = 0)
+    { elt = { annotations; cname; impls; fields; methods }; loc = _ } =
   let fields_s =
     String.concat ";\n"
       (List.map (show_node (show_vdecl ~lvl:(lvl + 2))) fields)
@@ -385,7 +412,14 @@ let show_cdecl ?(lvl = 0) { elt = { cname; impls; fields; methods }; loc = _ } =
       (List.map (fun m -> show_fdecl ~lvl:(lvl + 2) m.elt) methods)
   in
   Printf.sprintf
-    "%scdecl{name=%s; impls=[%s];\n%sfields=[\n%s\n%s];\n%smethods=[\n%s\n%s]}"
+    "[%s]%scdecl{name=%s; impls=[%s];\n\
+     %sfields=[\n\
+     %s\n\
+     %s];\n\
+     %smethods=[\n\
+     %s\n\
+     %s]}"
+    (show_annotations annotations)
     (indent lvl) cname (String.concat ", " impls)
     (indent (lvl + 1))
     fields_s
