@@ -25,7 +25,7 @@ let desugar_fn (fn : Typed.fdecl) (dbg : bool) : fdecl =
   }
 
 let desugar_program (prog : Typed.program) (dbg : bool) : program =
-  let (Prog (fns, cns)) = prog in
+  let (Prog (fns, cns, _)) = prog in
   let desugared_fns = List.map (fun f -> desugar_fn f dbg) fns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
   Prog (List.flatten extracted_methods @ desugared_fns, structs)

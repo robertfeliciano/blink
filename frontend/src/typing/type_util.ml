@@ -75,6 +75,19 @@ let get_fdecl_type (fn : fdecl node) (tc : Tctxt.t) : Ast.ty =
   List.iter (typecheck_ty fn tc) arg_types;
   TRef (RFun (arg_types, frtyp))
 
+let get_proto_type (fn : proto node) (tc : Tctxt.t) : Ast.ty =
+  let { elt = { annotations = _; frtyp; fname = _; args }; loc = _ } = fn in
+  let arg_types =
+    List.map
+      (fun (t, _) ->
+        typecheck_ty fn tc t;
+        t)
+      args
+  in
+  typecheck_ret_ty fn tc frtyp;
+  List.iter (typecheck_ty fn tc) arg_types;
+  TRef (RFun (arg_types, frtyp))
+
 let signed_int_hierarchy : Typed_ast.sint list =
   [ Ti8; Ti16; Ti32; Ti64; Ti128 ]
 

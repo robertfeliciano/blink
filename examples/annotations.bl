@@ -1,10 +1,6 @@
-@C fun puts(a: string);
-
-
-@test(1,2) fun xyz() => i32 {
-    return 1;
-}
+@C @Hello @Test("x", 11 as u8) fun puts(a: string);
 
 fun main() => i32 {
-    return xyz();
+    puts("hello!");
+    return 9;
 }

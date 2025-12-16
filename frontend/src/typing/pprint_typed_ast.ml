@@ -259,6 +259,27 @@ and show_block ?(lvl = 0) b =
 
 (* Function, class, and program printers *)
 
+let show_annotation ?(lvl = 0) annotation =
+  indent lvl
+  ^
+  match annotation with
+  | i, Some es ->
+      "@" ^ i ^ "(" ^ String.concat ", " (List.map (show_exp ~lvl) es) ^ ")"
+  | i, None -> "@" ^ i
+
+let show_proto ?(lvl = 0) { annotations; frtyp; fname; args } =
+  let args_s =
+    String.concat "; "
+      (List.map (fun ty -> Printf.sprintf "%s" (show_ty ty)) args)
+  in
+  let anno_s =
+    String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
+  in
+  Printf.sprintf "%s[\n%s\n%s]proto{name=%s; ret=%s; args=[%s]}" (indent lvl)
+    anno_s
+    (indent lvl)
+    fname (show_ret_ty frtyp) args_s
+
 let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
   let args_s =
     String.concat "; "
@@ -292,7 +313,10 @@ let show_cdecl ?(lvl = 0) { cname; impls; fields; methods } =
     methods_s
     (indent (lvl + 1))
 
-let show_typed_program (Prog (fns, cns)) =
+let show_typed_program (Prog (fns, cns, pns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
+  let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
-  Printf.sprintf "Program{\nClasses{\n%s\n}\nFunctions{\n%s\n}}" cns_s fns_s
+  Printf.sprintf
+    "Program{\nClasses{\n%s\n}\nPrototypes{\n%s\n}\nFunctions{\n%s\n}}" cns_s
+    pn_s fns_s

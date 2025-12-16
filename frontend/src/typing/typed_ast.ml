@@ -106,6 +106,8 @@ and stmt =
 
 and block = stmt list
 
+type annotation = id * exp list option
+
 type fdecl = {
   frtyp : ret_ty;
   fname : id;
@@ -122,4 +124,11 @@ type cdecl = {
   methods : fdecl list;
 }
 
-type program = Prog of fdecl list * cdecl list
+type proto = {
+  annotations : annotation list;
+  frtyp : ret_ty;
+  fname : id;
+  args : ty list;
+}
+
+type program = Prog of fdecl list * cdecl list * proto list

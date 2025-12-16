@@ -25,6 +25,24 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
       ("missing return statement for " ^ fname);
   { frtyp = frtyp'; fname; args = args'; body = typed_body }
 
+let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
+  let { elt = { annotations; frtyp; fname; args }; loc = _ } = pn in
+  let frtyp' = convert_ret_ty frtyp in
+  let args' = List.map (fun (ty, _) -> convert_ty ty) args in
+  let annotations' =
+    List.map
+      (fun (i, en) ->
+        let e' =
+          match en with
+          (* TODO create type_annotation and do specific things for that  *)
+          | Some es -> Some (List.map (fun e -> type_exp tc e |> fst) es)
+          | None -> None
+        in
+        (i.elt, e'))
+      annotations
+  in
+  { annotations = annotations'; frtyp = frtyp'; fname; args = args' }
+
 let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
   let { elt = vd; loc } = fn in
   let fieldName, fty_opt, en_opt, _const = vd in
@@ -38,11 +56,6 @@ let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
         (e, convert_ty t)
     | None, None -> type_error stmt_n "Must provide type or initial value."
   in
-  (* let tinit, init_ty =
-    match init with
-    | Some e -> type_exp ~expected:(convert_ty ftyp) tc e
-    | None -> type_error fn "default initializers not yet allowed."
-  in *)
   { fieldName; ftyp = e_ty; init = te }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
@@ -85,11 +98,29 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   let tmethods = List.map type_mthd methods in
   { cname; impls; fields = tfields; methods = tmethods }
 
-let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
-  let tc =
-    Tctxt.add_global tc "puts"
-      (convert_ty (TRef (RFun ([ TRef RString ], RetVoid))), false)
+let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
+  let rec aux (tc : Tctxt.t) : proto node list -> Tctxt.t = function
+    | pn :: t -> (
+        match lookup_global_option pn.elt.fname tc with
+        | Some _ ->
+            type_error pn
+              (Printf.sprintf "function with name %s already exists"
+                 pn.elt.fname)
+        | None ->
+            let func_type = get_proto_type pn tc in
+            let new_tc =
+              (*
+          TODO insert with is_proto flag
+          after lookup check if is_proto for fn ctxt -> yes then dont throw error
+          *)
+              Tctxt.add_global tc pn.elt.fname (convert_ty func_type, false)
+            in
+            aux new_tc t)
+    | [] -> tc
   in
+  aux tc pns
+
+let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) : fdecl node list -> Tctxt.t = function
     | fn :: t -> (
         match lookup_global_option fn.elt.fname tc with
@@ -141,12 +172,14 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
 
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
-  let (Prog (fns, cns, _)) = prog in
+  let (Prog (fns, cns, pns)) = prog in
   let cc = create_class_ctxt Tctxt.empty cns in
-  let fc = create_fn_ctxt cc fns in
-  let typed_classes = List.map (fun cn -> type_class fc cn) cns in
-  let typed_funs = List.map (fun fn -> type_fn fc fn) fns in
-  Prog (typed_funs, typed_classes)
+  let pc = create_proto_ctxt cc pns in
+  let fc = create_fn_ctxt pc fns in
+  let typed_classes = List.map (type_class fc) cns in
+  let typed_protos = List.map (type_proto fc) pns in
+  let typed_funs = List.map (type_fn fc) fns in
+  Prog (typed_funs, typed_classes, typed_protos)
 
 let type_prog (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
   try Ok (type_program prog)

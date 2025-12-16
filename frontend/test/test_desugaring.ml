@@ -11,7 +11,7 @@ let test_compound_assignment _ =
   let rhs = Int (Z.of_int 1, TSigned Ti32) in
   let stmt = Assn (lhs, PluEq, rhs, TInt (TSigned Ti32)) in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ stmt ] } in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
   | Ok (Prog (fns, _)) -> (
       match fns with
@@ -40,7 +40,7 @@ let test_desugar_call_proj _ =
         RetVoid )
   in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ call ] } in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
   | Ok (Prog (fns, _)) -> (
       match fns with
@@ -87,14 +87,14 @@ let test_desugar_if_and_while _ =
   let ifstmt = If (cond, [ Break ], [ Continue ]) in
   let whilestmt = While (cond, [ ifstmt ]) in
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [ whilestmt ] } in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
   | Ok (Prog (fns, _)) -> assert_bool "desugared" (List.length fns = 1)
   | Error e -> assert_failure (Core.Error.to_string_hum e)
 
 let test_noop_desugar _ =
   let fn = { frtyp = RetVoid; fname = "f"; args = []; body = [] } in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match D.desugar_prog prog with
   | Ok (Prog (fns, _)) -> assert_equal 1 (List.length fns)
   | Error e -> assert_failure (Core.Error.to_string_hum e)
@@ -184,7 +184,7 @@ let test_desugar_method_extraction _ =
   let cdecl =
     { cname; impls = []; fields = [ field ]; methods = [ method_fd ] }
   in
-  let prog = Prog ([], [ cdecl ]) in
+  let prog = Prog ([], [ cdecl ], []) in
   match D.desugar_prog prog with
   | Ok (Prog (_, structs)) ->
       assert_bool "structs returned" (List.length structs >= 0)
