@@ -80,7 +80,7 @@ type fdecl = {
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
-  mutable body : block;
+  body : block;
 }
 
 type proto = {

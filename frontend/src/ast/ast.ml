@@ -119,7 +119,7 @@ type fdecl = {
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
-  mutable body : block;
+  body : block;
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp node option }
