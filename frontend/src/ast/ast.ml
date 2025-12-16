@@ -379,6 +379,20 @@ let show_annotations annos =
        annos)
   ^ "\n"
 
+let show_proto ?(lvl=0) { elt = { annotations; frtyp; fname; args }; loc=_} =
+  let args_s =
+    String.concat "; "
+      (List.map
+         (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
+         args)
+  in
+  Printf.sprintf "%s[%s]proto{name=%s; ret=%s; args=[%s]}"
+    (indent lvl)
+    (show_annotations annotations)
+    fname
+    (show_ret_ty ~lvl:(lvl + 1) frtyp)
+    args_s
+
 let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
   let args_s =
     String.concat "; "
@@ -430,7 +444,8 @@ let show_cdecl ?(lvl = 0)
 
 let show_decl ?(lvl = 0) d = show_fdecl ~lvl d.elt
 
-let show_prog (Prog (fns, cns, _)) =
+let show_prog (Prog (fns, cns, pns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
+  let pn_s  = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_decl ~lvl:1) fns) in
-  Printf.sprintf "Program{\n%s\n%s\n}" cns_s fns_s
+  Printf.sprintf "Program{\n%s\n%s\n%s\n}" cns_s pn_s fns_s
