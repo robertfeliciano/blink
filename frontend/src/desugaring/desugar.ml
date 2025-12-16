@@ -11,8 +11,10 @@ module Typed = Typing.Typed_ast
 
 let desugar_annotation ((i, el) : Typed.annotation) = 
   match i, el with 
-  | id, Some es -> (id, List.map (fun e -> snd @@ desugar_exp e) es)
-  | id, None -> (id, [])
+  (* TODO any args passed to a desugar should be handled in desugarer elsewhere *)
+  (* | id, Some es -> (id, List.map (fun e -> snd @@ desugar_exp e) es) *)
+  | id , Some _ -> id
+  | id, None -> id
 
 let desugar_proto (pn : Typed.proto) : proto = 
   {

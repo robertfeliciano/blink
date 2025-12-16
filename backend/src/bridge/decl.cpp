@@ -18,7 +18,7 @@ static std::vector<std::unique_ptr<Stmt>> convert_block(value v) {
     return out;
 }
 
-FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; mutable body }
+FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; body }
     FDecl out;
 
     out.frtyp = convert_ret_ty(Field(v, 0));
@@ -40,6 +40,31 @@ FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; mutable b
         value hd = Field(body_v, 0);
         out.body.push_back(std::make_unique<Stmt>(convert_stmt(hd)));
         body_v = Field(body_v, 1);
+    }
+
+    return out;
+}
+
+Proto convert_proto(value v) { // record proto = { annotations; frtyp; fname; args }
+    Proto out;
+
+    value anno_v = Field(v, 0);
+    while (anno_v != Val_emptylist) {
+        std::string annotation = std::string(String_val(Field(anno_v, 0)));
+        out.annotations.emplace_back(annotation);
+        anno_v = Field(anno_v, 1);
+    }
+
+    out.frtyp = convert_ret_ty(Field(v, 1));
+    out.fname = std::string(String_val(Field(v, 2)));
+
+    // args : ty list
+    value args_v = Field(v, 3);
+    while (args_v != Val_emptylist) {
+        value caml_ty = Field(args_v, 0);
+        Ty t = convert_ty(Field(caml_ty, 0));
+        out.args.emplace_back(std::move(t));
+        args_v = Field(args_v, 1);
     }
 
     return out;

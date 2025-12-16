@@ -205,10 +205,7 @@ and show_block ?(lvl = 0) b =
 let show_annotation ?(lvl = 0) annotation =
   indent lvl
   ^
-  match annotation with
-  | i, e::es ->
-      "@" ^ i ^ "(" ^ String.concat ", " (List.map (show_exp ~lvl) (e::es)) ^ ")"
-  | i, [] -> "@" ^ i
+  "@" ^ annotation
 
 let show_proto ?(lvl = 0) { annotations; frtyp; fname; args } =
   let args_s =

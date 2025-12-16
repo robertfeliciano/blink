@@ -1,4 +1,4 @@
-@C @Hello @Test("x", 11 as u8) fun puts(a: string);
+@C @Hello fun puts(a: string);
 
 fun main() => i32 {
     puts("hello!");

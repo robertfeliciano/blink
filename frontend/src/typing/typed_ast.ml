@@ -113,6 +113,7 @@ type fdecl = {
   fname : id;
   args : (ty * id) list;
   body : block;
+  (* TODO bring annotations from AST in here *)
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp }
@@ -122,6 +123,7 @@ type cdecl = {
   impls : id list;
   fields : field list;
   methods : fdecl list;
+  (* TODO bring annotations from AST in here *)
 }
 
 type proto = {

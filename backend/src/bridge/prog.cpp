@@ -28,8 +28,19 @@ Program convert_program(value prog) {
         cdecls = Field(cdecls, 1);
     }
 
+    value pdecls = Field(prog, 2);
+
+    std::vector<Proto> protos;
+
+    while (pdecls != Val_emptylist) {
+        value proto = Field(pdecls, 0);
+        protos.push_back(convert_proto(proto));
+        pdecls = Field(pdecls, 1);
+    }
+
     program.functions = std::move(funs);
     program.classes   = std::move(cls);
+    program.protos    = std::move(protos);
 
     return program;
 }

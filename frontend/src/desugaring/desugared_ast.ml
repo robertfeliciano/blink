@@ -74,8 +74,6 @@ and stmt =
 
 and block = stmt list
 
-type annotation = id * exp list
-
 type fdecl = {
   frtyp : ret_ty;
   fname : id;
@@ -84,7 +82,7 @@ type fdecl = {
 }
 
 type proto = {
-  annotations : annotation list;
+  annotations : id list;
   frtyp: ret_ty;
   fname: id;
   args: ty list

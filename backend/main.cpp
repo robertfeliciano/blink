@@ -12,12 +12,12 @@ value convert_caml_ast(value p) {
     CAMLparam1(p);
     Program prog = convert_program(p);
     std::cout << programToString(prog) << std::endl;
-    Generator gen;
-    gen.configureTarget();
-    gen.codegenProgram(prog);
-    gen.dumpLL("new_output.ll");
+    // Generator gen;
+    // gen.configureTarget();
+    // gen.codegenProgram(prog);
+    // gen.dumpLL("new_output.ll");
 
-    llvm::llvm_shutdown();
+    // llvm::llvm_shutdown();
 
     CAMLreturn(Val_unit);
 }

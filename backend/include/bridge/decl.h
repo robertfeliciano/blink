@@ -28,6 +28,14 @@ struct CDecl {
     std::vector<Field>       fields;
 };
 
+struct Proto {
+    std::vector<std::string> annotations;
+    RetTy           frtyp;
+    std::string     fname;
+    std::vector<Ty> args;
+};
+
 FDecl convert_fdecl(value v);
 Field convert_field(value v);
 CDecl convert_cdecl(value v);
+Proto convert_proto(value v);
