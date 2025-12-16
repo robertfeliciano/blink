@@ -43,7 +43,7 @@ let test_show_manual_ast _ =
       loc = Ast.Range.norange;
     }
   in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   let _ = show_prog prog in
   ()
 
@@ -101,7 +101,7 @@ let test_show_prog_complex _ =
       loc = Ast.Range.norange;
     }
   in
-  let _ = show_prog (Prog ([ fn1; fn2 ], [])) in
+  let _ = show_prog (Prog ([ fn1; fn2 ], [], [])) in
   ()
 
 let suite =

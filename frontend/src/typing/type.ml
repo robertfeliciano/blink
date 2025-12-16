@@ -51,7 +51,9 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   in
   let () =
     match
-      List.find_opt (fun { elt = fn; loc = _ } -> fn.fname = cname) methods
+      List.find_opt
+        (fun ({ elt = fn; loc = _ } : fdecl node) -> fn.fname = cname)
+        methods
     with
     | Some { elt = constructor; loc = _ } ->
         if constructor.frtyp = RetVoid then
@@ -73,7 +75,7 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
     }
   in
   let type_mthd method_node =
-    let { elt = mthd; loc = _ } = method_node in
+    let ({ elt = mthd; loc = _ } : fdecl node) = method_node in
     let tc' =
       if mthd.fname = cname then { tc with globals = globals' @ tc.globals }
       else tc'
@@ -88,7 +90,7 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
     Tctxt.add_global tc "puts"
       (convert_ty (TRef (RFun ([ TRef RString ], RetVoid))), false)
   in
-  let rec aux (tc : Tctxt.t) = function
+  let rec aux (tc : Tctxt.t) : fdecl node list -> Tctxt.t = function
     | fn :: t -> (
         match lookup_global_option fn.elt.fname tc with
         | Some _ ->
@@ -106,7 +108,7 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   aux tc fns
 
 let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
-  let get_method_header { fname; frtyp; args; _ } : method_header =
+  let get_method_header ({ fname; frtyp; args; _ } : fdecl) : method_header =
     ( fname,
       convert_ret_ty frtyp,
       List.map (fun (t, name) -> (convert_ty t, name)) args )
@@ -139,7 +141,7 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
 
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
-  let (Prog (fns, cns)) = prog in
+  let (Prog (fns, cns, _)) = prog in
   let cc = create_class_ctxt Tctxt.empty cns in
   let fc = create_fn_ctxt cc fns in
   let typed_classes = List.map (fun cn -> type_class fc cn) cns in

@@ -75,7 +75,7 @@ let test_e2e_manual_ast_success _ =
       loc = Range.norange;
     }
   in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match Typing.Type.type_prog prog with
   | Error e -> assert_failure (Core.Error.to_string_hum e)
   | Ok tprog -> (
@@ -102,7 +102,7 @@ let test_e2e_manual_ast_type_error _ =
       loc = Range.norange;
     }
   in
-  let prog = Prog ([ fn ], []) in
+  let prog = Prog ([ fn ], [], []) in
   match Typing.Type.type_prog prog with
   | Ok _ -> assert_failure "expected type error"
   | Error _ -> ()

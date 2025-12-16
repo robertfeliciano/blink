@@ -156,39 +156,23 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 tdecl:
   | f=fdecl { `Fun f }
   | c=cdecl { `Class c }
-  // | p=pdecl { `Proto p }
-
+  | p=pdecl { `Proto p }
 
 program:
   | decls=list(tdecl) EOF
       {
-        let fdecls, cdecls =
+        let fdecls, cdecls, pdecls =
           List.fold_right
-            (fun d (fs, cs) ->
+            (fun d (fs, cs, ps) ->
               match d with
-              | `Fun f   -> (f :: fs, cs)
-              | `Class c -> (fs, c :: cs))
+              | `Fun f   -> (f :: fs, cs, ps)
+              | `Class c -> (fs, c :: cs, ps)
+              | `Proto p -> (fs, cs, p :: ps))
             decls
-            ([], [])
+            ([], [], [])
         in
-        Prog (fdecls, cdecls)
+        Prog (fdecls, cdecls, pdecls)
       }
-
-// program:
-//   | decls=list(tdecl) EOF
-//       {
-//         let fdecls, cdecls, pdecls =
-//           List.fold_right
-//             (fun d (fs, cs) ->
-//               match d with
-//               | `Fun f   -> (f :: fs, cs, ps)
-//               | `Class c -> (fs, c :: cs, ps)
-//               | `Proto p -> (fs, cs, p :: ps))
-//             decls
-//             ([], [], [])
-//         in
-//         Prog (fdecls, cdecls, pdecls)
-//       }
 
 (* -----------------------
    Function, Prototype, & Class decls
@@ -214,9 +198,9 @@ fdecl:
   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
       { (loc $startpos $endpos { annotations; frtyp; fname; args; body }) }
 
-// pdecl:
-//   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
-//       { (loc $startpos $endpos { annotations; frtyp; fname; args }) }
+pdecl:
+  | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
+      { (loc $startpos $endpos { annotations; frtyp; fname; args }) }
 
 cdecl:
   | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE

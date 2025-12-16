@@ -112,9 +112,10 @@ and stmt =
 and block = stmt node list
 
 type gdecl = { name : id; init : exp node }
+type annotation = id node * exp node list option
 
 type fdecl = {
-  annotations : (id node * exp node list option) list;
+  annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
@@ -124,21 +125,21 @@ type fdecl = {
 type field = { fieldName : id; ftyp : ty; init : exp node option }
 
 type cdecl = {
-  annotations : (id node * exp node list option) list;
+  annotations : annotation list;
   cname : id;
   impls : id list;
   fields : vdecl node list;
   methods : fdecl node list;
 }
 
-(* type proto = {
-  annotations: id node list;
+type proto = {
+  annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
-} *)
+}
 
-type program = Prog of fdecl node list * cdecl node list
+type program = Prog of fdecl node list * cdecl node list * proto node list
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
@@ -429,7 +430,7 @@ let show_cdecl ?(lvl = 0)
 
 let show_decl ?(lvl = 0) d = show_fdecl ~lvl d.elt
 
-let show_prog (Prog (fns, cns)) =
+let show_prog (Prog (fns, cns, _)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let fns_s = String.concat "\n" (List.map (show_decl ~lvl:1) fns) in
   Printf.sprintf "Program{\n%s\n%s\n}" cns_s fns_s
