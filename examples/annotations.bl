@@ -1,3 +1,6 @@
+@C puts(string a);
+
+
 @test(1,2) fun xyz() => i32 {
     return 1;
 }
