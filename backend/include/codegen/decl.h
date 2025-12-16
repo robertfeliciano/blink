@@ -14,8 +14,9 @@ class DeclToLLVisitor {
     void codegenCDecl(const CDecl& g);
     void codegenFDecl(const FDecl& d);
 
-    void codegenFunctionPrototypes(const std::vector<FDecl>& fns);
+    void codegenFunctionPrototypes(const std::vector<Proto>& ps, const std::vector<FDecl>& fns);
 
   private:
     void codegenFunctionProto(const FDecl& fn);
+    void codegenProto(const Proto& fn);
 };

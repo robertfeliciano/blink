@@ -20,12 +20,6 @@ void Generator::codegenProgram(const Program& p) {
 }
 
 void Generator::codegenStdlib() {
-    llvm::FunctionType* puts_type =
-        llvm::FunctionType::get(llvm::Type::getInt32Ty(*this->ctxt), {llvm::Type::getInt8PtrTy(*this->ctxt)}, false);
-
-    llvm::Function* puts_func =
-        llvm::Function::Create(puts_type, llvm::Function::ExternalLinkage, "puts", this->mod.get());
-
     llvm::FunctionType* exit_type =
         llvm::FunctionType::get(llvm::Type::getVoidTy(*this->ctxt), {llvm::Type::getInt32Ty(*this->ctxt)}, false);
 

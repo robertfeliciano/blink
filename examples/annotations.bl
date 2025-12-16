@@ -1,6 +1,7 @@
-@C @Hello fun puts(a: string);
+@C 
+fun puts(a: string);
 
 fun main() => i32 {
-    puts("hello!");
-    return 9;
+    puts("Hello, Jacob!");
+    return 0;
 }
