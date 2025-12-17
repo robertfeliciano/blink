@@ -3,7 +3,6 @@ module Printer = Pprint_typed_ast
 
 type ctxt = (id * (ty * bool)) list (* id -> type and is_const *)
 type method_header = id * ret_ty * (ty * id) list
-type proto_ctxt = (id * ty) list
 
 type class_ctxt =
   (id * ((id * ty * bool * bool) list * method_header list)) list
@@ -19,7 +18,7 @@ type t = {
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
-  protos : proto_ctxt;
+  protos : ctxt; (* id -> type and defined_yet *)
 }
 
 let empty = { locals = []; globals = []; classes = []; protos = [] }
@@ -56,17 +55,17 @@ let lookup_local_option id c : (ty * bool) option =
 let add_global (c : t) (id : id) (bnd : ty * bool) : t =
   { c with globals = (id, bnd) :: c.globals }
 
-let add_proto (c : t) (id : id) (bnd : ty) : t =
+let add_proto (c : t) (id : id) (bnd : ty*bool) : t =
   { c with protos = (id, bnd) :: c.protos }
-
+  
 let lookup_global (id : id) (c : t) : ty * bool = List.assoc id c.globals
-let lookup_proto (id : id) (c : t) : ty = List.assoc id c.protos
+let lookup_proto (id : id) (c : t) : ty*bool = List.assoc id c.protos
 
 let lookup_global_option id c : (ty * bool) option =
   try Some (List.assoc id c.globals) with Not_found -> None
 
 let lookup_proto_option id c : (ty * bool) option =
-  try Some (List.assoc id c.protos, false) with Not_found -> None
+  try Some (List.assoc id c.protos) with Not_found -> None
 
 (* general-purpose lookup: for local _or_ global *)
 let lookup id c : ty * bool =

@@ -125,12 +125,9 @@ let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
                  pn.elt.fname)
         | None ->
             let func_type = get_proto_type pn tc |> convert_ty in
+            let externally_defined = List.exists (fun anno_n -> let ({elt=i; loc=_}, _) =anno_n in i = "C") pn.elt.annotations in
             let new_tc =
-              (*
-          TODO insert with is_proto flag
-          after lookup check if is_proto for fn ctxt -> yes then dont throw error
-          *)
-              Tctxt.add_proto tc pn.elt.fname func_type
+              Tctxt.add_proto tc pn.elt.fname (func_type, externally_defined)
             in
             aux new_tc t)
     | [] -> tc
@@ -146,11 +143,14 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
               (Printf.sprintf "Function with name %s already defined."
                  fn.elt.fname)
         | None ->
-            let func_type = get_fdecl_type fn tc in
+            let func_type = get_fdecl_type fn tc |> convert_ty in
             let new_tc =
-              Tctxt.add_global tc fn.elt.fname (convert_ty func_type, false)
+              Tctxt.add_global tc fn.elt.fname (func_type, false)
             in
-            aux new_tc t)
+            let new_tc' = 
+              Tctxt.add_proto new_tc fn.elt.fname (func_type, true)
+            in
+            aux new_tc' t)
     | [] -> tc
   in
   aux tc fns
@@ -187,12 +187,26 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
   in
   aux tc cns
 
+let check_undefined_protos tc = 
+  let unique_protos =
+    List.fold_right (fun (id, data) acc ->
+      (* TODO maybe use a set to keep track *)
+      if List.mem_assoc id acc then 
+        acc
+      else 
+        (id, snd data) :: acc
+    ) tc.protos [] in 
+    let undefined_protos = List.fold_left (fun acc (id, defined) -> if not defined then id::acc else acc) [] unique_protos in 
+    if List.length undefined_protos > 0 then 
+      type_failure ("The following function prototypes are undefined:\n" ^ (String.concat "\n" undefined_protos))
+
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   let (Prog (fns, cns, pns)) = prog in
   let cc = create_class_ctxt Tctxt.empty cns in
   let pc = create_proto_ctxt cc pns in
   let fc = create_fn_ctxt pc fns in
+  check_undefined_protos fc;
   let typed_classes = List.map (type_class fc) cns in
   let typed_protos = List.map (type_proto fc) pns in
   let typed_funs = List.map (type_fn fc) fns in
