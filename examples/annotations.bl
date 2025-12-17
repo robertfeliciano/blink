@@ -1,6 +1,5 @@
-@C("hi")
+@C
 fun puts(a: string);
-
 
 @C class Some_C_Struct {
     let x: i32; 

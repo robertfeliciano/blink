@@ -118,19 +118,19 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
 let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) : proto node list -> Tctxt.t = function
     | pn :: t -> (
-        match lookup_global_option pn.elt.fname tc with
+        match lookup_proto_option pn.elt.fname tc with
         | Some _ ->
             type_error pn
-              (Printf.sprintf "function with name %s already exists"
+              (Printf.sprintf "Function prototype with name %s already defined."
                  pn.elt.fname)
         | None ->
-            let func_type = get_proto_type pn tc in
+            let func_type = get_proto_type pn tc |> convert_ty in
             let new_tc =
               (*
           TODO insert with is_proto flag
           after lookup check if is_proto for fn ctxt -> yes then dont throw error
           *)
-              Tctxt.add_global tc pn.elt.fname (convert_ty func_type, false)
+              Tctxt.add_proto tc pn.elt.fname func_type
             in
             aux new_tc t)
     | [] -> tc
@@ -143,7 +143,7 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
         match lookup_global_option fn.elt.fname tc with
         | Some _ ->
             type_error fn
-              (Printf.sprintf "function with name %s already exists"
+              (Printf.sprintf "Function with name %s already defined."
                  fn.elt.fname)
         | None ->
             let func_type = get_fdecl_type fn tc in
