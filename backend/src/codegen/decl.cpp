@@ -29,7 +29,14 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
 
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
-    llvm::Function* llfn = llvm::Function::Create(ftyp, llvm::Function::ExternalLinkage, fn.fname, gen.mod.get());
+    // bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
+
+    llvm::GlobalValue::LinkageTypes linkage = llvm::Function::InternalLinkage;
+
+    if (fn.fname == "main")
+        linkage = llvm::Function::ExternalLinkage;
+
+    llvm::Function* llfn = llvm::Function::Create(ftyp, linkage, fn.fname, gen.mod.get());
 
     unsigned idx = 0;
     for (auto& arg : llfn->args()) {
@@ -38,7 +45,42 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     }
 }
 
-void DeclToLLVisitor::codegenFunctionPrototypes(const std::vector<FDecl>& fns) {
+void DeclToLLVisitor::codegenProto(const Proto& p) {
+    std::vector<llvm::Type*> argTys;
+    for (auto& argTy : p.args) {
+        if (is_obj_ty(argTy)) {
+            argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
+        } else {
+            llvm::Type* baseTy = gen.codegenType(argTy);
+            argTys.push_back(baseTy);
+        }
+    }
+
+    const RetTy& retTy = p.frtyp;
+    llvm::Type*  llRetTy;
+
+    if (retTy.tag == RetTyTag::RetVal && is_obj_ty(*retTy.val)) {
+        llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
+    } else {
+        llRetTy = gen.codegenRetType(p.frtyp);
+    }
+
+    bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
+
+    llvm::GlobalValue::LinkageTypes linkage = llvm::Function::InternalLinkage;
+
+    if (C_fun)
+        linkage = llvm::Function::ExternalLinkage;
+
+    llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
+
+    llvm::Function* llfn = llvm::Function::Create(ftyp, linkage, p.fname, gen.mod.get());
+}
+
+void DeclToLLVisitor::codegenFunctionPrototypes(const std::vector<Proto>& ps, const std::vector<FDecl>& fns) {
+    for (auto& proto : ps) {
+        codegenProto(proto);
+    }
     for (auto& decl : fns) {
         codegenFunctionProto(decl);
     }

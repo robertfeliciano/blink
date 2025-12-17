@@ -18,8 +18,8 @@ struct Assn {
 };
 
 struct LambdaDecl {
-    std::string id;
-    RefTy refTy;
+    std::string          id;
+    RefTy                refTy;
     std::unique_ptr<Exp> lambda;
 };
 

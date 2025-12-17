@@ -19,9 +19,11 @@ class Point {
     }
 }
 
+@C fun puts(a: string) => void;
+
 fun main(argv: [string; 2]) => i32 {
     let p = new Point { x = 2, y = 4 };
     let p2 = new Point { x = 4, y = 9 };
-    printf("Hello sir kamal");
+    puts("Hello sir kamal");
     return p.midpoint(p2).sumX(p2);   
 }

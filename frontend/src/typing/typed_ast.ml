@@ -106,20 +106,31 @@ and stmt =
 
 and block = stmt list
 
+type annotation = id * exp list option
+
 type fdecl = {
+  annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
-  mutable body : block;
+  body : block;
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp }
 
 type cdecl = {
+  annotations : annotation list;
   cname : id;
   impls : id list;
   fields : field list;
   methods : fdecl list;
 }
 
-type program = Prog of fdecl list * cdecl list
+type proto = {
+  annotations : annotation list;
+  frtyp : ret_ty;
+  fname : id;
+  args : ty list;
+}
+
+type program = Prog of fdecl list * cdecl list * proto list

@@ -14,9 +14,14 @@ type class_ctxt =
  
 *)
 
-type t = { locals : ctxt; globals : ctxt; classes : class_ctxt }
+type t = {
+  locals : ctxt;
+  globals : ctxt;
+  classes : class_ctxt;
+  protos : ctxt; (* id -> type and defined_yet *)
+}
 
-let empty = { locals = []; globals = []; classes = [] }
+let empty = { locals = []; globals = []; classes = []; protos = [] }
 
 let show_tys tctxt =
   String.concat "\n"
@@ -50,10 +55,17 @@ let lookup_local_option id c : (ty * bool) option =
 let add_global (c : t) (id : id) (bnd : ty * bool) : t =
   { c with globals = (id, bnd) :: c.globals }
 
+let add_proto (c : t) (id : id) (bnd : ty*bool) : t =
+  { c with protos = (id, bnd) :: c.protos }
+  
 let lookup_global (id : id) (c : t) : ty * bool = List.assoc id c.globals
+let lookup_proto (id : id) (c : t) : ty*bool = List.assoc id c.protos
 
 let lookup_global_option id c : (ty * bool) option =
   try Some (List.assoc id c.globals) with Not_found -> None
+
+let lookup_proto_option id c : (ty * bool) option =
+  try Some (List.assoc id c.protos) with Not_found -> None
 
 (* general-purpose lookup: for local _or_ global *)
 let lookup id c : ty * bool =
@@ -61,7 +73,10 @@ let lookup id c : ty * bool =
 
 let lookup_option id c : (ty * bool) option =
   match lookup_local_option id c with
-  | None -> lookup_global_option id c
+  | None -> (
+      match lookup_global_option id c with
+      | None -> lookup_proto_option id c
+      | Some x -> Some x)
   | Some x -> Some x
 
 let add_class c id fields funs =

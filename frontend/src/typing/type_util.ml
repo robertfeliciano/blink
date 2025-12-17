@@ -34,6 +34,9 @@ let type_error (l : 'a node) err =
        (Printf.sprintf "Error at %s:%d:%d:\n%s%s\n%s\n%s" filename l1 c1
           line_indicator line underline err))
 
+let type_failure err = 
+  raise (TypeError (Printf.sprintf "Error: %s" err))
+
 let type_warning (l : 'a node) err =
   let _, (s, e), _ = l.loc in
   Printf.eprintf "[%d, %d] Warning: %s" s e err
@@ -61,7 +64,22 @@ and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
 
 let get_fdecl_type (fn : fdecl node) (tc : Tctxt.t) : Ast.ty =
-  let { elt = { frtyp; fname = _; args; body = _ }; loc = _ } = fn in
+  let { elt = { annotations = _; frtyp; fname = _; args; body = _ }; loc = _ } =
+    fn
+  in
+  let arg_types =
+    List.map
+      (fun (t, _) ->
+        typecheck_ty fn tc t;
+        t)
+      args
+  in
+  typecheck_ret_ty fn tc frtyp;
+  List.iter (typecheck_ty fn tc) arg_types;
+  TRef (RFun (arg_types, frtyp))
+
+let get_proto_type (fn : proto node) (tc : Tctxt.t) : Ast.ty =
+  let { elt = { annotations = _; frtyp; fname = _; args }; loc = _ } = fn in
   let arg_types =
     List.map
       (fun (t, _) ->
@@ -331,3 +349,10 @@ let default_step t enode =
   | Typed_ast.(TInt int_ty) -> Typed_ast.Int (Z.of_int 1, int_ty)
   | Typed_ast.(TFloat float_ty) -> Typed_ast.Float (1.0, float_ty)
   | _ -> type_error enode "impossible state"
+
+let is_const en =
+  match en.elt with
+  | Bool _ | Int _ | Float _ | Str _ | Array _ | TypedLambda _ -> true
+  | Id _ | Call _ | Bop _ | Uop _ | Index _ | Cast _ | Proj _ | ObjInit _ | Null
+  | Lambda _ ->
+      false

@@ -1,0 +1,23 @@
+@C
+fun puts(a: string);
+
+@C class Some_C_Struct {
+    let x: i32; 
+    let y: i32;
+
+    fun midpt(other: Some_C_Struct) => Some_C_Struct {
+        let x' = (this.x + other.x)/2;
+        let y': i32;
+        puts("Creating new C struct");
+        y' = (this.y + other.y)/2;
+        return new Some_C_Struct { x = x', y = y' };
+    }
+}
+
+fun main() => i32 {
+    puts("Hello, World!");
+    let p = new Some_C_Struct { x = 10, y = 10 };
+    let p2 = new Some_C_Struct { x = 20, y = 20 };
+    return p.midpt(p2).x;
+    //return 0;
+}

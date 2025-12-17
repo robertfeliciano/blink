@@ -19,7 +19,7 @@ let alpha = ['a'-'z' 'A'-'Z']
 let int = digit+
 let decimal = digit+ '.' digit+
 let scientific = digit+ ('E'|'e') '-'? digit+
-let id = alpha (alpha | digit | '_')*
+let id = alpha (alpha | digit | '_' | '\'')*
 let generic_type_param = ['A'-'Z']
 
 let whitespace = [' ' '\t']+
@@ -41,6 +41,7 @@ rule read = parse
   | ".." { RANGE }
   | "..=" { RANGE_INCL }
   | ":" { COLON }
+  (* | "::" { COLCOL } *)
   | ";" { SEMI }
   | "=" { EQUAL }
   | "=>" { ARROW }

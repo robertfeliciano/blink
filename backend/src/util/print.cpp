@@ -301,8 +301,36 @@ std::string stmtToString(const Stmt& stmt, int indentLevel) {
     return std::visit(StmtToStringVisitor{indentLevel}, stmt.val);
 }
 
+std::string protoToString(const Proto& p) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < p.annotations.size(); ++i) {
+        oss << "@" << p.annotations[i] << "\n";
+    }
+    oss << "proto " << p.fname << "(";
+    for (size_t i = 0; i < p.args.size(); ++i) {
+        const auto& t = p.args[i];
+        oss << tyToString(t);
+        if (i + 1 < p.args.size())
+            oss << ", ";
+    }
+    oss << ") -> ";
+    switch (p.frtyp.tag) {
+        case RetTyTag::RetVoid:
+            oss << "void";
+            break;
+        case RetTyTag::RetVal:
+            oss << tyToString(*p.frtyp.val);
+            break;
+    }
+    oss << ";";
+    return oss.str();
+}
+
 std::string fdeclToString(const FDecl& f) {
     std::ostringstream oss;
+    for (size_t i = 0; i < f.annotations.size(); ++i) {
+        oss << "@" << f.annotations[i] << "\n";
+    }
     oss << "fn " << f.fname << "(";
     for (size_t i = 0; i < f.args.size(); ++i) {
         const auto& p = f.args[i];
@@ -329,6 +357,9 @@ std::string fdeclToString(const FDecl& f) {
 
 std::string cdeclToString(const CDecl& c) {
     std::ostringstream oss;
+    for (size_t i = 0; i < c.annotations.size(); ++i) {
+        oss << "@" << c.annotations[i] << "\n";
+    }
     oss << "class " << c.cname << " {\n";
 
     for (const auto& fld : c.fields) {
@@ -346,6 +377,9 @@ std::string programToString(const Program& prog) {
     std::ostringstream oss;
     for (const auto& c : prog.classes) {
         oss << cdeclToString(c) << "\n\n";
+    }
+    for (const auto& p : prog.protos) {
+        oss << protoToString(p) << "\n\n";
     }
     for (const auto& f : prog.functions) {
         oss << fdeclToString(f) << "\n\n";
