@@ -349,8 +349,7 @@ let default_step t enode =
 
 let is_const en =
   match en.elt with
-  | Bool _ | Int _ | Float _ | Str _ | Array _ | TypedLambda _ | Lambda _ ->
-      true
+  | Bool _ | Int _ | Float _ | Str _ | Array _ | TypedLambda _ -> true
   | Id _ | Call _ | Bop _ | Uop _ | Index _ | Cast _ | Proj _ | ObjInit _ | Null
-    ->
+  | Lambda _ ->
       false

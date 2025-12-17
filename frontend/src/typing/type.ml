@@ -16,7 +16,8 @@ let type_annotations (tc : Tctxt.t) =
                    if is_const en then type_exp tc en |> fst
                    else
                      type_error i
-                       "Expected compile-constant for annotation argument")
+                       "Expected compile-constant or fully-typed lambda for \
+                        annotation argument")
                  ens)
         | None -> None
       in
