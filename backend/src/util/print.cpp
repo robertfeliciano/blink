@@ -328,6 +328,9 @@ std::string protoToString(const Proto& p) {
 
 std::string fdeclToString(const FDecl& f) {
     std::ostringstream oss;
+    for (size_t i = 0; i < f.annotations.size(); ++i) {
+        oss << "@" << f.annotations[i] << "\n";
+    }
     oss << "fn " << f.fname << "(";
     for (size_t i = 0; i < f.args.size(); ++i) {
         const auto& p = f.args[i];
@@ -354,6 +357,9 @@ std::string fdeclToString(const FDecl& f) {
 
 std::string cdeclToString(const CDecl& c) {
     std::ostringstream oss;
+    for (size_t i = 0; i < c.annotations.size(); ++i) {
+        oss << "@" << c.annotations[i] << "\n";
+    }
     oss << "class " << c.cname << " {\n";
 
     for (const auto& fld : c.fields) {

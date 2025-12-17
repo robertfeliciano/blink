@@ -276,19 +276,21 @@ let show_proto ?(lvl = 0) { annotations; frtyp; fname; args } =
     String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
   in
   Printf.sprintf "%s[\n%s\n%s]proto{name=%s; ret=%s; args=[%s]}" (indent lvl)
-    anno_s
-    (indent lvl)
-    fname (show_ret_ty frtyp) args_s
+    anno_s (indent lvl) fname (show_ret_ty frtyp) args_s
 
-let show_fdecl ?(lvl = 0) { frtyp; fname; args; body } =
+let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
   let args_s =
     String.concat "; "
       (List.map
          (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
          args)
   in
-  Printf.sprintf "%sfdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
-    (indent lvl) fname (show_ret_ty frtyp) args_s
+  let anno_s =
+    String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
+  in
+  Printf.sprintf
+    "%s[\n%s\n%s]fdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+    (indent lvl) anno_s (indent lvl) fname (show_ret_ty frtyp) args_s
     (show_block ~lvl:(lvl + 1) body)
     (indent lvl)
 
@@ -296,16 +298,27 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
   Printf.sprintf "%s%s: %s = %s" (indent lvl) fieldName (show_ty ftyp)
     (show_exp ~lvl:(lvl + 1) init)
 
-let show_cdecl ?(lvl = 0) { cname; impls; fields; methods } =
+let show_cdecl ?(lvl = 0) { annotations; cname; impls; fields; methods } =
   let fields_s =
     String.concat ";\n" (List.map (show_field ~lvl:(lvl + 1)) fields)
   in
   let methods_s =
     String.concat ";\n" (List.map (show_fdecl ~lvl:(lvl + 1)) methods)
   in
+  let anno_s =
+    String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
+  in
   Printf.sprintf
-    "%scdecl{name=%s; impls=[%s];\n%sfields=[\n%s\n%s];\n%smethods=[\n%s\n%s];}"
-    (indent lvl) cname (String.concat ", " impls)
+    "%s[\n\
+     %s\n\
+     %s]cdecl{name=%s; impls=[%s];\n\
+     %sfields=[\n\
+     %s\n\
+     %s];\n\
+     %smethods=[\n\
+     %s\n\
+     %s];}"
+    (indent lvl) anno_s (indent lvl) cname (String.concat ", " impls)
     (indent (lvl + 1))
     fields_s
     (indent (lvl + 1))

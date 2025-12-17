@@ -1,5 +1,6 @@
 open Typing.Typed_ast
 open Desugar_stmt
+open Desugar_util
 open Conversions
 
 (* open Desugar_util *)
@@ -20,6 +21,7 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
       m.frtyp
   in *)
   {
+    annotations = List.map desugar_annotation m.annotations;
     frtyp = convert_ret_ty m.frtyp;
     fname = m.fname;
     args = desugared_args;
@@ -37,4 +39,9 @@ let desugar_class (c : cdecl) : D.fdecl list * D.cdecl =
   let desugared_methods =
     List.map (fun m -> desugar_method m c.cname) c.methods
   in
-  (desugared_methods, { cname = c.cname; fields = desugar_fields c.fields })
+  ( desugared_methods,
+    {
+      cname = c.cname;
+      fields = desugar_fields c.fields;
+      annotations = List.map desugar_annotation c.annotations;
+    } )

@@ -7,8 +7,22 @@ open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
 
+let type_annotations (tc : Tctxt.t) =
+  List.map (fun (i, en) ->
+      let e' =
+        match en with
+        (* 
+    TODO create type_annotation and do specific things for that 
+    - check annotation ("@<anno>") is valid 
+    - check exp is valid (basic string, number)
+    *)
+        | Some es -> Some (List.map (fun e -> type_exp tc e |> fst) es)
+        | None -> None
+      in
+      (i.elt, e'))
+
 let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
-  let { elt = { annotations = _; frtyp; fname; args; body }; loc = _ } = fn in
+  let { elt = { annotations; frtyp; fname; args; body }; loc = _ } = fn in
   let tc' =
     List.fold_left
       (fun acc (t, a) ->
@@ -19,32 +33,24 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, id) -> (convert_ty ty, id)) args in
   let _tc_final, typed_body, does_ret = type_block tc' frtyp' body false in
+  let annotations' = type_annotations tc annotations in
   if frtyp' <> RetVoid && not does_ret then
     type_error
       (List.nth body (List.length body - 1))
       ("missing return statement for " ^ fname);
-  { frtyp = frtyp'; fname; args = args'; body = typed_body }
+  {
+    annotations = annotations';
+    frtyp = frtyp';
+    fname;
+    args = args';
+    body = typed_body;
+  }
 
 let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
   let { elt = { annotations; frtyp; fname; args }; loc = _ } = pn in
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, _) -> convert_ty ty) args in
-  let annotations' =
-    List.map
-      (fun (i, en) ->
-        let e' =
-          match en with
-          (* 
-          TODO create type_annotation and do specific things for that 
-          - check annotation ("@<anno>") is valid 
-          - check exp is valid (basic string, number)
-          *)
-          | Some es -> Some (List.map (fun e -> type_exp tc e |> fst) es)
-          | None -> None
-        in
-        (i.elt, e'))
-      annotations
-  in
+  let annotations' = type_annotations tc annotations in
   { annotations = annotations'; frtyp = frtyp'; fname; args = args' }
 
 let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
@@ -63,9 +69,7 @@ let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
   { fieldName; ftyp = e_ty; init = te }
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
-  let { elt = { annotations = _; cname; impls; fields; methods }; loc = _ } =
-    cn
-  in
+  let { elt = { annotations; cname; impls; fields; methods }; loc = _ } = cn in
   let () =
     match
       List.find_opt
@@ -100,7 +104,14 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
     type_fn tc' method_node
   in
   let tmethods = List.map type_mthd methods in
-  { cname; impls; fields = tfields; methods = tmethods }
+  let annotations' = type_annotations tc annotations in
+  {
+    annotations = annotations';
+    cname;
+    impls;
+    fields = tfields;
+    methods = tmethods;
+  }
 
 let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
   let rec aux (tc : Tctxt.t) : proto node list -> Tctxt.t = function

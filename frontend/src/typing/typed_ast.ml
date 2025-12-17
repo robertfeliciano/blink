@@ -109,21 +109,21 @@ and block = stmt list
 type annotation = id * exp list option
 
 type fdecl = {
+  annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
   args : (ty * id) list;
-  body : block;
-  (* TODO bring annotations from AST in here *)
+  body : block; (* TODO bring annotations from AST in here *)
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp }
 
 type cdecl = {
+  annotations : annotation list;
   cname : id;
   impls : id list;
   fields : field list;
-  methods : fdecl list;
-  (* TODO bring annotations from AST in here *)
+  methods : fdecl list; (* TODO bring annotations from AST in here *)
 }
 
 type proto = {

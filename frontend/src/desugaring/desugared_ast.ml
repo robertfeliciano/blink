@@ -79,17 +79,18 @@ type fdecl = {
   fname : id;
   args : (ty * id) list;
   body : block;
+  annotations : id list;
 }
 
 type proto = {
   annotations : id list;
-  frtyp: ret_ty;
-  fname: id;
-  args: ty list
+  frtyp : ret_ty;
+  fname : id;
+  args : ty list;
 }
 
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
-type cdecl = { cname : id; fields : field list }
+type cdecl = { cname : id; fields : field list; annotations : id list }
 type program = Prog of fdecl list * cdecl list * proto list [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"

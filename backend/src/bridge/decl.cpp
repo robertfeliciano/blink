@@ -42,6 +42,14 @@ FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; body }
         body_v = Field(body_v, 1);
     }
 
+    // annotations : id list
+    value anno_v = Field(v, 4);
+    while (anno_v != Val_emptylist) {
+        std::string annotation = std::string(String_val(Field(anno_v, 0)));
+        out.annotations.emplace_back(annotation);
+        anno_v = Field(anno_v, 1);
+    }
+
     return out;
 }
 
@@ -94,6 +102,13 @@ CDecl convert_cdecl(value v) { // record cdecl = { cname : id; fields : field li
         value head = Field(fields_v, 0);
         out.fields.push_back(convert_field(head));
         fields_v = Field(fields_v, 1);
+    }
+
+    value anno_v = Field(v, 2);
+    while (anno_v != Val_emptylist) {
+        std::string annotation = std::string(String_val(Field(anno_v, 0)));
+        out.annotations.emplace_back(annotation);
+        anno_v = Field(anno_v, 1);
     }
 
     return out;

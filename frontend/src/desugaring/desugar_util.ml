@@ -17,6 +17,13 @@ let gensym sfx =
   incr counter;
   "%tmp_" ^ sfx ^ Int.to_string n
 
+let desugar_annotation ((i, el) : T.annotation) =
+  match (i, el) with
+  (* TODO any args passed to an annotation should be handled in desugarer elsewhere *)
+  (* | id, Some es -> (id, List.map (fun e -> snd @@ desugar_exp e) es) *)
+  | id, Some _ -> id
+  | id, None -> id
+
 let is_lvalue = function T.Index _ | T.Proj _ -> true | _ -> false
 
 let get_zero (ty : D.ty) : D.exp =
