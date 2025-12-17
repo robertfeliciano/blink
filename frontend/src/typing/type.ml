@@ -1,22 +1,23 @@
 open Ast
 open Tctxt
 open Type_stmt
-
-(* open Type_exp *)
 open Type_util
 open Conversions
 module Printer = Pprint_typed_ast
 
 let type_annotations (tc : Tctxt.t) =
-  List.map (fun (i, en) ->
+  List.map (fun (i, ens_opt) ->
       let e' =
-        match en with
-        (* 
-    TODO create type_annotation and do specific things for that 
-    - check annotation ("@<anno>") is valid 
-    - check exp is valid (basic string, number)
-    *)
-        | Some es -> Some (List.map (fun e -> type_exp tc e |> fst) es)
+        match ens_opt with
+        | Some ens ->
+            Some
+              (List.map
+                 (fun en ->
+                   if is_const en then type_exp tc en |> fst
+                   else
+                     type_error i
+                       "Expected compile-constant for annotation argument")
+                 ens)
         | None -> None
       in
       (i.elt, e'))

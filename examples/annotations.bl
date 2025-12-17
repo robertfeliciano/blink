@@ -1,4 +1,4 @@
-@C 
+@C("hi")
 fun puts(a: string);
 
 
