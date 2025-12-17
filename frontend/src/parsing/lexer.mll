@@ -41,6 +41,7 @@ rule read = parse
   | ".." { RANGE }
   | "..=" { RANGE_INCL }
   | ":" { COLON }
+  (* | "::" { COLCOL } *)
   | ";" { SEMI }
   | "=" { EQUAL }
   | "=>" { ARROW }

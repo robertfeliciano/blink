@@ -19,8 +19,10 @@ let gensym sfx =
 
 let desugar_annotation ((i, el) : T.annotation) =
   match (i, el) with
-  (* TODO any args passed to an annotation should be handled in desugarer elsewhere *)
-  (* | id, Some es -> (id, List.map (fun e -> snd @@ desugar_exp e) es) *)
+  (* 
+  TODO desugar complex annotations (getters/things with exps inside)
+  only thing passed to backend should be basic @<id> annotations
+  *)
   | id, Some _ -> id
   | id, None -> id
 

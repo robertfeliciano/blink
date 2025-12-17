@@ -190,7 +190,7 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
 let check_undefined_protos tc = 
   let unique_protos =
     List.fold_right (fun (id, data) acc ->
-      (* TODO maybe use a set to keep track *)
+      (* TODO maybe use a set to keep track for faster lookup*)
       if List.mem_assoc id acc then 
         acc
       else 
