@@ -125,7 +125,13 @@ let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
                  pn.elt.fname)
         | None ->
             let func_type = get_proto_type pn tc |> convert_ty in
-            let externally_defined = List.exists (fun anno_n -> let ({elt=i; loc=_}, _) =anno_n in i = "C") pn.elt.annotations in
+            let externally_defined =
+              List.exists
+                (fun anno_n ->
+                  let { elt = i; loc = _ }, _ = anno_n in
+                  i = "C")
+                pn.elt.annotations
+            in
             let new_tc =
               Tctxt.add_proto tc pn.elt.fname (func_type, externally_defined)
             in
@@ -144,10 +150,8 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
                  fn.elt.fname)
         | None ->
             let func_type = get_fdecl_type fn tc |> convert_ty in
-            let new_tc =
-              Tctxt.add_global tc fn.elt.fname (func_type, false)
-            in
-            let new_tc' = 
+            let new_tc = Tctxt.add_global tc fn.elt.fname (func_type, false) in
+            let new_tc' =
               Tctxt.add_proto new_tc fn.elt.fname (func_type, true)
             in
             aux new_tc' t)
@@ -187,18 +191,23 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
   in
   aux tc cns
 
-let check_undefined_protos tc = 
+let check_undefined_protos tc =
   let unique_protos =
-    List.fold_right (fun (id, data) acc ->
-      (* TODO maybe use a set to keep track for faster lookup*)
-      if List.mem_assoc id acc then 
-        acc
-      else 
-        (id, snd data) :: acc
-    ) tc.protos [] in 
-    let undefined_protos = List.fold_left (fun acc (id, defined) -> if not defined then id::acc else acc) [] unique_protos in 
-    if List.length undefined_protos > 0 then 
-      type_failure ("The following function prototypes are undefined:\n" ^ (String.concat "\n" undefined_protos))
+    List.fold_right
+      (fun (id, data) acc ->
+        (* TODO maybe use a set to keep track for faster lookup*)
+        if List.mem_assoc id acc then acc else (id, snd data) :: acc)
+      tc.protos []
+  in
+  let undefined_protos =
+    List.fold_left
+      (fun acc (id, defined) -> if not defined then id :: acc else acc)
+      [] unique_protos
+  in
+  if List.length undefined_protos > 0 then
+    type_failure
+      ("The following function prototypes are undefined:\n"
+      ^ String.concat "\n" undefined_protos)
 
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)

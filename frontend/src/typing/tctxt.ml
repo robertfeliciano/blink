@@ -55,11 +55,11 @@ let lookup_local_option id c : (ty * bool) option =
 let add_global (c : t) (id : id) (bnd : ty * bool) : t =
   { c with globals = (id, bnd) :: c.globals }
 
-let add_proto (c : t) (id : id) (bnd : ty*bool) : t =
+let add_proto (c : t) (id : id) (bnd : ty * bool) : t =
   { c with protos = (id, bnd) :: c.protos }
-  
+
 let lookup_global (id : id) (c : t) : ty * bool = List.assoc id c.globals
-let lookup_proto (id : id) (c : t) : ty*bool = List.assoc id c.protos
+let lookup_proto (id : id) (c : t) : ty * bool = List.assoc id c.protos
 
 let lookup_global_option id c : (ty * bool) option =
   try Some (List.assoc id c.globals) with Not_found -> None

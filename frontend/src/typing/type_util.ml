@@ -34,8 +34,7 @@ let type_error (l : 'a node) err =
        (Printf.sprintf "Error at %s:%d:%d:\n%s%s\n%s\n%s" filename l1 c1
           line_indicator line underline err))
 
-let type_failure err = 
-  raise (TypeError (Printf.sprintf "Error: %s" err))
+let type_failure err = raise (TypeError (Printf.sprintf "Error: %s" err))
 
 let type_warning (l : 'a node) err =
   let _, (s, e), _ = l.loc in
