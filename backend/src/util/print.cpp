@@ -300,7 +300,7 @@ struct StmtToStringVisitor {
             if (i + 1 < d.exps.size()) 
                 res += ", ";
         }
-        return res;
+        return res + ";";
     }
     std::string operator()(const Break&) const { return indent(indentLevel) + "break;"; }
     std::string operator()(const Continue&) const { return indent(indentLevel) + "continue;"; }
