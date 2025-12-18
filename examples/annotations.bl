@@ -14,10 +14,15 @@ fun puts(a: string);
     }
 }
 
+fun midpt(a: i32, b: i32) => i32 { 
+    return (a + b) / 2;
+}
+
 fun main() => i32 {
     puts("Hello, World!");
     let p = new Some_C_Struct { x = 10, y = 10 };
     let p2 = new Some_C_Struct { x = 20, y = 20 };
-    return p.midpt(p2).x;
+    let o' = midpt(10, 0);
+    return p.midpt(p2).x + o';
     //return 0;
 }
