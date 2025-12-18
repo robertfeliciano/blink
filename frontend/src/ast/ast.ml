@@ -78,6 +78,9 @@ type exp =
   | Id of id
   | Proj of exp node * id
   | Call of exp node * exp node list
+  (* | StaticCall of id node * id node * exp node
+  TODO static class methods and fields + accesses
+  *)
   | Bop of binop * exp node * exp node
   | Uop of unop * exp node
   | Index of exp node * exp node

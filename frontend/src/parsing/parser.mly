@@ -25,6 +25,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token RANGE     /* .. */
 %token RANGE_INCL/* ..= */
 %token COLON     /* : */
+// %token COLCOL    /* :: */
 %token SEMI      /* ; */
 %token EQUAL     /* = */
 %token ARROW     /* => */
@@ -98,6 +99,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token BREAK     /* break */
 %token CONT      /* continue */
 %token RETURN    /* return */
+// %token STATIC    /* static */
 %token TRUE      /* true */
 %token FALSE     /* false */
 // %token WHERE     /* where */
@@ -381,6 +383,12 @@ postfix:
       { loc $startpos $endpos @@ Index (p, i) }
   | p=postfix LPAREN args=separated_list(COMMA, exp) RPAREN
       { loc $startpos $endpos @@ Call (p, args) }
+  // | cid=IDENT COLCOL fname=IDENT LPAREN args=separated_list(COMMA, exp) RPAREN
+  //     { 
+  //       let cid_node = { elt = cid; loc = Range.mk_lex_range $startpos(cid) $endpos(cid) } in
+  //       let fname_node = { elt = fname; loc = Range.mk_lex_range $startpos(fname) $endpos(fname) } in
+  //       loc $startpos $endpos @@ StaticCall (cid_node, fname_node, args)
+  //     }
   | p=postfix AS t=ty
       { loc $startpos $endpos @@ Cast (p, t) }
   | p=postfix DOT i=IDENT

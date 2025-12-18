@@ -111,6 +111,7 @@ rule read = parse
   | "break" { BREAK }
   | "continue" { CONT }
   | "return" { RETURN }
+  (* | "static" { STATIC } *)
   | "true" { TRUE }
   | "false" { FALSE }
   (* | "where" { WHERE }
