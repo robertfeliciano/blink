@@ -24,6 +24,11 @@ class Point {
 fun main(argv: [string; 2]) => i32 {
     let p = new Point { x = 2, y = 4 };
     let p2 = new Point { x = 4, y = 9 };
+    let x: f32 = 2.0;
     puts("Hello sir kamal");
-    return p.midpoint(p2).sumX(p2);   
+    let tp = p.midpoint(p2);
+    let sx = tp.sumX(p2);
+    del p, p2, tp;
+    let f = x**(3 as f32);
+    return sx + (f as i32);
 }
