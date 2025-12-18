@@ -25,6 +25,12 @@ void Generator::codegenStdlib() {
 
     llvm::Function* exit_func =
         llvm::Function::Create(exit_type, llvm::Function::ExternalLinkage, "exit", this->mod.get());
+
+    llvm::FunctionType* free_type = 
+        llvm::FunctionType::get(llvm::Type::getVoidTy(*this->ctxt), {llvm::Type::getInt8PtrTy(*this->ctxt)}, false);
+
+    llvm::Function* free_func = 
+        llvm::Function::Create(free_type, llvm::Function::ExternalLinkage, "free", this->mod.get());
 }
 
 void Generator::configureTarget() {

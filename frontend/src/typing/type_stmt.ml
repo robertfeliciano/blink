@@ -195,6 +195,18 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       if not in_loop then
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue, false)
+  | Del ens ->
+      let tes =
+        List.fold_left
+          (fun acc en ->
+            let te, ety = type_exp tc en in
+            match ety with
+            | Typed_ast.TRef (RClass _) -> te :: acc
+            (* other TRefs are on the stack or global (strings) not suited for deletion *)
+            | _ -> type_error en "Expected reference type for deletion!")
+          [] ens
+      in
+      (tc, Typed_ast.Del tes, false)
 
 and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
     : Typed_ast.exp * Typed_ast.ty =
@@ -607,7 +619,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
               ("Must provide a default constructor for " ^ cname ^ " class.")
       in
       constructor
-  | TRef (RFun _) -> type_error stmt_n "Default functions not allowed yet"
+  | TRef (RFun _) -> type_error stmt_n "Default functions not allowed."
   | TRef (RGeneric _) -> type_error stmt_n "Generic default init to come some"
   | TRef (RArray (t, sz)) ->
       let sz' = Z.to_int sz in

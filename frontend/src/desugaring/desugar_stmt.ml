@@ -110,7 +110,8 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let istmts, inst' = desugar_exp inst in
       let args_stmts, args' = List.map desugar_exp args |> flatten in
       let mangled = mangle_name ~enclosing_class:cname pname types ret in
-      istmts @ args_stmts @ [ SCall (Id (mangled, convert_ty t), inst' :: args') ]
+      istmts @ args_stmts
+      @ [ SCall (Id (mangled, convert_ty t), inst' :: args') ]
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
@@ -145,6 +146,9 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       [ LambdaDecl (lname, converted_ltyp, desugared_defn) ]
   | Break -> [ Break ]
   | Continue -> [ Continue ]
+  | Del es ->
+      let sa, des = List.map desugar_exp es |> flatten in
+      sa @ [ Del des ]
 
 and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
   (* vdecls may also produce pre-statements now *)
@@ -212,7 +216,8 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
         mangle_name ~enclosing_class:cname pname tys (RetVal ty)
       in
       ( si @ sa,
-        D.Call (D.Id (mangled_name, convert_ty t), inst' :: args', convert_ty ty) )
+        D.Call (D.Id (mangled_name, convert_ty t), inst' :: args', convert_ty ty)
+      )
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in

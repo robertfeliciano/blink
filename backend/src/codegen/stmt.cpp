@@ -169,6 +169,16 @@ Value* StmtToLLVisitor::operator()(const While& s) {
     return nullptr;
 }
 
+Value* StmtToLLVisitor::operator()(const Del& s) {
+    llvm::Function* freeFun = gen.mod->getFunction("free");
+    for (const auto& e : s.exps) {
+        Value* toBeFreed = gen.codegenExp(*e);
+        Value* freeVal = gen.builder->CreateCall(freeFun, {toBeFreed});
+    }
+
+    return nullptr;
+}
+
 Value* StmtToLLVisitor::operator()(const Break& s) {
     if (gen.breakTargets.empty()) {
         throw std::runtime_error("Break statement outside of a loop.");

@@ -106,6 +106,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token IMPORT    /* import */
 // %token ENABLE    /* enable */
 %token CLASS     /* class */
+%token DEL       /* del */
 %token IMPLS     /* impls */
 // %token GLOBAL    /* global */
 // %token QMARK     /* ? */
@@ -481,6 +482,8 @@ stmt:
       { loc $startpos $endpos @@ Continue }
   | BREAK SEMI
       { loc $startpos $endpos @@ Break }
+  | DEL es=separated_list(COMMA, exp) SEMI
+      { loc $startpos $endpos @@ Del(es) }
 
 range: 
   | start=exp RANGE fin=exp

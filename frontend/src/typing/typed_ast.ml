@@ -103,6 +103,7 @@ and stmt =
   | While of exp * block
   | Break
   | Continue
+  | Del of exp list
 
 and block = stmt list
 

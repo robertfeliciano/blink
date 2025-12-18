@@ -23,6 +23,9 @@ fun main() => i32 {
     let p = new Some_C_Struct { x = 10, y = 10 };
     let p2 = new Some_C_Struct { x = 20, y = 20 };
     let o' = midpt(10, 0);
-    return p.midpt(p2).x + o';
+    let mp = p.midpt(p2);
+    let retVal = mp.x + o';
+    del p, p2, mp;
+    return retVal;
     //return 0;
 }

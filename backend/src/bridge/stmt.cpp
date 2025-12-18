@@ -78,6 +78,17 @@ Stmt convert_stmt(value v) {
                 result.val = While{std::move(cond), std::move(body)};
                 break;
             }
+            case Constants::STMT_Del: { // Del of exp list
+                std::vector<std::unique_ptr<Exp>> exps;
+                value exps_v = Field(v, 0);
+                while (exps_v != Val_emptylist) { 
+                    value head = Field(exps_v, 0);
+                    exps.push_back(std::make_unique<Exp>(convert_exp(head)));
+                    exps_v = Field(exps_v, 1);
+                }
+                result.val = Del{std::move(exps)};
+                break;
+            }
             default: {
                 throw std::runtime_error("Unsupported stmt variant in bridge conversion");
             }
