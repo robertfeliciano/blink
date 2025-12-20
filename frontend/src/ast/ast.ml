@@ -111,7 +111,7 @@ and stmt =
   | While of exp node * block
   | Break
   | Continue
-  | Del of exp node list
+  | Free of exp node list
 
 and block = stmt node list
 
@@ -363,8 +363,8 @@ and show_stmt ?(lvl = 0) = function
         (indent lvl)
   | Break -> Printf.sprintf "%sBreak" (indent lvl)
   | Continue -> Printf.sprintf "%sContinue" (indent lvl)
-  | Del es ->
-      Printf.sprintf "%sDel %s" (indent lvl)
+  | Free es ->
+      Printf.sprintf "%sFree %s" (indent lvl)
         (String.concat ", " (List.map (show_node show_exp) es))
 
 and show_node_stmt ?(lvl = 0) stmt_node =

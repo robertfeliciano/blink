@@ -92,7 +92,7 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
                 (analyze_exp locals false cond)
                 (analyze_block locals body_blk)
           | Break | Continue -> empty_result
-          | Del _ -> empty_result
+          | Free _ -> empty_result
         in
         let locals' =
           match stmt with

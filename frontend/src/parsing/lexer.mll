@@ -118,7 +118,7 @@ rule read = parse
   | "import" { IMPORT }
   | "enable" { ENABLE } *)
   | "class" { CLASS }
-  | "del"   { DEL }
+  | "free"   { FREE }
   (* | "impls" { IMPLS } *)
   (* | "global" { GLOBAL } *)
   (* | "?" { QMARK } *)

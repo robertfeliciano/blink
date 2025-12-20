@@ -253,8 +253,8 @@ and show_stmt ?(lvl = 0) = function
         (indent lvl)
   | Break -> Printf.sprintf "%sBreak" (indent lvl)
   | Continue -> Printf.sprintf "%sContinue" (indent lvl)
-  | Del es ->
-      Printf.sprintf "%sDel %s" (indent lvl)
+  | Free es ->
+      Printf.sprintf "%sFree %s" (indent lvl)
         (String.concat ", " (List.map show_exp es))
 
 and show_block ?(lvl = 0) b =

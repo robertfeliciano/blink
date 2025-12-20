@@ -196,8 +196,8 @@ and show_stmt ?(lvl = 0) = function
         (show_ref_ty ltyp) (indent lvl)
         (show_exp ~lvl:(lvl + 1) defn)
         (indent lvl)
-  | Del es ->
-      Printf.sprintf "%sDel %s" (indent lvl)
+  | Free es ->
+      Printf.sprintf "%sFree %s" (indent lvl)
         (String.concat ", " (List.map show_exp es))
 
 and show_block ?(lvl = 0) b =

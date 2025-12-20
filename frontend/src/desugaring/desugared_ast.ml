@@ -69,7 +69,7 @@ and stmt =
   | SCall of exp * exp list
   | If of exp * block * block
   | While of exp * block
-  | Del of exp list
+  | Free of exp list
   | Break
   | Continue
 

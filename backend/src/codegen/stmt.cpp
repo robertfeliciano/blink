@@ -169,7 +169,7 @@ Value* StmtToLLVisitor::operator()(const While& s) {
     return nullptr;
 }
 
-Value* StmtToLLVisitor::operator()(const Del& s) {
+Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
         Value* toBeFreed = gen.codegenExp(*e);

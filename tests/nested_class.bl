@@ -9,6 +9,6 @@ class Outer {
 fun main() => i32 {
     let o = new Outer { inside = new Inner { i = 55 } };
     let i = o.inside.i;
-    del o, o.inside;
+    free o, o.inside;
     return i;
 }

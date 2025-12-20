@@ -28,7 +28,7 @@ fun main(argv: [string; 2]) => i32 {
     puts("Hello sir kamal");
     let tp = p.midpoint(p2);
     let sx = tp.sumX(p2);
-    del p, p2, tp;
+    free p, p2, tp;
     let f = x**(3 as f32);
     return sx + (f as i32);
 }

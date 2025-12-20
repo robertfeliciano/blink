@@ -195,7 +195,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       if not in_loop then
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue, false)
-  | Del ens ->
+  | Free ens ->
       let tes =
         List.fold_left
           (fun acc en ->
@@ -203,10 +203,10 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             match ety with
             | Typed_ast.TRef (RClass _) -> te :: acc
             (* other TRefs are on the stack or global (strings) not suited for deletion *)
-            | _ -> type_error en "Expected reference type for deletion!")
+            | _ -> type_error en "Expected reference type for freeing!")
           [] ens
       in
-      (tc, Typed_ast.Del tes, false)
+      (tc, Typed_ast.Free tes, false)
 
 and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
     : Typed_ast.exp * Typed_ast.ty =

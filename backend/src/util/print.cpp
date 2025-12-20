@@ -293,8 +293,8 @@ struct StmtToStringVisitor {
         res += indent(indentLevel) + " }";
         return res;
     }
-    std::string operator()(const Del& d) const {
-        std::string res = indent(indentLevel) + "del ";
+    std::string operator()(const Free& d) const {
+        std::string res = indent(indentLevel) + "free ";
         for (size_t i = 0; i < d.exps.size(); ++i){
             res += expToString(*d.exps[i]);
             if (i + 1 < d.exps.size()) 

@@ -66,7 +66,7 @@ namespace Constants {
         STMT_SCall      = 4,
         STMT_If         = 5,
         STMT_While      = 6,
-        STMT_Del        = 7
+        STMT_Free        = 7
     };
 
     enum CtrlTag { CTRL_Break = 0, CTRL_Continue = 1 };

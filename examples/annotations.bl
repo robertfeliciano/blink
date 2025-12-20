@@ -25,7 +25,7 @@ fun main() => i32 {
     let o' = midpt(10, 0);
     let mp = p.midpt(p2);
     let retVal = mp.x + o';
-    del p, p2, mp;
+    free p, p2, mp;
     return retVal;
     //return 0;
 }

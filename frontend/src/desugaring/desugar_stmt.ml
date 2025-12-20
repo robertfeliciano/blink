@@ -146,9 +146,9 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       [ LambdaDecl (lname, converted_ltyp, desugared_defn) ]
   | Break -> [ Break ]
   | Continue -> [ Continue ]
-  | Del es ->
+  | Free es ->
       let sa, des = List.map desugar_exp es |> flatten in
-      sa @ [ Del des ]
+      sa @ [ Free des ]
 
 and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
   (* vdecls may also produce pre-statements now *)

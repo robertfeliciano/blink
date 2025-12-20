@@ -50,7 +50,7 @@ struct While {
     std::vector<std::unique_ptr<Stmt>> body;
 };
 
-struct Del {
+struct Free {
     std::vector<std::unique_ptr<Exp>>  exps;
 };
 
@@ -59,7 +59,7 @@ struct Continue {};
 
 // TODO do lambdadecl
 
-using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Del, Break, Continue>;
+using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Free, Break, Continue>;
 
 struct Stmt {
     StmtVariant val;
