@@ -297,9 +297,7 @@ and show_vdecl ?(lvl = 0) (id, ty_opt, exp_opt, is_const) =
 and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)
     (show_node (fun x -> x) id)
-    (match ty_opt with
-    | Some ty -> show_ty ~lvl:(lvl + 1) ty
-    | None -> "None")
+    (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
     (indent (lvl + 1))
     (show_node show_exp exp)
 
