@@ -38,7 +38,7 @@ let test_float _ =
 
 let test_simple_err _ =
   let e = Bop (Add, mk_node (Int (of_int 1)), mk_node (Str "some string")) in
-  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) in
+  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) None in
   assert_error f
 
 let test_stmt _ =
@@ -61,7 +61,7 @@ let test_cast_ok _ =
 
 let test_cast_err _ =
   let e = Cast (mk_node (Bool true), TInt (TSigned Ti32)) in
-  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) in
+  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) None in
   assert_error f
 
 let test_array_and_index _ =
@@ -89,7 +89,7 @@ let test_fn_call_ok _ =
 
 let test_fn_call_err _ =
   let call = Call (mk_node (Id "not_a_fn"), [ mk_node (Int (of_int 42)) ]) in
-  let f = fun () -> Ts.type_exp Tc.empty (mk_node call) in
+  let f = fun () -> Ts.type_exp Tc.empty (mk_node call) None in
   assert_error f
 
 let test_method_call_ok _ =
@@ -109,7 +109,7 @@ let test_method_call_ok _ =
 
 let test_uop_err _ =
   let e = Uop (Neg, mk_node (Bool true)) in
-  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) in
+  let f = fun () -> Ts.type_exp Tc.empty (mk_node e) None in
   assert_error f
 
 let suite =
