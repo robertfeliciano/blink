@@ -13,7 +13,7 @@ let type_annotations (tc : Tctxt.t) =
             Some
               (List.map
                  (fun en ->
-                   if is_const en then type_exp tc en |> fst
+                   if is_const en then type_exp tc en None |> fst
                    else
                      type_error i
                        "Expected compile-constant or fully-typed lambda for \
@@ -23,7 +23,7 @@ let type_annotations (tc : Tctxt.t) =
       in
       (i.elt, e'))
 
-let type_fn ?(class_fields = []) (tc : Tctxt.t) (fn : fdecl node) :
+let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     Typed_ast.fdecl =
   let { elt = { annotations; frtyp; fname; args; body }; loc = _ } = fn in
   let tc' =
@@ -36,7 +36,7 @@ let type_fn ?(class_fields = []) (tc : Tctxt.t) (fn : fdecl node) :
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, id) -> (convert_ty ty, id)) args in
   let _tc_final, typed_body, does_ret =
-    type_block ~class_fields tc' frtyp' body false
+    type_block tc' frtyp' body false enclosing_class
   in
   let annotations' = type_annotations tc annotations in
   if frtyp' <> RetVoid && not does_ret then
@@ -58,14 +58,14 @@ let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
   let annotations' = type_annotations tc annotations in
   { annotations = annotations'; frtyp = frtyp'; fname; args = args' }
 
-let type_field (tc : Tctxt.t) (fn : vdecl node) : Typed_ast.field =
+let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
   let { elt = vd; loc } = fn in
   let fieldName, fty_opt, en_opt, _const = vd in
   let stmt_n = { elt = Decl vd; loc } in
   let te, e_ty =
     match (fty_opt, en_opt) with
-    | Some t, Some e -> type_exp ~expected:(convert_ty t) tc e
-    | None, Some e -> type_exp tc e
+    | Some t, Some e -> type_exp ~expected:(convert_ty t) tc e (Some cname)
+    | None, Some e -> type_exp tc e (Some cname)
     | Some t, None ->
         let e = create_default_init stmt_n tc t in
         (e, convert_ty t)
@@ -87,7 +87,7 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
         else ()
     | None -> ()
   in
-  let tfields = List.map (type_field tc) fields in
+  let tfields = List.map (type_field tc cname) fields in
   let globals' =
     List.map
       (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false)))
@@ -100,16 +100,13 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
       globals = globals' @ tc.globals;
     }
   in
-  let class_fields =
-    List.map (fun (f : Typed_ast.field) -> f.fieldName) tfields
-  in
   let type_mthd method_node =
     let ({ elt = mthd; loc = _ } : fdecl node) = method_node in
     let tc' =
       if mthd.fname = cname then { tc with globals = globals' @ tc.globals }
       else tc'
     in
-    type_fn ~class_fields tc' method_node
+    type_fn ~enclosing_class:cname tc' method_node
   in
   let tmethods = List.map type_mthd methods in
   let annotations' = type_annotations tc annotations in
@@ -182,9 +179,9 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
             let fields =
               List.map
                 (fun fn ->
-                  let { elt = _id, _ty_opt, en_opt, const; loc = _ } = fn in
+                  let { elt = cid, _ty_opt, en_opt, const; loc = _ } = fn in
                   (* TODO figure out how to not call type_field twice... *)
-                  let fld = type_field tc fn in
+                  let fld = type_field tc cid fn in
                   (fld.fieldName, fld.ftyp, const, Option.is_some en_opt))
                 cn.elt.fields
             in

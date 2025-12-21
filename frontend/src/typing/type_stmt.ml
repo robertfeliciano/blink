@@ -10,8 +10,9 @@ The mutual recursion introduced by lambda expressions has forced me to combine e
 into one file. 
 *)
 
-let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmt_n : stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
+let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
+    (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node) (in_loop : bool) :
+    Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | Decl (_, None, None, _) ->
@@ -22,12 +23,12 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       let tc' = Tctxt.add_local tc i (e_ty, const) in
       (tc', Typed_ast.Decl (i, e_ty, e, const), false)
   | Decl (i, None, Some en, const) ->
-      let te, e_ty = type_exp ~class_fields tc en in
+      let te, e_ty = type_exp tc en enclosing_class in
       let tc', resolved_ty = (Tctxt.add_local tc i (e_ty, const), e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Decl (i, Some given_ty_ast, Some en, const) ->
       let given_ty = convert_ty given_ty_ast in
-      let te, e_ty = type_exp ~class_fields ~expected:given_ty tc en in
+      let te, e_ty = type_exp ~expected:given_ty tc en enclosing_class in
       let tc', resolved_ty =
         match (e_ty, given_ty, te) with
         | Typed_ast.TInt _, Typed_ast.TInt given_num_ty, Typed_ast.Int (n, _) ->
@@ -62,7 +63,7 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  | LambdaDecl _ -> type_lambda tc stmt_n
+  | LambdaDecl _ -> failwith "derp" (* type_lambda tc stmt_n *)
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
       | Id i -> (
@@ -74,14 +75,14 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
           | None -> type_error stmt_n ("variable " ^ i ^ " is not defined"))
       | Proj _ | Index _ -> ()
       | _ -> type_error lhs "cannot assign to this expression");
-      let tlhs, lhsty = type_exp ~class_fields tc lhs in
-      let trhs, _rhsty = type_exp ~class_fields ~expected:lhsty tc rhs in
+      let tlhs, lhsty = type_exp tc lhs enclosing_class in
+      let trhs, _rhsty = type_exp ~expected:lhsty tc rhs enclosing_class in
       (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs, lhsty), false)
   | Ret expr ->
       let te_opt =
         match (expr, frtyp) with
         | Some e, RetVal r_ty ->
-            let te, expr_ty = type_exp ~class_fields ~expected:r_ty tc e in
+            let te, expr_ty = type_exp ~expected:r_ty tc e enclosing_class in
             if not (equal_ty expr_ty r_ty) then
               type_error stmt_n
                 ("Expected function return type " ^ Printer.show_ty r_ty
@@ -99,7 +100,7 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       in
       (tc, Typed_ast.Ret te_opt, true)
   | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
-      match type_method (Proj (obj, mth)) args false tc with
+      match type_method_app (Proj (obj, mth)) args false tc enclosing_class with
       | Error msg -> type_error stmt_n msg
       | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVoid) ->
           ( tc,
@@ -114,9 +115,9 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
             false )
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
-      let typed_callee, typ = type_exp ~class_fields tc f in
+      let typed_callee, typ = type_exp tc f enclosing_class in
       let arg_types, typed_args, ret =
-        match type_func args typ false tc with
+        match type_func_app args typ false tc enclosing_class with
         | Error msg -> type_error stmt_n msg
         | Ok (arg_types, typed_args, RetVoid) ->
             (arg_types, typed_args, Typed_ast.RetVoid)
@@ -126,23 +127,27 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       in
       (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types, ret), false)
   | If (cond, then_branch, else_branch) ->
-      let tcond, cond_ty = type_exp ~class_fields ~expected:TBool tc cond in
+      let tcond, cond_ty = type_exp ~expected:TBool tc cond enclosing_class in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "if condition must be bool";
-      let _tc_then, t_then, if_ret = type_block tc frtyp then_branch in_loop in
+      let _tc_then, t_then, if_ret =
+        type_block tc frtyp then_branch in_loop enclosing_class
+      in
       let _tc_else, t_else, else_ret =
-        type_block tc frtyp else_branch in_loop
+        type_block tc frtyp else_branch in_loop enclosing_class
       in
       (tc, Typed_ast.If (tcond, t_then, t_else), if_ret && else_ret)
   | While (cond, body) ->
-      let tcond, cond_ty = type_exp ~class_fields ~expected:TBool tc cond in
+      let tcond, cond_ty = type_exp ~expected:TBool tc cond enclosing_class in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "while condition must be bool";
-      let _tc_while, t_body, while_ret = type_block tc frtyp body true in
+      let _tc_while, t_body, while_ret =
+        type_block tc frtyp body true enclosing_class
+      in
       (tc, Typed_ast.While (tcond, t_body), while_ret)
   | For (i_node, (start, fin, incl), step_opt, body) ->
-      let tstart, start_ty = type_exp ~class_fields tc start in
-      let tfin, fin_ty = type_exp ~class_fields tc fin in
+      let tstart, start_ty = type_exp tc start enclosing_class in
+      let tfin, fin_ty = type_exp tc fin enclosing_class in
       if not (is_number start_ty) then
         type_error start "Expected number type for left bound.";
       if not (is_number fin_ty) then
@@ -154,7 +159,7 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       let t_step, s_ty =
         match step_opt with
         | Some s ->
-            let ts, s_ty = type_exp ~class_fields tc s in
+            let ts, s_ty = type_exp tc s enclosing_class in
             if not (equal_ty s_ty start_ty) then
               type_error s
                 ("Expected type " ^ Printer.show_ty start_ty
@@ -163,12 +168,14 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
         | None -> (default_step start_ty stmt_n, Typed_ast.TInt (TSigned Ti32))
       in
       let tc_loop = Tctxt.add_local tc i_node.elt (start_ty, false) in
-      let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
+      let _tc_body, t_body, for_ret =
+        type_block tc_loop frtyp body true enclosing_class
+      in
       ( tc,
         Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, s_ty, t_body),
         for_ret )
   | ForEach (i_node, iter_exp, body) ->
-      let titer, iter_ty = type_exp ~class_fields tc iter_exp in
+      let titer, iter_ty = type_exp tc iter_exp enclosing_class in
       let elem_ty =
         match iter_ty with
         | Typed_ast.(TRef (RClass cls)) -> (
@@ -186,7 +193,9 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
               "For-loop must iterate over an array, string, or iterable class."
       in
       let tc_loop = Tctxt.add_local tc i_node.elt (elem_ty, false) in
-      let _tc_body, t_body, for_ret = type_block tc_loop frtyp body true in
+      let _tc_body, t_body, for_ret =
+        type_block tc_loop frtyp body true enclosing_class
+      in
       (tc, Typed_ast.ForEach (i_node.elt, titer, iter_ty, t_body), for_ret)
   | Break ->
       if not in_loop then type_error stmt_n "break can only be used inside loop"
@@ -199,7 +208,7 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       let tes =
         List.fold_left
           (fun acc en ->
-            let te, ety = type_exp ~class_fields tc en in
+            let te, ety = type_exp tc en enclosing_class in
             match ety with
             | Typed_ast.TRef (RClass _) -> te :: acc
             (* other TRefs are on the stack or global (strings) not suited for deletion *)
@@ -208,8 +217,8 @@ let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       in
       (tc, Typed_ast.Free tes, false)
 
-and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
-    (tc : Tctxt.t) (e : Ast.exp node) : Typed_ast.exp * Typed_ast.ty =
+and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
+    (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =
   let { elt = e'; loc = _ } = e in
   match e' with
   | Bool b ->
@@ -254,26 +263,33 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
       check_expected_ty expected (TRef RString) e;
       Typed_ast.(Str s, TRef RString)
   | Id i -> (
+      let handle_global_or_field i t tc e enclosing_class =
+        match enclosing_class with
+        | Some cn ->
+            let fields, _ = Tctxt.lookup_class cn tc in
+            let is_field = List.exists (fun (f, _, _, _) -> f = i) fields in
+
+            if is_field then
+              match Tctxt.lookup_local_option "this" tc with
+              | Some ((TRef (RClass cname) as clazz), _) ->
+                  Typed_ast.(Proj (Id ("this", clazz), i, cname, t), t)
+              | _ -> type_error e "Field access found but 'this' is undefined"
+            else (Id (i, t), t)
+        | None -> (Id (i, t), t)
+      in
       match Tctxt.lookup_local_option i tc with
       | Some (t, _) ->
           check_expected_ty expected t e;
           (Typed_ast.Id (i, t), t)
       | None -> (
           match Tctxt.lookup_global_option i tc with
-          | Some (t, _) ->
-              if List.mem i class_fields then
-                match Tctxt.lookup_local_option "this" tc with
-                | Some ((TRef (RClass cname) as clazz), _) ->
-                    (Proj (Id ("this", clazz), i, cname, t), t)
-                | _ ->
-                    type_error e "Field access outside of a valid class context"
-              else (Id (i, t), t)
+          | Some (t, _) -> handle_global_or_field i t tc e enclosing_class
           | None -> (
               match Tctxt.lookup_proto_option i tc with
               | Some (t, _) -> (Id (i, t), t)
               | None -> type_error e ("variable " ^ i ^ " is not defined"))))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
-      match type_method (Proj (obj, mth)) args true tc with
+      match type_method_app (Proj (obj, mth)) args true tc enclosing_class with
       | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVal rt) ->
           check_expected_ty expected rt e;
           Typed_ast.
@@ -281,16 +297,16 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
-      let typed_callee, typ = type_exp ~class_fields tc f in
-      match type_func args typ true tc with
+      let typed_callee, typ = type_exp tc f enclosing_class in
+      match type_func_app args typ true tc enclosing_class with
       | Error msg -> type_error e msg
       | Ok (arg_types, typed_args, RetVal rt) ->
           check_expected_ty expected rt e;
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
-      let te1, lty = type_exp ~class_fields tc e1 in
-      let te2, rty = type_exp ~class_fields tc e2 in
+      let te1, lty = type_exp tc e1 enclosing_class in
+      let te2, rty = type_exp tc e2 enclosing_class in
       match eval_const_exp e with
       | Some ev ->
           let inferred_int_ty = infer_integer_ty ev e in
@@ -329,7 +345,7 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
           in
           (Typed_ast.Bop (binop', te1, te2, res_ty), res_ty))
   | Uop (unop, e1) ->
-      let te1, ety = type_exp ~class_fields tc e1 in
+      let te1, ety = type_exp tc e1 enclosing_class in
       let unop' = convert_unop unop in
       let res_ty =
         match (unop, ety) with
@@ -345,7 +361,7 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
-      let t_iter, iter_ty = type_exp ~class_fields tc e_iter in
+      let t_iter, iter_ty = type_exp tc e_iter enclosing_class in
       let ty_of_array =
         match iter_ty with
         | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
@@ -354,16 +370,16 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
               ("cannot index non-array type, recieved " ^ Printer.show_ty t)
       in
       check_expected_ty expected ty_of_array e;
-      let t_idx, idx_ty = type_exp ~class_fields tc e_idx in
+      let t_idx, idx_ty = type_exp tc e_idx enclosing_class in
       let _ =
         match idx_ty with
         | Typed_ast.TInt _ -> ()
         | _ -> type_error e "index must be integer type"
       in
       (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
-  | Array _ -> type_array expected tc e
+  | Array _ -> type_array enclosing_class expected tc e
   | Cast (e, t) ->
-      let te, e_ty = type_exp ~class_fields tc e in
+      let te, e_ty = type_exp tc e enclosing_class in
       let tty = convert_ty t in
       check_expected_ty expected tty e;
       if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
@@ -372,7 +388,7 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
          ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
   | Proj (ec, f) -> (
-      let tec, e_ty = type_exp ~class_fields tc ec in
+      let tec, e_ty = type_exp tc ec enclosing_class in
       match e_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
           match Tctxt.lookup_field_option cid f tc with
@@ -419,7 +435,9 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
           let _, fty, _, _ =
             List.find (fun (fieldName, _, _, _) -> fieldName = fname) cfields
           in
-          let tinit, _init_ty = type_exp ~class_fields ~expected:fty tc init in
+          let tinit, _init_ty =
+            type_exp ~expected:fty tc init enclosing_class
+          in
           (fname, tinit)
         with Not_found ->
           type_error e
@@ -428,14 +446,14 @@ and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
       let typed_inits = List.map type_field_inits inits in
       (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
 
-and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
-    (tc : Tctxt.t) :
+and type_func_app (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
+    (tc : Tctxt.t) (enclosing_class : id option) :
     (Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty, string) result =
   let typecheck_args arg_types =
     ( arg_types,
       List.map2
         (fun aty a ->
-          let te, ty = type_exp tc a in
+          let te, ty = type_exp tc a enclosing_class in
           if equal_ty ty aty then te
           else
             let err_msg =
@@ -460,21 +478,23 @@ and type_func (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
         Ok (arg_types, typed_args, RetVoid)
   | _ -> Error "attempted to call a non-function type."
 
-and type_method (proj : exp) (args : exp node list) (from_exp : bool)
-    (tc : Tctxt.t) :
+and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
+    (tc : Tctxt.t) (enclosing_class : id option) :
     ( Typed_ast.exp * Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty,
       string )
     result =
   match proj with
   | Proj (obj, mth) -> (
-      let tobj, obj_ty = type_exp tc obj in
+      let tobj, obj_ty = type_exp tc obj enclosing_class in
       match obj_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
           match Tctxt.lookup_method_option cid mth tc with
           | Some (rt, argheaders) -> (
               let argtypes = List.map fst argheaders in
               let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
-              match type_func args temp_func from_exp tc with
+              match
+                type_func_app args temp_func from_exp tc enclosing_class
+              with
               | Error msg -> Error msg
               | Ok (arg_types, typed_args, rt) ->
                   Ok
@@ -490,8 +510,8 @@ and type_method (proj : exp) (args : exp node list) (from_exp : bool)
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."
 
-and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
-    Typed_ast.exp * Typed_ast.ty =
+and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
+    (tc : Tctxt.t) (en : exp node) : Typed_ast.exp * Typed_ast.ty =
   match (en.elt, expected) with
   | Array [], None ->
       type_error en
@@ -512,15 +532,15 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       in
       let th, h_ty =
         match exp_ty with
-        | Some ety -> type_exp ~expected:ety tc h
-        | None -> type_exp tc h
+        | Some ety -> type_exp ~expected:ety tc h enclosing_class
+        | None -> type_exp tc h enclosing_class
       in
       let typed_elems =
         List.map
           (fun elem ->
             (* now that the head of the array has been typechecked 
              we can just check the rest of the array must match the head's type *)
-            let te, ty = type_exp ~expected:h_ty tc elem in
+            let te, ty = type_exp ~expected:h_ty tc elem enclosing_class in
             if equal_ty ty h_ty then te
             else
               type_error elem
@@ -546,7 +566,7 @@ and type_array (expected : Typed_ast.ty option) (tc : Tctxt.t) (en : exp node) :
       (Typed_ast.Array (all_elems, arr_ty), arr_ty)
   | _ -> type_error en "Somehow reached unreachable state."
 
-and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
+(* and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | LambdaDecl (lname, None, { elt = Lambda _; _ }) ->
@@ -602,7 +622,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
           (fun tc' (i, t) -> Tctxt.add_local tc' i (t, false))
           tc converted_args
       in
-      let _, typed_body, _ = type_block lambda_tc converted_ret body false in
+      let _, typed_body, _ = type_block enclosing_class lambda_tc converted_ret body false in
       let lambda_type =
         Typed_ast.RFun (List.map snd converted_args, converted_ret)
       in
@@ -611,7 +631,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
       in
       let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type, false) in
       (tc', Typed_ast.LambdaDecl (lname.elt, lambda_type, typed_lambda), false)
-  | _ -> type_error stmt_n "Even more impossible state"
+  | _ -> type_error stmt_n "Even more impossible state" *)
 
 and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
   | TBool -> Typed_ast.Bool false
@@ -640,15 +660,17 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
       let t' = Typed_ast.TRef (RArray (convert_ty t, sz')) in
       Typed_ast.Array (lst, t')
 
-and type_block ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
-    (stmts : stmt node list) (in_loop : bool) :
+and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+    (stmts : stmt node list) (in_loop : bool) (enclosing_class : id option) :
     Tctxt.t * Typed_ast.stmt list * bool =
   let tc_new, rev_stmts, does_ret =
     List.fold_left
       (fun (tc_acc, tstmts, does_ret) s ->
         if does_ret then
           type_error s "Dead code, function already returns before this.";
-        let tc', tstmt, ret = type_stmt ~class_fields tc_acc frtyp s in_loop in
+        let tc', tstmt, ret =
+          type_stmt enclosing_class tc_acc frtyp s in_loop
+        in
         (tc', tstmt :: tstmts, ret))
       (tc, [], false) stmts
   in
