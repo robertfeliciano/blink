@@ -3,8 +3,10 @@ fun printf(s: string) => void {
 }
 
 fun main(argc: i32, argv: [string; 2]) => i32 {
+    let i = 0;
     for x in 0..12 by 2 {
         printf("hi");
+        i += x;
     }
     /*
     let arr = [1,2,3,4];
@@ -12,5 +14,5 @@ fun main(argc: i32, argv: [string; 2]) => i32 {
         printf("heh");
     }
     */
-    return 0;
+    return i;
 }
