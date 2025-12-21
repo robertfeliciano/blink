@@ -111,8 +111,8 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token GLOBAL    /* global */
 // %token QMARK     /* ? */
 %token AS        /* as */
-%token BAR       /* | */
 %token FN        /* fn */
+%token LAMBDA    /* lambda */
 
 // %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
@@ -417,36 +417,59 @@ vdecl:
   | CONST id=IDENT t=ty_spec? EQUAL init=exp
       { (id, t, Some init, true) }
 
+lambda:
+  | FN LPAREN args=lambda_args RPAREN r=lambda_ret body=block
+      {
+        match r with
+        | None ->
+            (* untyped lambda: all args must be untyped *)
+            let ids =
+              List.map
+                (fun (i, t) ->
+                  match t with
+                  | None -> i
+                  | Some _ ->
+                      let args_start = $startpos(args) in 
+                      raise (ParserError (args_start, "Untyped lambda does not allow typed args")))
+                args
+            in
+            loc $startpos $endpos @@
+            Lambda (ids, body)
 
-lambda: 
-  | BAR args=untyped_lambda_args BAR THIN_ARROW stmts=block
-      { loc $startpos $endpos @@ Lambda (args, stmts) }
-  | LPAREN args=typed_lambda_args RPAREN THIN_ARROW rty=ret_ty stmts=block
-      { loc $startpos $endpos @@ TypedLambda (args, rty, stmts) }
+        | Some rty ->
+            (* typed lambda: all args must be typed *)
+            let typed_args =
+              List.map
+                (fun (i, t) ->
+                  match t with
+                  | Some ty -> (i, ty)
+                  | None ->
+                      let args_end = $endpos(args) in 
+                      raise (ParserError (args_end, "Missing type in typed lambda argument")))
+                args
+            in
+            loc $startpos $endpos @@
+            TypedLambda (typed_args, rty, body)
+      }
 
-untyped_lambda_arg:
-  | i=IDENT { i }
+lambda_arg:
+  | i=IDENT t=ty_spec? { (i, t) }
 
-untyped_lambda_args:
-  | l=separated_list(COMMA, untyped_lambda_arg) { l }
+lambda_args:
+  | l=separated_list(COMMA, lambda_arg) { l }
 
-typed_lambda_arg:
-  | i=IDENT t=ty_spec { (i, t) }
-
-typed_lambda_args:
-  | l=separated_list(COMMA, typed_lambda_arg) { l }
-
-lambda_fun_ty_spec: 
-  | COLON t=fun_ty  { t }
+lambda_ret:
+  | THIN_ARROW rty=ret_ty { Some rty }
+  | { None }
 
 ldecl: 
-  | FN id=IDENT t=lambda_fun_ty_spec? EQUAL l=lambda
-      { 
+  | LAMBDA id=IDENT t=ty_spec? EQUAL l=lambda
+    { 
         let i_start = $startpos(id) in 
         let i_end   = $endpos(id) in 
         let id_node = loc i_start i_end @@ id in
         (id_node, (match t with Some ty -> Some ty | None -> None), l) 
-      }
+    }
 
 (* -----------------------
    for-loop step (optional)

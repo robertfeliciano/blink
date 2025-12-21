@@ -2,6 +2,8 @@ module Range = Util.Range
 
 type 'a node = { elt : 'a; loc : Range.t }
 
+exception ParserError of Lexing.position * string
+
 let show_node show_elt { elt; loc } =
   Printf.sprintf "{ elt = %s; loc = %s }" (show_elt elt)
     (Range.string_of_range loc)
@@ -92,7 +94,7 @@ type exp =
   | Null
 
 and vdecl = id * ty option * exp node option * bool
-and ldecl = id node * ref_ty option * exp node
+and ldecl = id node * ty option * exp node
 
 and stmt =
   | Assn of exp node * aop * exp node
@@ -296,7 +298,7 @@ and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)
     (show_node (fun x -> x) id)
     (match ty_opt with
-    | Some ty -> show_ref_ty ~lvl:(lvl + 1) ty
+    | Some ty -> show_ty ~lvl:(lvl + 1) ty
     | None -> "None")
     (indent (lvl + 1))
     (show_node show_exp exp)

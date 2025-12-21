@@ -541,7 +541,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
   | LambdaDecl (lname, Some t, { elt = TypedLambda (args, ret, body); loc }) ->
       let arg_types, ret_typ =
         match t with
-        | RFun (arg_types, ret_typ) -> (arg_types, ret_typ)
+        | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
         | _ -> type_error lname "Must specify function type for untyped lambda."
       in
       let all_types_match =
@@ -566,7 +566,7 @@ and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
   | LambdaDecl (lname, Some t, { elt = Lambda (arg_ids, body); loc }) ->
       let arg_types, ret =
         match t with
-        | RFun (arg_types, ret_typ) -> (arg_types, ret_typ)
+        | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
         | _ -> type_error lname "Must specify function type for lambda."
       in
       let new_args =
