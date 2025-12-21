@@ -10,8 +10,8 @@ The mutual recursion introduced by lambda expressions has forced me to combine e
 into one file. 
 *)
 
-let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
-    (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
+let rec type_stmt ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+    (stmt_n : stmt node) (in_loop : bool) : Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
   | Decl (_, None, None, _) ->
@@ -22,12 +22,12 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       let tc' = Tctxt.add_local tc i (e_ty, const) in
       (tc', Typed_ast.Decl (i, e_ty, e, const), false)
   | Decl (i, None, Some en, const) ->
-      let te, e_ty = type_exp tc en in
+      let te, e_ty = type_exp ~class_fields tc en in
       let tc', resolved_ty = (Tctxt.add_local tc i (e_ty, const), e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Decl (i, Some given_ty_ast, Some en, const) ->
       let given_ty = convert_ty given_ty_ast in
-      let te, e_ty = type_exp ~expected:given_ty tc en in
+      let te, e_ty = type_exp ~class_fields ~expected:given_ty tc en in
       let tc', resolved_ty =
         match (e_ty, given_ty, te) with
         | Typed_ast.TInt _, Typed_ast.TInt given_num_ty, Typed_ast.Int (n, _) ->
@@ -74,14 +74,14 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
           | None -> type_error stmt_n ("variable " ^ i ^ " is not defined"))
       | Proj _ | Index _ -> ()
       | _ -> type_error lhs "cannot assign to this expression");
-      let tlhs, lhsty = type_exp tc lhs in
-      let trhs, _rhsty = type_exp ~expected:lhsty tc rhs in
+      let tlhs, lhsty = type_exp ~class_fields tc lhs in
+      let trhs, _rhsty = type_exp ~class_fields ~expected:lhsty tc rhs in
       (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs, lhsty), false)
   | Ret expr ->
       let te_opt =
         match (expr, frtyp) with
         | Some e, RetVal r_ty ->
-            let te, expr_ty = type_exp ~expected:r_ty tc e in
+            let te, expr_ty = type_exp ~class_fields ~expected:r_ty tc e in
             if not (equal_ty expr_ty r_ty) then
               type_error stmt_n
                 ("Expected function return type " ^ Printer.show_ty r_ty
@@ -114,7 +114,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
             false )
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
-      let typed_callee, typ = type_exp tc f in
+      let typed_callee, typ = type_exp ~class_fields tc f in
       let arg_types, typed_args, ret =
         match type_func args typ false tc with
         | Error msg -> type_error stmt_n msg
@@ -126,7 +126,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types, ret), false)
   | If (cond, then_branch, else_branch) ->
-      let tcond, cond_ty = type_exp ~expected:TBool tc cond in
+      let tcond, cond_ty = type_exp ~class_fields ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "if condition must be bool";
       let _tc_then, t_then, if_ret = type_block tc frtyp then_branch in_loop in
@@ -135,14 +135,14 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       (tc, Typed_ast.If (tcond, t_then, t_else), if_ret && else_ret)
   | While (cond, body) ->
-      let tcond, cond_ty = type_exp ~expected:TBool tc cond in
+      let tcond, cond_ty = type_exp ~class_fields ~expected:TBool tc cond in
       if cond_ty <> Typed_ast.TBool then
         type_error cond "while condition must be bool";
       let _tc_while, t_body, while_ret = type_block tc frtyp body true in
       (tc, Typed_ast.While (tcond, t_body), while_ret)
   | For (i_node, (start, fin, incl), step_opt, body) ->
-      let tstart, start_ty = type_exp tc start in
-      let tfin, fin_ty = type_exp tc fin in
+      let tstart, start_ty = type_exp ~class_fields tc start in
+      let tfin, fin_ty = type_exp ~class_fields tc fin in
       if not (is_number start_ty) then
         type_error start "Expected number type for left bound.";
       if not (is_number fin_ty) then
@@ -154,7 +154,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       let t_step, s_ty =
         match step_opt with
         | Some s ->
-            let ts, s_ty = type_exp tc s in
+            let ts, s_ty = type_exp ~class_fields tc s in
             if not (equal_ty s_ty start_ty) then
               type_error s
                 ("Expected type " ^ Printer.show_ty start_ty
@@ -168,7 +168,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
         Typed_ast.For (i_node.elt, tstart, tfin, incl, t_step, s_ty, t_body),
         for_ret )
   | ForEach (i_node, iter_exp, body) ->
-      let titer, iter_ty = type_exp tc iter_exp in
+      let titer, iter_ty = type_exp ~class_fields tc iter_exp in
       let elem_ty =
         match iter_ty with
         | Typed_ast.(TRef (RClass cls)) -> (
@@ -199,7 +199,7 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       let tes =
         List.fold_left
           (fun acc en ->
-            let te, ety = type_exp tc en in
+            let te, ety = type_exp ~class_fields tc en in
             match ety with
             | Typed_ast.TRef (RClass _) -> te :: acc
             (* other TRefs are on the stack or global (strings) not suited for deletion *)
@@ -208,8 +208,8 @@ let rec type_stmt (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node)
       in
       (tc, Typed_ast.Free tes, false)
 
-and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
-    : Typed_ast.exp * Typed_ast.ty =
+and type_exp ?(class_fields = []) ?(expected : Typed_ast.ty option)
+    (tc : Tctxt.t) (e : Ast.exp node) : Typed_ast.exp * Typed_ast.ty =
   let { elt = e'; loc = _ } = e in
   match e' with
   | Bool b ->
@@ -254,11 +254,24 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       check_expected_ty expected (TRef RString) e;
       Typed_ast.(Str s, TRef RString)
   | Id i -> (
-      match Tctxt.lookup_option i tc with
+      match Tctxt.lookup_local_option i tc with
       | Some (t, _) ->
           check_expected_ty expected t e;
-          (Id (i, t), t)
-      | None -> type_error e ("variable " ^ i ^ " is not defined"))
+          (Typed_ast.Id (i, t), t)
+      | None -> (
+          match Tctxt.lookup_global_option i tc with
+          | Some (t, _) ->
+              if List.mem i class_fields then
+                match Tctxt.lookup_local_option "this" tc with
+                | Some ((TRef (RClass cname) as clazz), _) ->
+                    (Proj (Id ("this", clazz), i, cname, t), t)
+                | _ ->
+                    type_error e "Field access outside of a valid class context"
+              else (Id (i, t), t)
+          | None -> (
+              match Tctxt.lookup_proto_option i tc with
+              | Some (t, _) -> (Id (i, t), t)
+              | None -> type_error e ("variable " ^ i ^ " is not defined"))))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method (Proj (obj, mth)) args true tc with
       | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVal rt) ->
@@ -268,7 +281,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
-      let typed_callee, typ = type_exp tc f in
+      let typed_callee, typ = type_exp ~class_fields tc f in
       match type_func args typ true tc with
       | Error msg -> type_error e msg
       | Ok (arg_types, typed_args, RetVal rt) ->
@@ -276,8 +289,8 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
-      let te1, lty = type_exp tc e1 in
-      let te2, rty = type_exp tc e2 in
+      let te1, lty = type_exp ~class_fields tc e1 in
+      let te2, rty = type_exp ~class_fields tc e2 in
       match eval_const_exp e with
       | Some ev ->
           let inferred_int_ty = infer_integer_ty ev e in
@@ -316,7 +329,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           in
           (Typed_ast.Bop (binop', te1, te2, res_ty), res_ty))
   | Uop (unop, e1) ->
-      let te1, ety = type_exp tc e1 in
+      let te1, ety = type_exp ~class_fields tc e1 in
       let unop' = convert_unop unop in
       let res_ty =
         match (unop, ety) with
@@ -332,7 +345,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Index (e_iter, e_idx) ->
-      let t_iter, iter_ty = type_exp tc e_iter in
+      let t_iter, iter_ty = type_exp ~class_fields tc e_iter in
       let ty_of_array =
         match iter_ty with
         | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
@@ -341,7 +354,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
               ("cannot index non-array type, recieved " ^ Printer.show_ty t)
       in
       check_expected_ty expected ty_of_array e;
-      let t_idx, idx_ty = type_exp tc e_idx in
+      let t_idx, idx_ty = type_exp ~class_fields tc e_idx in
       let _ =
         match idx_ty with
         | Typed_ast.TInt _ -> ()
@@ -350,7 +363,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
   | Array _ -> type_array expected tc e
   | Cast (e, t) ->
-      let te, e_ty = type_exp tc e in
+      let te, e_ty = type_exp ~class_fields tc e in
       let tty = convert_ty t in
       check_expected_ty expected tty e;
       if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
@@ -359,7 +372,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
          ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
   | Proj (ec, f) -> (
-      let tec, e_ty = type_exp tc ec in
+      let tec, e_ty = type_exp ~class_fields tc ec in
       match e_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
           match Tctxt.lookup_field_option cid f tc with
@@ -406,7 +419,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           let _, fty, _, _ =
             List.find (fun (fieldName, _, _, _) -> fieldName = fname) cfields
           in
-          let tinit, _init_ty = type_exp ~expected:fty tc init in
+          let tinit, _init_ty = type_exp ~class_fields ~expected:fty tc init in
           (fname, tinit)
         with Not_found ->
           type_error e
@@ -627,7 +640,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
       let t' = Typed_ast.TRef (RArray (convert_ty t, sz')) in
       Typed_ast.Array (lst, t')
 
-and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
+and type_block ?(class_fields = []) (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
     (stmts : stmt node list) (in_loop : bool) :
     Tctxt.t * Typed_ast.stmt list * bool =
   let tc_new, rev_stmts, does_ret =
@@ -635,7 +648,7 @@ and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       (fun (tc_acc, tstmts, does_ret) s ->
         if does_ret then
           type_error s "Dead code, function already returns before this.";
-        let tc', tstmt, ret = type_stmt tc_acc frtyp s in_loop in
+        let tc', tstmt, ret = type_stmt ~class_fields tc_acc frtyp s in_loop in
         (tc', tstmt :: tstmts, ret))
       (tc, [], false) stmts
   in

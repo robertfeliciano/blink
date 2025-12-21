@@ -23,7 +23,8 @@ let type_annotations (tc : Tctxt.t) =
       in
       (i.elt, e'))
 
-let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
+let type_fn ?(class_fields = []) (tc : Tctxt.t) (fn : fdecl node) :
+    Typed_ast.fdecl =
   let { elt = { annotations; frtyp; fname; args; body }; loc = _ } = fn in
   let tc' =
     List.fold_left
@@ -34,7 +35,9 @@ let type_fn (tc : Tctxt.t) (fn : fdecl node) : Typed_ast.fdecl =
   in
   let frtyp' = convert_ret_ty frtyp in
   let args' = List.map (fun (ty, id) -> (convert_ty ty, id)) args in
-  let _tc_final, typed_body, does_ret = type_block tc' frtyp' body false in
+  let _tc_final, typed_body, does_ret =
+    type_block ~class_fields tc' frtyp' body false
+  in
   let annotations' = type_annotations tc annotations in
   if frtyp' <> RetVoid && not does_ret then
     type_error
@@ -97,13 +100,16 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
       globals = globals' @ tc.globals;
     }
   in
+  let class_fields =
+    List.map (fun (f : Typed_ast.field) -> f.fieldName) tfields
+  in
   let type_mthd method_node =
     let ({ elt = mthd; loc = _ } : fdecl node) = method_node in
     let tc' =
       if mthd.fname = cname then { tc with globals = globals' @ tc.globals }
       else tc'
     in
-    type_fn tc' method_node
+    type_fn ~class_fields tc' method_node
   in
   let tmethods = List.map type_mthd methods in
   let annotations' = type_annotations tc annotations in
