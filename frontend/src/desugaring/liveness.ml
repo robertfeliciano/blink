@@ -71,8 +71,7 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
                 (analyze_exp locals true lhs)
                 (analyze_exp locals false rhs)
           (* | LambdaDecl (_id, _, init_exp)  *)
-          | Decl (_id, _, init_exp, _) ->
-              analyze_exp locals false init_exp
+          | Decl (_id, _, init_exp, _) -> analyze_exp locals false init_exp
           | Ret maybe_e -> (
               match maybe_e with
               | None -> empty_result
@@ -98,7 +97,7 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
         let locals' =
           match stmt with
           | Decl (id, _, _, _) ->
-           (* | LambdaDecl (id, _, _) -> *)
+              (* | LambdaDecl (id, _, _) -> *)
               StringSet.add id locals
           | _ -> locals
         in

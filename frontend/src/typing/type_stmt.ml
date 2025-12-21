@@ -398,9 +398,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-  | Lambda _ | TypedLambda _ -> 
-    Printf.printf "hi\n";
-    type_error e "not supported yet"
+  | Lambda _ | TypedLambda _ -> type_error e "not supported yet"
   | ObjInit ({ elt = cname; loc = cloc }, inits) ->
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
