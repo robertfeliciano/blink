@@ -191,11 +191,11 @@ and show_stmt ?(lvl = 0) = function
         (indent lvl)
   | Break -> Printf.sprintf "%sBreak" (indent lvl)
   | Continue -> Printf.sprintf "%sContinue" (indent lvl)
-  | LambdaDecl (lname, ltyp, defn) ->
+  (* | LambdaDecl (lname, ltyp, defn) ->
       Printf.sprintf "%sLambda(%s: %s) = \n%s{%s%s}" (indent lvl) lname
         (show_ref_ty ltyp) (indent lvl)
         (show_exp ~lvl:(lvl + 1) defn)
-        (indent lvl)
+        (indent lvl) *)
   | Free es ->
       Printf.sprintf "%sFree %s" (indent lvl)
         (String.concat ", " (List.map show_exp es))

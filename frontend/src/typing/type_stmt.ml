@@ -63,7 +63,7 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  | LambdaDecl _ -> failwith "derp" (* type_lambda tc stmt_n *)
+  (* | LambdaDecl _ -> failwith "derp" type_lambda tc stmt_n *)
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
       | Id i -> (
@@ -398,7 +398,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-  | Lambda _ | TypedLambda _ -> type_error e "not supported yet"
+  | Lambda _ | TypedLambda _ -> 
+    Printf.printf "hi\n";
+    type_error e "not supported yet"
   | ObjInit ({ elt = cname; loc = cloc }, inits) ->
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with

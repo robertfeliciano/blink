@@ -134,7 +134,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       | Some e ->
           let estmts, e' = desugar_exp e in
           estmts @ [ Ret (Some e') ])
-  | LambdaDecl (lname, ltyp, defn) ->
+  (* | LambdaDecl (lname, ltyp, defn) ->
       let converted_ltyp = convert_ref_ty ltyp in
       let _, desugared_defn = desugar_exp defn in
       let _tys, _ret_ty =
@@ -143,7 +143,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
         | _ -> desugar_error "unreachable state"
       in
       (* let mangled_name = mangle_name lname tys ret_ty in *)
-      [ LambdaDecl (lname, converted_ltyp, desugared_defn) ]
+      [ LambdaDecl (lname, converted_ltyp, desugared_defn) ] *)
   | Break -> [ Break ]
   | Continue -> [ Continue ]
   | Free es ->

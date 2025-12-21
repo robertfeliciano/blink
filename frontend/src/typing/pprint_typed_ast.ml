@@ -190,11 +190,11 @@ and show_stmt ?(lvl = 0) = function
         (indent (lvl + 1))
         (show_ty t)
   | Decl v -> show_vdecl ~lvl v
-  | LambdaDecl (id, ref_ty, defn) ->
+  (* | LambdaDecl (id, ref_ty, defn) ->
       Printf.sprintf "%sLambdaDecl(%s : %s => [\n%s\n%s])" (indent lvl) id
         (show_ref_ty ref_ty)
         (show_exp ~lvl:(lvl + 1) defn)
-        (indent lvl)
+        (indent lvl) *)
   | Ret eo ->
       let e_s =
         match eo with None -> "None" | Some e -> show_exp ~lvl:(lvl + 1) e

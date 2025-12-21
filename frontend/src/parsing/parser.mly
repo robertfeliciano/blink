@@ -112,7 +112,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token QMARK     /* ? */
 %token AS        /* as */
 %token FN        /* fn */
-%token LAMBDA    /* lambda */
+// %token LAMBDA    /* lambda */
 
 // %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
 %left OR
@@ -462,14 +462,14 @@ lambda_ret:
   | THIN_ARROW rty=ret_ty { Some rty }
   | { None }
 
-ldecl: 
-  | LAMBDA id=IDENT t=ty_spec? EQUAL l=lambda
-    { 
-        let i_start = $startpos(id) in 
-        let i_end   = $endpos(id) in 
-        let id_node = loc i_start i_end @@ id in
-        (id_node, (match t with Some ty -> Some ty | None -> None), l) 
-    }
+// ldecl: 
+//   | LAMBDA id=IDENT t=ty_spec? EQUAL l=lambda
+//     { 
+//         let i_start = $startpos(id) in 
+//         let i_end   = $endpos(id) in 
+//         let id_node = loc i_start i_end @@ id in
+//         (id_node, (match t with Some ty -> Some ty | None -> None), l) 
+//     }
 
 (* -----------------------
    for-loop step (optional)
@@ -485,8 +485,6 @@ by_step:
 stmt:
   | d=vdecl SEMI
       { loc $startpos $endpos @@ Decl(d) }
-  | l=ldecl SEMI
-      { loc $startpos $endpos @@ LambdaDecl(l) }
   | p=lhs a=aop e=exp SEMI
       { loc $startpos $endpos @@ Assn(p,a,e) }
   | cs=call_stmt
