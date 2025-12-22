@@ -30,9 +30,6 @@ Stmt convert_stmt(value v) {
                 result.val = Assn{std::move(lhs), std::move(rhs), std::move(ty)};
                 break;
             }
-            case Constants::STMT_LambdaDecl: { // LambdaDecl of ldecl
-                throw std::runtime_error("Lambda declarations not supported in bridge conversion");
-            }
             case Constants::STMT_Decl: { // Decl of vdecl (id * ty * exp * bool)
                 value       vdecl    = Field(v, 0);
                 std::string id       = String_val(Field(vdecl, 0));

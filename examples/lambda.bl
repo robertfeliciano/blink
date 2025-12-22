@@ -37,5 +37,5 @@ fun main(args: [string; 2]) => u64 {
     };
     */
 
-    return takesLambda(l1, 2 as u8);
+    return takesLambda(l3, 2 as u8);
 }

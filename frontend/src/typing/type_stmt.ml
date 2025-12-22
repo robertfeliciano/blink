@@ -398,7 +398,49 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-  | Lambda _ | TypedLambda _ -> type_error e "not supported yet"
+  | Lambda (arg_ids, body) -> (
+      (* TODO get better node for errors from parser *)
+      match expected with
+      | Some t ->
+          let arg_types, ret =
+            match t with
+            | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
+            | _ -> type_error e "Must specify function type for lambda"
+          in
+          let new_args =
+            try List.combine arg_ids arg_types
+            with Invalid_argument _ ->
+              type_error e "LHS types and RHS ids must have same length."
+          in
+          create_typed_lambda tc new_args ret body enclosing_class
+      | None -> type_error e "Must specify variable type for untyped lambda.")
+  | TypedLambda (args, rhs_ret, body) -> (
+      match expected with
+      | Some t ->
+          let lhs_arg_types, lhs_ret =
+            match t with
+            | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
+            | _ -> type_error e "Invalid type specified for lambda"
+          in
+          let rhs_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
+          let _ =
+            try
+              List.for_all2
+                (fun t1 (_, t2) -> equal_ty t1 t2)
+                lhs_arg_types rhs_args
+            with Invalid_argument _ ->
+              type_error e "LHS and RHS types must match exactly."
+          in
+          let rhs_ret = convert_ret_ty rhs_ret in
+          let () =
+            if not (equal_ret_ty lhs_ret rhs_ret) then
+              type_error e "LHS and RHS types must match exactly."
+          in
+          create_typed_lambda tc rhs_args rhs_ret body enclosing_class
+      | None -> 
+        let rhs_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
+        let rhs_ret = convert_ret_ty rhs_ret in
+        create_typed_lambda tc rhs_args rhs_ret body enclosing_class)
   | ObjInit ({ elt = cname; loc = cloc }, inits) ->
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
@@ -675,3 +717,13 @@ and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
       (tc, [], false) stmts
   in
   (tc_new, List.rev rev_stmts, does_ret)
+
+and create_typed_lambda (tc : Tctxt.t) (args : (id * Typed_ast.ty) list)
+    (ret : Typed_ast.ret_ty) (body : block) (enclosing_class : id option) =
+  let ltc =
+    List.fold_left (fun tc' (i, t) -> Tctxt.add_local tc' i (t, false)) tc args
+  in
+  let _, t_body, _ = type_block ltc ret body false enclosing_class in
+  let lambda_typ = Typed_ast.(TRef (RFun (List.map snd args, ret))) in
+  let t_lambda = Typed_ast.Lambda (args, ret, t_body) in
+  (t_lambda, lambda_typ)

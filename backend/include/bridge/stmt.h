@@ -57,8 +57,6 @@ struct Free {
 struct Break {};
 struct Continue {};
 
-// TODO do lambdadecl
-
 using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Free, Break, Continue>;
 
 struct Stmt {

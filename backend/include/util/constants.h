@@ -60,13 +60,12 @@ namespace Constants {
 
     enum StmtVariant {
         STMT_Assn       = 0,
-        STMT_LambdaDecl = 1,
-        STMT_Decl       = 2,
-        STMT_Ret        = 3,
-        STMT_SCall      = 4,
-        STMT_If         = 5,
-        STMT_While      = 6,
-        STMT_Free        = 7
+        STMT_Decl       = 1,
+        STMT_Ret        = 2,
+        STMT_SCall      = 3,
+        STMT_If         = 4,
+        STMT_While      = 5,
+        STMT_Free       = 6
     };
 
     enum CtrlTag { CTRL_Break = 0, CTRL_Continue = 1 };

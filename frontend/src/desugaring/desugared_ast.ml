@@ -59,11 +59,9 @@ type exp =
   | Null of ty
 
 and vdecl = id * ty * exp * bool
-(* and ldecl = id * ref_ty * exp *)
 
 and stmt =
   | Assn of exp * exp * ty
-  (* | LambdaDecl of ldecl *)
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
   | SCall of exp * exp list

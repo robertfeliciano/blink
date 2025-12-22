@@ -94,7 +94,7 @@ type exp =
   | Null
 
 and vdecl = id * ty option * exp node option * bool
-and ldecl = id node * ty option * exp node
+(* and ldecl = id node * ty option * exp node *)
 
 and stmt =
   | Assn of exp node * aop * exp node
