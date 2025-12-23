@@ -2,12 +2,11 @@ open Desugar_util
 open Desugar_stmt
 open Desugar_class
 open Desugared_ast
+open Desugar_lambdas
+
+(* open Desugar_lambdas *)
 open Conversions
 module Typed = Typing.Typed_ast
-
-(* let mangle_lambda lname = function
-  | Typed.TRef (RFun (arg_tys, ret_ty)) -> mangle_name lname arg_tys ret_ty
-  | _ -> lname *)
 
 let desugar_proto (pn : Typed.proto) : proto =
   {
@@ -17,33 +16,29 @@ let desugar_proto (pn : Typed.proto) : proto =
     args = List.map (fun t -> convert_ty t) pn.args;
   }
 
-let desugar_fn (fn : Typed.fdecl) (dbg : bool) : fdecl =
+let desugar_fn (fn : Typed.fdecl) : fdecl =
   let body = desugar_block fn.body in
-  let mangled_name =
-    if dbg || fn.fname = "main" then fn.fname
-    (* else mangle_name fn.fname (List.map (fun (t, _) -> t) fn.args) fn.frtyp *)
-      else fn.fname
-  in
   {
     annotations = List.map desugar_annotation fn.annotations;
     frtyp = convert_ret_ty fn.frtyp;
-    fname = mangled_name;
+    fname = fn.fname;
     (* args = List.map (fun (t, i) -> (convert_ty t, mangle_lambda i t)) fn.args; *)
     args = List.map (fun (t, i) -> (convert_ty t, i)) fn.args;
     body;
   }
 
-let desugar_program (prog : Typed.program) (dbg : bool) : program =
+let desugar_program (prog : Typed.program) : program =
   let (Prog (fns, cns, pns)) = prog in
-  let desugared_fns = List.map (fun f -> desugar_fn f dbg) fns in
+  let desugared_fns = List.map (fun f -> desugar_fn f) fns in
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
-  Prog
-    (List.flatten extracted_methods @ desugared_fns, structs, desugared_protos)
+  let fn_list = List.flatten extracted_methods @ desugared_fns in
+  (* now we make a second pass for lambdas *)
+  let fn_list', structs' = check_fdecls fn_list structs in
+  Prog (fn_list', structs', desugared_protos)
 
-let desugar_prog ?(dbg = false) (prog : Typed.program) :
-    (program, Core.Error.t) result =
-  try Ok (desugar_program prog dbg)
+let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
+  try Ok (desugar_program prog)
   with DesugarError msg ->
     let err = Fmt.str "Error: %s" msg in
     Error (Core.Error.of_string err)

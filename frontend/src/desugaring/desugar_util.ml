@@ -1,4 +1,4 @@
-open Typing.Pprint_typed_ast
+open Pprint_desugared_ast
 module T = Typing.Typed_ast
 module D = Desugared_ast
 
@@ -34,32 +34,34 @@ let get_zero (ty : D.ty) : D.exp =
   | TFloat some_float_ty -> Float (0.0, some_float_ty)
   | _ ->
       desugar_error
-        "this should have ben caught earlier, but we expect numbers in the \
+        "this should have been caught earlier, but we expect numbers in the \
          bounds and step of a loop"
 
 let mangle_int = function
-  | T.TSigned s -> show_sint s
-  | T.TUnsigned u -> show_uint u
+  | D.TSigned s -> show_sint s
+  | D.TUnsigned u -> show_uint u
 
-let mangle_float = function T.Tf32 -> "f32" | Tf64 -> "f64"
+let mangle_float = function D.Tf32 -> "f32" | Tf64 -> "f64"
 let len_and_name e = Printf.sprintf "%d%s" (String.length e) e
 
-let rec mangle_ty = function
-  | T.TBool -> "b"
-  | T.TInt i -> mangle_int i
-  | T.TFloat f -> mangle_float f
-  | T.TRef (RClass cname) -> len_and_name cname
-  | T.TRef RString -> "str"
-  | T.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int.to_string sz
-  | T.TRef (RFun (tys, r)) -> (
-      String.concat "_" (List.map mangle_ty tys)
-      ^
-      match r with
-      | RetVoid -> "__void"
-      | RetVal t -> Printf.sprintf "__%s" (show_ty t))
+let mangle_ret_ty (t : D.ret_ty) =
+  match t with
+  | RetVoid -> "__void"
+  | RetVal t -> Printf.sprintf "__%s" (show_ty t)
 
-let mangle_name ?(enclosing_class : T.id option) (fname : T.id)
-    (tys : T.ty list) (rtyp : T.ret_ty) : T.id =
+let rec mangle_ty = function
+  | D.TBool -> "b"
+  | D.TInt i -> mangle_int i
+  | D.TFloat f -> mangle_float f
+  | D.TRef (RClass cname) -> len_and_name cname
+  | D.TRef RString -> "str"
+  | D.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int.to_string sz
+  | D.TRef (RFun (tys, r)) ->
+      String.concat "_" (List.map mangle_ty tys) ^ mangle_ret_ty r
+  | D.TRef (RPtr t) -> show_ty t ^ "*"
+
+let mangle_name ?(enclosing_class : D.id option) (fname : D.id)
+    (tys : D.ty list) (rtyp : D.ret_ty) : D.id =
   let base = "_Z" in
   let mangled_class =
     match enclosing_class with
@@ -74,4 +76,36 @@ let mangle_name ?(enclosing_class : T.id option) (fname : T.id)
     | [] -> base ^ "v"
     | _ -> base ^ String.concat "" (List.map mangle_ty tys)
   in
-  base ^ match rtyp with RetVoid -> "__void" | RetVal t -> mangle_ty t
+  base ^ mangle_ret_ty rtyp
+
+let mangle_lambda (t : D.ref_ty) =
+  match t with
+  | RFun (arg_tys, ret_ty) ->
+      "lambda"
+      ^ String.concat "_" (List.map mangle_ty arg_tys)
+      ^ mangle_ret_ty ret_ty
+  | _ -> desugar_error "impossible state"
+
+let lifted_lambda_name (lname : string) = gensym "lifted." ^ lname
+let lambda_env_struct_name (lname : string) = gensym "env." ^ lname
+let lambda_struct_name (lname : string) = "struct." ^ lname
+
+let create_lambda_struct (cname : string) (arg_tys : D.ty list)
+    (rty : D.ret_ty)
+      (* (lifted_lambda_name: string) (env_struct_ptr_name: string) *) : D.cdecl
+    =
+  let env_ty = D.TRef (RPtr (TInt (TSigned Ti8))) in
+  (* using generic i8* for env -> LLVM GEP uses opaque ptr *)
+  let fptr_ty = D.TRef (RPtr (TRef (RFun (arg_tys, rty)))) in
+  let env_field : D.field =
+    { prelude = []; fieldName = "envptr"; ftyp = env_ty; init = Null env_ty }
+  in
+  let fptr_field : D.field =
+    {
+      prelude = [];
+      fieldName = "lambdaptr";
+      ftyp = fptr_ty;
+      init = Null fptr_ty;
+    }
+  in
+  { cname; fields = [ env_field; fptr_field ]; annotations = [] }

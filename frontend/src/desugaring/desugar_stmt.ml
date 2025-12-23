@@ -108,8 +108,9 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       cstmts @ [ While (cond', body') ]
   | SCall (Proj (inst, pname, cname, t), args, types, ret) ->
       let istmts, inst' = desugar_exp inst in
+      let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
       let args_stmts, args' = List.map desugar_exp args |> flatten in
-      let mangled = mangle_name ~enclosing_class:cname pname types ret in
+      let mangled = mangle_name ~enclosing_class:cname pname dtypes dret in
       istmts @ args_stmts
       @ [ SCall (Id (mangled, convert_ty t), inst' :: args') ]
   | SCall (fn, args, tys, _ret) -> (
@@ -117,9 +118,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id (fname, t) ->
-          (* let mangled_name = mangle_name fname tys ret in *)
-          sf @ sa @ [ SCall (Id (fname, t), args') ]
+      | D.Id (fname, t) -> sf @ sa @ [ SCall (Id (fname, t), args') ]
       | _ ->
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVoid)) in
@@ -134,16 +133,6 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       | Some e ->
           let estmts, e' = desugar_exp e in
           estmts @ [ Ret (Some e') ])
-  (* | LambdaDecl (lname, ltyp, defn) ->
-      let converted_ltyp = convert_ref_ty ltyp in
-      let _, desugared_defn = desugar_exp defn in
-      let _tys, _ret_ty =
-        match ltyp with
-        | RFun (tys, ret_ty) -> (tys, ret_ty)
-        | _ -> desugar_error "unreachable state"
-      in
-      (* let mangled_name = mangle_name lname tys ret_ty in *)
-      [ LambdaDecl (lname, converted_ltyp, desugared_defn) ] *)
   | Break -> [ Break ]
   | Continue -> [ Continue ]
   | Free es ->
@@ -212,8 +201,9 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let si, inst' = desugar_exp inst in
       let sa, args' = List.map desugar_exp args |> flatten in
+      let dtys, dty = (List.map convert_ty tys, convert_ty ty) in
       let mangled_name =
-        mangle_name ~enclosing_class:cname pname tys (RetVal ty)
+        mangle_name ~enclosing_class:cname pname dtys (RetVal dty)
       in
       ( si @ sa,
         D.Call (D.Id (mangled_name, convert_ty t), inst' :: args', convert_ty ty)
@@ -225,9 +215,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id (fname, _t) ->
-          (* let mangled_name = mangle_name fname tys (RetVal ty) in *)
-          (sf @ sa, D.Call (Id (fname, ty'), args', ty'))
+      | D.Id (fname, _t) -> (sf @ sa, D.Call (Id (fname, ty'), args', ty'))
       | _ ->
           (* will expand chained calls: 
         ```
@@ -254,11 +242,12 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
           (sf @ [ tmp_decl ] @ sa, D.Call (Id (fn_store, fn_ty), args', ty')))
-  | Lambda (_, args, ret_ty, body) ->
+  | Lambda (scope, args, ret_ty, body) ->
       (* TODO desugar lambdas to structs and function pointers *)
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
       let converted_ret = convert_ret_ty ret_ty in
       let desugared_body = desugar_block body in
-      ([], Lambda ([], converted_args, converted_ret, desugared_body))
+      let ls, scope' = List.map desugar_exp scope |> flatten in
+      (ls, Lambda (scope', converted_args, converted_ret, desugared_body))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

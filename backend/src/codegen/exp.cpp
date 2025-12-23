@@ -453,6 +453,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         }
 
         for (auto& stmtPtr : fd.prelude) {
+            // TODO think this goes with codegen exp of fields...
             gen.codegenStmt(*stmtPtr);
         }
 
