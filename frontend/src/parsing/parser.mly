@@ -352,6 +352,15 @@ unary:
   | p=postfix
       { p }
 
+// array_lit:
+//   | NEW LBRACKET elems=separated_list(COMMA, exp) RBRACKET { elems }
+//   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET { elems }
+
+// object_lit:
+//   | NEW cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE { (cid, fields) }
+//   | cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE { (cid, fields) }
+
+
 (* primary forms (literals, ids, arrays, grouped) *)
 primary:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
@@ -362,7 +371,16 @@ primary:
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
+  // | elems=array_lit
       { loc $startpos $endpos @@ Array elems }
+  // | o=object_lit
+  //     {
+  //       let (cid, fields) = o in
+  //       let cid_node =
+  //         loc ($startpos(cid)) ($endpos(cid)) cid
+  //       in
+  //       loc $startpos $endpos @@ ObjInit (cid_node, fields)
+  //     }
   | LPAREN e=exp RPAREN             { e }
   | NEW cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE 
       { 
