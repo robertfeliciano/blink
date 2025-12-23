@@ -440,7 +440,6 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             if not (equal_ret_ty lhs_ret rhs_ret) then
               type_error e "LHS and RHS types must match exactly."
           in
-          (* TODO update tc with scope *)
           create_typed_lambda tc' rhs_args rhs_ret body enclosing_class t_scope
       | None ->
           let rhs_args = List.map (fun (i, t) -> (i, convert_ty t)) args in

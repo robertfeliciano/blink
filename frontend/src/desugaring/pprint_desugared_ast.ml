@@ -36,6 +36,7 @@ let rec show_ref_ty = function
       match r with
       | RetVoid -> "__void"
       | RetVal t -> Printf.sprintf "__%s" (show_ty t))
+  | RPtr t -> Printf.sprintf "%s ptr" (show_ty t)
 
 and show_ret_ty = function
   | RetVoid -> "RetVoid"

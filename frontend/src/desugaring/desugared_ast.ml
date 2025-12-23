@@ -11,6 +11,7 @@ and ref_ty =
   | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
+  | RPtr of ty
 
 and ret_ty = RetVoid | RetVal of ty
 
