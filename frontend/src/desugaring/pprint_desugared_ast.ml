@@ -116,14 +116,15 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "Proj(%s, %s, %s)"
         (show_exp ~lvl:(lvl + 1) e)
         i (show_ty t)
-  | Lambda (args, ret, body) ->
+  | Lambda (scope, args, ret, body) ->
+      let scope_s = String.concat ", " (List.map show_exp scope) in
       let args_s =
         String.concat ", "
           (List.map
              (fun (id, ty) -> Printf.sprintf "(%s: %s)" id (show_ty ty))
              args)
       in
-      Printf.sprintf "%s(%s) -> %s {\n%s%s\n%s}" (indent lvl) args_s
+      Printf.sprintf "%s[%s](%s) -> %s {\n%s%s\n%s}" (indent lvl) scope_s args_s
         (show_ret_ty ret) (indent lvl)
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)

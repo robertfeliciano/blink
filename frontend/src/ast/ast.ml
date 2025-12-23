@@ -89,16 +89,18 @@ type exp =
   | Array of exp node list
   | Cast of exp node * ty
   | ObjInit of id node * (id node * exp node) list
-  | Lambda of id list * block
-  | TypedLambda of (id * ty) list * ret_ty * block
+  | Lambda of exp node list * id list * block (* scope, args, body *)
+  | TypedLambda of
+      exp node list
+      * (id * ty) list
+      * ret_ty
+      * block (* scope, args+types, ret type, body *)
   | Null
 
 and vdecl = id * ty option * exp node option * bool
-(* and ldecl = id node * ty option * exp node *)
 
 and stmt =
   | Assn of exp node * aop * exp node
-  (* | LambdaDecl of ldecl *)
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp node option
   | SCall of exp node * exp node list
@@ -262,14 +264,20 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
         (show_node (fun x -> x) cn)
         fields_s (indent lvl)
-  | Lambda (params, body) ->
+  | Lambda (scope, params, body) ->
+      let scope_s =
+        "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
+      in
       let params_s = String.concat ", " params in
       let body_s =
         String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
       in
-      Printf.sprintf "%sLambda(params=[%s], body=[\n%s\n%s])" (indent lvl)
-        params_s body_s (indent lvl)
-  | TypedLambda (params, ret_ty, body) ->
+      Printf.sprintf "%sLambda(scope=[%s], params=[%s], body=[\n%s\n%s])"
+        (indent lvl) scope_s params_s body_s (indent lvl)
+  | TypedLambda (scope, params, ret_ty, body) ->
+      let scope_s =
+        "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
+      in
       let params_s =
         String.concat "; "
           (List.map
@@ -279,8 +287,9 @@ let rec show_exp ?(lvl = 0) = function
       let body_s =
         String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
       in
-      Printf.sprintf "%sTypedLambda(params=[%s]; ret=%s; body=[\n%s\n%s])"
-        (indent lvl) params_s
+      Printf.sprintf
+        "%sTypedLambda(scope=[%s], params=[%s]; ret=%s; body=[\n%s\n%s])"
+        (indent lvl) scope_s params_s
         (show_ret_ty ~lvl:(lvl + 1) ret_ty)
         body_s (indent lvl)
 

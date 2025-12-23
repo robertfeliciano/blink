@@ -254,10 +254,11 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
           (sf @ [ tmp_decl ] @ sa, D.Call (Id (fn_store, fn_ty), args', ty')))
-  | Lambda (args, ret_ty, body) ->
+  | Lambda (_, args, ret_ty, body) ->
+      (* TODO desugar lambdas to structs and function pointers *)
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
       let converted_ret = convert_ret_ty ret_ty in
       let desugared_body = desugar_block body in
-      ([], Lambda (converted_args, converted_ret, desugared_body))
+      ([], Lambda ([], converted_args, converted_ret, desugared_body))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

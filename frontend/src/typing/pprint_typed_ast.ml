@@ -158,15 +158,16 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "ObjInit(%s, [\n%s\n%s])" cn fs (indent lvl)
-  | Lambda (args, ret_ty, body) ->
+  | Lambda (scope, args, ret_ty, body) ->
+      let scope_s = String.concat "; " (List.map show_exp scope) in
       let args_s =
         String.concat "; "
           (List.map
              (fun (id, ty) -> Printf.sprintf "(%s : %s)" id (show_ty ty))
              args)
       in
-      Printf.sprintf "Lambda(args=[%s]; ret=%s; body=[\n%s\n%s])" args_s
-        (show_ret_ty ret_ty)
+      Printf.sprintf "Lambda(scope=[%s]; args=[%s]; ret=%s; body=[\n%s\n%s])"
+        scope_s args_s (show_ret_ty ret_ty)
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)
 

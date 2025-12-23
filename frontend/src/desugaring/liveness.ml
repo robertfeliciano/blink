@@ -50,7 +50,7 @@ and analyze_exp (locals : StringSet.t) (is_lhs : bool) (e : exp) : result =
       List.fold_left
         (fun acc (_, ex) -> union_result acc (analyze_exp locals false ex))
         empty_result fields
-  | Lambda (params, _ret, body) ->
+  | Lambda (_, params, _ret, body) ->
       let nested = analyze_lambda params body in
       let reads =
         StringSet.filter (fun id -> not (StringSet.mem id locals)) nested.reads

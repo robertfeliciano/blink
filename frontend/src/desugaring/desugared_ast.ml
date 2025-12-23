@@ -55,7 +55,7 @@ type exp =
   | Cast of exp * ty
   | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list
-  | Lambda of (id * ty) list * ret_ty * block
+  | Lambda of exp list * (id * ty) list * ret_ty * block
   | Null of ty
 
 and vdecl = id * ty * exp * bool

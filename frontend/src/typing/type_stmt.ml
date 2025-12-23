@@ -398,8 +398,10 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
           )
       | _ -> type_error ec "Must project field of a class.")
-  | Lambda (arg_ids, body) -> (
+  | Lambda (scope, arg_ids, body) -> (
       (* TODO get better node for errors from parser *)
+      let local_tc, t_scope = type_lambda_scope tc scope in
+      let tc' = { tc with locals = local_tc } in
       match expected with
       | Some t ->
           let arg_types, ret =
@@ -412,9 +414,11 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             with Invalid_argument _ ->
               type_error e "LHS types and RHS ids must have same length."
           in
-          create_typed_lambda tc new_args ret body enclosing_class
+          create_typed_lambda tc' new_args ret body enclosing_class t_scope
       | None -> type_error e "Must specify variable type for untyped lambda.")
-  | TypedLambda (args, rhs_ret, body) -> (
+  | TypedLambda (scope, args, rhs_ret, body) -> (
+      let local_tc, t_scope = type_lambda_scope tc scope in
+      let tc' = { tc with locals = local_tc } in
       match expected with
       | Some t ->
           let lhs_arg_types, lhs_ret =
@@ -436,11 +440,12 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             if not (equal_ret_ty lhs_ret rhs_ret) then
               type_error e "LHS and RHS types must match exactly."
           in
-          create_typed_lambda tc rhs_args rhs_ret body enclosing_class
-      | None -> 
-        let rhs_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
-        let rhs_ret = convert_ret_ty rhs_ret in
-        create_typed_lambda tc rhs_args rhs_ret body enclosing_class)
+          (* TODO update tc with scope *)
+          create_typed_lambda tc' rhs_args rhs_ret body enclosing_class t_scope
+      | None ->
+          let rhs_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
+          let rhs_ret = convert_ret_ty rhs_ret in
+          create_typed_lambda tc' rhs_args rhs_ret body enclosing_class t_scope)
   | ObjInit ({ elt = cname; loc = cloc }, inits) ->
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
@@ -608,73 +613,6 @@ and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
       (Typed_ast.Array (all_elems, arr_ty), arr_ty)
   | _ -> type_error en "Somehow reached unreachable state."
 
-(* and type_lambda (tc : Tctxt.t) (stmt_n : stmt node) =
-  let { elt = stmt; loc = _ } = stmt_n in
-  match stmt with
-  | LambdaDecl (lname, None, { elt = Lambda _; _ }) ->
-      type_error lname "Must include type defn of lambda on either LHS or RHS."
-  | LambdaDecl (lname, Some t, { elt = TypedLambda (args, ret, body); loc }) ->
-      let arg_types, ret_typ =
-        match t with
-        | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
-        | _ -> type_error lname "Must specify function type for untyped lambda."
-      in
-      let all_types_match =
-        try
-          List.for_all2
-            (fun ltyp (_, rtyp) -> equal_ty (convert_ty ltyp) (convert_ty rtyp))
-            arg_types args
-          && equal_ret_ty (convert_ret_ty ret_typ) (convert_ret_ty ret)
-        with Invalid_argument _ ->
-          type_error lname "LHS and RHS type specs must have same length."
-      in
-      if not all_types_match then
-        type_error lname "Given LHS and RHS lambda types do not match."
-      else
-        type_lambda tc
-          {
-            elt =
-              LambdaDecl
-                (lname, None, { elt = TypedLambda (args, ret, body); loc });
-            loc = stmt_n.loc;
-          }
-  | LambdaDecl (lname, Some t, { elt = Lambda (arg_ids, body); loc }) ->
-      let arg_types, ret =
-        match t with
-        | TRef (RFun (arg_types, ret_typ)) -> (arg_types, ret_typ)
-        | _ -> type_error lname "Must specify function type for lambda."
-      in
-      let new_args =
-        try List.combine arg_ids arg_types
-        with Invalid_argument _ ->
-          type_error lname "LHS types and RHS ids must have same length."
-      in
-      type_lambda tc
-        {
-          elt =
-            LambdaDecl
-              (lname, None, { elt = TypedLambda (new_args, ret, body); loc });
-          loc = stmt_n.loc;
-        }
-  | LambdaDecl (lname, None, { elt = TypedLambda (args, ret, body); _ }) ->
-      let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
-      let converted_ret = convert_ret_ty ret in
-      let lambda_tc =
-        List.fold_left
-          (fun tc' (i, t) -> Tctxt.add_local tc' i (t, false))
-          tc converted_args
-      in
-      let _, typed_body, _ = type_block enclosing_class lambda_tc converted_ret body false in
-      let lambda_type =
-        Typed_ast.RFun (List.map snd converted_args, converted_ret)
-      in
-      let typed_lambda =
-        Typed_ast.Lambda (converted_args, converted_ret, typed_body)
-      in
-      let tc' = Tctxt.add_local tc lname.elt (TRef lambda_type, false) in
-      (tc', Typed_ast.LambdaDecl (lname.elt, lambda_type, typed_lambda), false)
-  | _ -> type_error stmt_n "Even more impossible state" *)
-
 and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
   | TBool -> Typed_ast.Bool false
   | TInt it -> Typed_ast.Int (Z.of_int 0, convert_int_ty it)
@@ -719,11 +657,30 @@ and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
   (tc_new, List.rev rev_stmts, does_ret)
 
 and create_typed_lambda (tc : Tctxt.t) (args : (id * Typed_ast.ty) list)
-    (ret : Typed_ast.ret_ty) (body : block) (enclosing_class : id option) =
+    (ret : Typed_ast.ret_ty) (body : block) (enclosing_class : id option)
+    (scope : Typed_ast.exp list) =
   let ltc =
     List.fold_left (fun tc' (i, t) -> Tctxt.add_local tc' i (t, false)) tc args
   in
   let _, t_body, _ = type_block ltc ret body false enclosing_class in
   let lambda_typ = Typed_ast.(TRef (RFun (List.map snd args, ret))) in
-  let t_lambda = Typed_ast.Lambda (args, ret, t_body) in
+  let t_lambda = Typed_ast.Lambda (scope, args, ret, t_body) in
   (t_lambda, lambda_typ)
+
+and type_lambda_scope (tc : Tctxt.t) (scope : exp node list) =
+  let locals', scope' =
+    List.fold_left
+      (fun (locals, scope_acc) en ->
+        let { elt = v; loc = _ } = en in
+        match v with
+        | Id i -> (
+            match Tctxt.lookup_option i tc with
+            | Some (t, _) ->
+                let tid = Typed_ast.Id (i, t) in
+                let tc_entry = (i, (t, false)) in
+                (tc_entry :: locals, tid :: scope_acc)
+            | None -> type_error en ("Variable " ^ i ^ "is not defined."))
+        | _ -> type_error en "Only support ids for lambda scope now.")
+      ([], []) scope
+  in
+  (locals', scope')

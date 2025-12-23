@@ -74,7 +74,11 @@ type exp =
   | Proj of
       exp * id * id * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list
-  | Lambda of (id * ty) list * ret_ty * block
+  | Lambda of
+      exp list
+      * (id * ty) list
+      * ret_ty
+      * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
 
 and vdecl = id * ty * exp * bool

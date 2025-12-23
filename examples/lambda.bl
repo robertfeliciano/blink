@@ -7,7 +7,7 @@ fun main(args: [string; 2]) => u64 {
     let z = 12;
 
 /*
-    let l1: [i32, i32] -> f64 = fn (x, y) {
+    let l1: [i32, i32] -> f64 = fn [](x, y) {
         let a = x;
         let b = y;
         return (a+b+z) as f64;
@@ -22,15 +22,15 @@ fun main(args: [string; 2]) => u64 {
     };
     */
     
-    let l3 = fn (a: i32, b: i32) -> f64 {
+    let l3 = fn [z](a: i32, b: i32) -> f64 {
         let x = a;
         let y = b;
-        return (x+y) as f64;
+        return (x+y+z) as f64;
     };
     
     /*
     // SHOULD PRODUCE TYPE_ERROR
-    let l4 = fn (a,b) {
+    let l4 = fn [](a,b) {
         let x = a;
         let y = b;
         return (x+y) as f64;

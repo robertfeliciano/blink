@@ -416,9 +416,12 @@ vdecl:
       { (id, t, None, false) }
   | CONST id=IDENT t=ty_spec? EQUAL init=exp
       { (id, t, Some init, true) }
+  
+scope: 
+  | LBRACKET scope=separated_list(COMMA, exp) RBRACKET { scope }
 
 lambda:
-  | FN LPAREN args=lambda_args RPAREN r=lambda_ret body=block
+  | FN scope=scope? LPAREN args=lambda_args RPAREN r=lambda_ret body=block
       {
         match r with
         | None ->
@@ -431,10 +434,11 @@ lambda:
                   | Some _ ->
                       let args_start = $startpos(args) in 
                       raise (ParserError (args_start, "Untyped lambda does not allow typed args")))
-                args
+                args in
+            let s = match scope with Some s' -> s' | None -> []
             in
-            loc $startpos $endpos @@
-            Lambda (ids, body)
+            loc $startpos $endpos @@ 
+            Lambda (s, ids, body)
 
         | Some rty ->
             (* typed lambda: all args must be typed *)
@@ -446,10 +450,11 @@ lambda:
                   | None ->
                       let args_end = $endpos(args) in 
                       raise (ParserError (args_end, "Missing type in typed lambda argument")))
-                args
+                args in
+            let s = match scope with Some s' -> s' | None -> []
             in
             loc $startpos $endpos @@
-            TypedLambda (typed_args, rty, body)
+            TypedLambda (s, typed_args, rty, body)
       }
 
 lambda_arg:
