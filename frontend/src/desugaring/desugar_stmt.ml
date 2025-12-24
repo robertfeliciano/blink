@@ -248,6 +248,15 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let converted_ret = convert_ret_ty ret_ty in
       let desugared_body = desugar_block body in
       let ls, scope' = List.map desugar_exp scope |> flatten in
-      (ls, Lambda (scope', converted_args, converted_ret, desugared_body))
+      let s =
+        List.map
+          (fun v ->
+            match v with
+            | D.Id (i, t) -> (i, t)
+            | _ ->
+                desugar_error "currently only accept varnames for lambda scope")
+          scope'
+      in
+      (ls, Lambda (s, converted_args, converted_ret, desugared_body))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

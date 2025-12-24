@@ -22,7 +22,6 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     annotations = List.map desugar_annotation fn.annotations;
     frtyp = convert_ret_ty fn.frtyp;
     fname = fn.fname;
-    (* args = List.map (fun (t, i) -> (convert_ty t, mangle_lambda i t)) fn.args; *)
     args = List.map (fun (t, i) -> (convert_ty t, i)) fn.args;
     body;
   }

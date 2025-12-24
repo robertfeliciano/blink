@@ -17,6 +17,7 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
   match stmt with
   | Decl (_, None, None, _) ->
       type_error stmt_n "Must provide type or initial value."
+      (* TODO check if i exsists in tctxt at any level *)
   | Decl (i, Some ty, None, const) ->
       let e = create_default_init stmt_n tc ty in
       let e_ty = convert_ty ty in

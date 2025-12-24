@@ -118,7 +118,9 @@ let rec show_exp ?(lvl = 0) = function
         (show_exp ~lvl:(lvl + 1) e)
         i (show_ty t)
   | Lambda (scope, args, ret, body) ->
-      let scope_s = String.concat ", " (List.map show_exp scope) in
+      let scope_s =
+        String.concat ", " (List.map (fun (i, t) -> i ^ ": " ^ show_ty t) scope)
+      in
       let args_s =
         String.concat ", "
           (List.map

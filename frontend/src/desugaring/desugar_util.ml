@@ -86,17 +86,23 @@ let mangle_lambda (t : D.ref_ty) =
       ^ mangle_ret_ty ret_ty
   | _ -> desugar_error "impossible state"
 
-let lifted_lambda_name (lname : string) = gensym "lifted." ^ lname
-let lambda_env_struct_name (lname : string) = gensym "env." ^ lname
-let lambda_struct_name (lname : string) = "struct." ^ lname
+(* TODO update gensym to use diff pattern for lambdas *)
 
-let create_lambda_struct (cname : string) (arg_tys : D.ty list)
-    (rty : D.ret_ty)
-      (* (lifted_lambda_name: string) (env_struct_ptr_name: string) *) : D.cdecl
-    =
-  let env_ty = D.TRef (RPtr (TInt (TSigned Ti8))) in
+let lambdasym sfx =
+  let n = !counter in
+  incr counter;
+  sfx ^ "anon" ^ Int.to_string n
+
+let lifted_lambda_name (lname : string) = lambdasym "Lifted." ^ lname
+let lambda_env_struct_name (lname : string) = lambdasym "Env." ^ lname
+let lambda_struct_name (lname : string) = "Struct." ^ lname
+let create_ptr_to t = D.TRef (RPtr t)
+
+let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
+    : D.cdecl =
+  let env_ty = create_ptr_to (TInt (TSigned Ti8)) in
   (* using generic i8* for env -> LLVM GEP uses opaque ptr *)
-  let fptr_ty = D.TRef (RPtr (TRef (RFun (arg_tys, rty)))) in
+  let fptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
   let env_field : D.field =
     { prelude = []; fieldName = "envptr"; ftyp = env_ty; init = Null env_ty }
   in
