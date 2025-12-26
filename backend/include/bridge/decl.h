@@ -13,7 +13,7 @@ struct FDecl {
     std::string                             fname;
     std::vector<std::pair<Ty, std::string>> args;
     std::vector<std::unique_ptr<Stmt>>      body;
-    std::vector<std::string> annotations;
+    std::vector<std::string>                annotations;
 };
 
 struct Field {

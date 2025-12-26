@@ -173,7 +173,7 @@ Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
         Value* toBeFreed = gen.codegenExp(*e);
-        Value* freeVal = gen.builder->CreateCall(freeFun, {toBeFreed});
+        Value* freeVal   = gen.builder->CreateCall(freeFun, {toBeFreed});
     }
 
     return nullptr;

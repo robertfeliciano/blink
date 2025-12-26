@@ -80,6 +80,9 @@ llvm::Type* TypeToLLGenerator::codegenRefTy(const RefTy& rt) {
         case RefTyTag::RFun:
             return getFunctionPointerType(rt);
 
+        case RefTyTag::RPtr: 
+            return llvm::PointerType::getUnqual(*gen.ctxt);
+
         default:
             throw std::runtime_error("Unknown RefTyTag in codegenRefTy");
     }

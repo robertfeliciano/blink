@@ -81,7 +81,7 @@ let mangle_name ?(enclosing_class : D.id option) (fname : D.id)
 let mangle_lambda (t : D.ref_ty) =
   match t with
   | RFun (arg_tys, ret_ty) ->
-      "lambda"
+      "lambda_"
       ^ String.concat "_" (List.map mangle_ty arg_tys)
       ^ mangle_ret_ty ret_ty
   | _ -> desugar_error "impossible state"
@@ -91,10 +91,10 @@ let mangle_lambda (t : D.ref_ty) =
 let lambdasym sfx =
   let n = !counter in
   incr counter;
-  sfx ^ "anon" ^ Int.to_string n
+  Int.to_string n ^ sfx
 
-let lifted_lambda_name (lname : string) = lambdasym "Lifted." ^ lname
-let lambda_env_struct_name (lname : string) = lambdasym "Env." ^ lname
+let lifted_lambda_name (lname : string) = "Lifted." ^ lname
+let lambda_env_struct_name (lname : string) = "Env." ^ lname
 let lambda_struct_name (lname : string) = "Struct." ^ lname
 let create_ptr_to t = D.TRef (RPtr t)
 
@@ -115,3 +115,20 @@ let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
     }
   in
   { cname; fields = [ env_field; fptr_field ]; annotations = [] }
+
+ let rec create_default_init t = match t with
+  | D.TBool -> D.Bool false
+  | D.TInt it -> D.Int ("0", it)
+  | D.TFloat ft -> D.Float (0.0, ft)
+  | D.TRef RString -> D.Str ""
+  | D.TRef (RClass _cname) ->
+      (* let default_constructor = cname in *)
+      Null t
+      (* D.Call (Id (default_constructor, TRef (RClass cname)), [], TRef (RClass cname)) *)
+  | D.TRef (RFun _) -> desugar_error "Default functions not allowed."
+  (* | D.TRef (RGeneric _) -> type_error stmt_n "Generic default init to come some" *)
+  | D.TRef (RPtr _) -> Null t
+  | D.TRef (RArray (t, sz)) ->
+      let lst = List.init sz (fun _ -> create_default_init t) in
+      let t' = D.TRef (RArray (t, sz)) in
+      D.Array (lst, t')

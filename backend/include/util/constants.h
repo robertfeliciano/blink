@@ -9,7 +9,7 @@ namespace Constants {
 
     enum IntTyVariant { INTTY_Signed = 0, INTTY_Unsigned = 1 };
 
-    enum RefTyVariant { REFTY_Array = 0, REFTY_Class = 1, REFTY_Fun = 2 };
+    enum RefTyVariant { REFTY_Array = 0, REFTY_Class = 1, REFTY_Fun = 2, REFTY_Ptr = 3 };
 
     enum TyVariant { TY_TInt = 0, TY_TFloat = 1, TY_TRef = 2 };
 
@@ -59,13 +59,13 @@ namespace Constants {
     };
 
     enum StmtVariant {
-        STMT_Assn       = 0,
-        STMT_Decl       = 1,
-        STMT_Ret        = 2,
-        STMT_SCall      = 3,
-        STMT_If         = 4,
-        STMT_While      = 5,
-        STMT_Free       = 6
+        STMT_Assn  = 0,
+        STMT_Decl  = 1,
+        STMT_Ret   = 2,
+        STMT_SCall = 3,
+        STMT_If    = 4,
+        STMT_While = 5,
+        STMT_Free  = 6
     };
 
     enum CtrlTag { CTRL_Break = 0, CTRL_Continue = 1 };

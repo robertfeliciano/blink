@@ -51,7 +51,7 @@ struct While {
 };
 
 struct Free {
-    std::vector<std::unique_ptr<Exp>>  exps;
+    std::vector<std::unique_ptr<Exp>> exps;
 };
 
 struct Break {};

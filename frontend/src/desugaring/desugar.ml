@@ -2,7 +2,7 @@ open Desugar_util
 open Desugar_stmt
 open Desugar_class
 open Desugared_ast
-open Desugar_lambdas
+(* open Desugar_lambdas *)
 
 (* open Desugar_lambdas *)
 open Conversions
@@ -32,9 +32,31 @@ let desugar_program (prog : Typed.program) : program =
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
   let fn_list = List.flatten extracted_methods @ desugared_fns in
-  (* now we make a second pass for lambdas *)
-  let fn_list', structs' = check_fdecls fn_list structs in
-  Prog (fn_list', structs', desugared_protos)
+  Prog (fn_list, structs, desugared_protos)
+(* 
+  (* 1. First Pass: Update all top-level signatures to use Lambda structs *)
+  let fn_list_transformed, structs_with_interfaces =
+    check_fdecls fn_list structs
+  in
+
+  (* 2. Second Pass: Lift lambdas from bodies and collect new functions *)
+  let final_structs, final_fns =
+    List.fold_left
+      (fun (cs_acc, fs_acc) f ->
+        (* Thread the current struct list into the lifter *)
+        let next_cs, new_lifted_fs, transformed_f =
+          lift_lambda_from_fdecl cs_acc f
+        in
+        (* Accumulate: 
+         - Updated structs (next_cs)
+         - All previous functions + new lifted ones + the transformed original
+      *)
+        (next_cs, fs_acc @ new_lifted_fs @ [ transformed_f ]))
+      (structs_with_interfaces, [])
+      fn_list_transformed
+  in
+
+  Prog (final_fns, final_structs, desugared_protos) *)
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

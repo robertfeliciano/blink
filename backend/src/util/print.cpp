@@ -122,6 +122,11 @@ std::string tyToString(const Ty& ty) {
                         s += tyToString(*r.ret.val);
                     return s;
                 }
+                case RefTyTag::RPtr: {
+                    std::string s = "(" + tyToString(*r.pointedTy) + ")";
+                    s += "*";
+                    return s;
+                }
             }
             break;
         }
@@ -243,7 +248,7 @@ struct ExpToStringVisitor {
         res += "}";
         return res;
     }
-    std::string operator()(const ENull& e) const { return "nullptr to " + tyToString(e.ty); }
+    std::string operator()(const ENull& e) const { return "null " + tyToString(e.ty); }
 };
 
 std::string expToString(const Exp& exp) {
@@ -295,9 +300,9 @@ struct StmtToStringVisitor {
     }
     std::string operator()(const Free& d) const {
         std::string res = indent(indentLevel) + "free ";
-        for (size_t i = 0; i < d.exps.size(); ++i){
+        for (size_t i = 0; i < d.exps.size(); ++i) {
             res += expToString(*d.exps[i]);
-            if (i + 1 < d.exps.size()) 
+            if (i + 1 < d.exps.size())
                 res += ", ";
         }
         return res + ";";
@@ -340,7 +345,7 @@ std::string fdeclToString(const FDecl& f) {
     for (size_t i = 0; i < f.annotations.size(); ++i) {
         oss << "@" << f.annotations[i] << "\n";
     }
-    oss << "fn " << f.fname << "(";
+    oss << "fun " << f.fname << "(";
     for (size_t i = 0; i < f.args.size(); ++i) {
         const auto& p = f.args[i];
         oss << tyToString(p.first) << " " << p.second;

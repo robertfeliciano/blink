@@ -114,12 +114,6 @@ struct EObjInit {
     Ty                                                        ty;
 };
 
-struct ELambda {
-    std::vector<std::pair<std::string, Ty>> params;
-    RetTy                                   ret_ty;
-    std::vector<Stmt>                       body;
-};
-
 struct ENull {
     Ty ty;
 };

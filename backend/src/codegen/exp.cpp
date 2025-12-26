@@ -61,11 +61,24 @@ Value* ExpToLLVisitor::operator()(const EBool& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EId& e) {
+    // 1. Check local variable environment (alloca/pointers)
     auto it = gen.varEnv.find(e.id);
-    if (it == gen.varEnv.end()) {
-        llvm_unreachable("Unknown identifier");
+    if (it != gen.varEnv.end()) {
+        return gen.builder->CreateLoad(
+            it->second->getAllocatedType(), 
+            it->second, 
+            e.id.c_str()
+        );
     }
-    return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
+
+    // 2. Check for a global function in the module
+    if (auto* func = gen.mod->getFunction(e.id)) {
+        // In LLVM, functions are treated as constant pointers to the function code.
+        // We return the function pointer directly without a 'load'.
+        return func;
+    }
+
+    llvm_unreachable(("Unknown identifier: " + e.id).c_str());
 }
 
 Value* ExpToLLVisitor::operator()(const EFloat& e) {
@@ -259,17 +272,34 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         args.push_back(val);
     }
 
-    if (!std::holds_alternative<EId>(e.callee->val))
-        llvm_unreachable("We do not currently support higher-order functions.");
+    if (std::holds_alternative<EId>(e.callee->val)) {
+        const EId&      idNode = std::get<EId>(e.callee->val);
+        llvm::Function* callee = gen.mod->getFunction(idNode.id);
 
-    const EId& idNode = std::get<EId>(e.callee->val);
+        if (!callee) {
+            Value* fnPtr = gen.codegenExp(*e.callee);
+            if (!fnPtr)
+                llvm_unreachable("Failed to get function pointer");
+        
+            auto* fnTy = llvm::cast<llvm::FunctionType>(gen.codegenType(e.ty));
+            return gen.builder->CreateCall(fnTy, fnPtr, args);
+        } else {
+            return gen.builder->CreateCall(callee, args, "call");
+        }
+    } else {
+        llvm_unreachable("Callee guaranteed to be Id from desugaring stage.");
+    }
+    // } else if (std::holds_alternative<EProj>(e.callee->val)) {
+    //     // this is only the case for lambdas
+    //     // we store the function pointer in an object
+    //     const EProj& calleeNode = std::get<EProj>(e.callee->val);
+    //     Value*       callee     = gen.codegenExp(*calleeNode.obj);
 
-    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+    //     if (!callee)
+    //         llvm_unreachable("Calling unknown function.");
 
-    if (!callee)
-        llvm_unreachable("Calling unknown function.");
-
-    return gen.builder->CreateCall(callee, args, "call");
+    //     return gen.builder->CreateCall((llvm::Function*)callee, args, "lambdaCall");
+    // }
 }
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
