@@ -201,13 +201,14 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let si, inst' = desugar_exp inst in
       let sa, args' = List.map desugar_exp args |> flatten in
+      let t' = convert_ty t in
       let dtys, dty = (List.map convert_ty tys, convert_ty ty) in
+      let first_ty = D.TRef (RClass cname) in
       let mangled_name =
-        mangle_name ~enclosing_class:cname pname dtys (RetVal dty)
+        mangle_name ~enclosing_class:cname pname (first_ty :: dtys) (RetVal dty)
       in
-      ( si @ sa,
-        D.Call (D.Id (mangled_name, convert_ty t), inst' :: args', convert_ty ty)
-      )
+      Printf.printf "mangled name from stmt:   %s\n" mangled_name;
+      (si @ sa, D.Call (D.Id (mangled_name, t'), inst' :: args', convert_ty ty))
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in

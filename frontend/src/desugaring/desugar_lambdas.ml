@@ -61,12 +61,10 @@ let rec lift_lambda (cs : cdecl list) (_fs : fdecl list) (vname_opt : id option)
   in
   let lname = mangle_lambda r in
   (* get the lifted lambda function name and scope struct name *)
-  let sym = lambdasym lname in 
+  let sym = lambdasym lname in
   let lifted_lambda_fname = lifted_lambda_name sym in
   let lifted_lambda_scope = lambda_env_struct_name sym in
-  let vname =
-    match vname_opt with Some v -> v | None -> gensym "lambda"
-  in
+  let vname = match vname_opt with Some v -> v | None -> gensym "lambda" in
   (* set the fields of the env struct to the scope vars *)
   let env_fields =
     List.map
@@ -255,7 +253,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list) (lctxt : id list)
       let nlctxt =
         match ty with TRef (RFun _) -> vname :: lctxt | _ -> lctxt
       in
-      (ncs', nfs, nlctxt, ns )
+      (ncs', nfs, nlctxt, ns)
   | Assn (e1, e2, ty) ->
       let cs1, fs1, ns1, ne1, _ = lift_lambdas_from_exps cs fs lctxt None e1 in
       let cs2, fs2, ns2, ne2, _ =

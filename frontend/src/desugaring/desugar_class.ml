@@ -17,9 +17,10 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
   let dfrtyp = convert_ret_ty m.frtyp in
   let mangled_name =
     mangle_name ~enclosing_class:cname m.fname
-      (List.map (fun (t, _) -> t) desugared_args)
+      (List.map fst desugared_args)
       dfrtyp
   in
+  Printf.printf "mangled name from method: %s\n" mangled_name;
   {
     annotations = List.map desugar_annotation m.annotations;
     frtyp = dfrtyp;

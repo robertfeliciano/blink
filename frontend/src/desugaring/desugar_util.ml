@@ -86,8 +86,6 @@ let mangle_lambda (t : D.ref_ty) =
       ^ mangle_ret_ty ret_ty
   | _ -> desugar_error "impossible state"
 
-(* TODO update gensym to use diff pattern for lambdas *)
-
 let lambdasym sfx =
   let n = !counter in
   incr counter;
@@ -116,7 +114,8 @@ let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
   in
   { cname; fields = [ env_field; fptr_field ]; annotations = [] }
 
- let rec create_default_init t = match t with
+let rec create_default_init t =
+  match t with
   | D.TBool -> D.Bool false
   | D.TInt it -> D.Int ("0", it)
   | D.TFloat ft -> D.Float (0.0, ft)
