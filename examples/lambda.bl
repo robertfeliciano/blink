@@ -2,15 +2,8 @@ fun takesLambda(f: [i32, i32] -> f64, x: u8) => u64 {
     return f(2, 3) as u64;
 }
 
-fun returnsLambda(a: i32) => ([i32, i32] -> i32) {
-    let f = fn [a](x: i32, y: i32) -> i32 {
-        return x + y - a;
-    };
-    return f;
-}
 
-
-fun main(args: [string; 2]) => i32 {
+fun main(args: [string; 2]) => u64 {
     let z = 12;
 
 /*
@@ -19,20 +12,21 @@ fun main(args: [string; 2]) => i32 {
         let b = y;
         return (a+b+z) as f64;
     };
+    */
+/*
     
     let l2: [i32, i32] -> f64 = fn (a: i32, b: i32) -> f64 {
         let x = a;
         let y = b;
         return (x+y*z) as f64;
     };
+    */
     
     let l3 = fn [z](a: i32, b: i32) -> f64 {
         let x = a;
         let y = b;
         return (x+y+z) as f64;
     };
-*/
-    let res = returnsLambda(9)(10, 11);
     
     /*
     // SHOULD PRODUCE TYPE_ERROR
@@ -42,6 +36,6 @@ fun main(args: [string; 2]) => i32 {
         return (x+y) as f64;
     };
     */
-    return res;
-    //return takesLambda(l3, 2 as u8);
+
+    return takesLambda(l3, 2 as u8);
 }
