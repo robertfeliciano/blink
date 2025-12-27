@@ -35,7 +35,7 @@ struct Ret {
 };
 
 struct SCall {
-    std::unique_ptr<Exp>              callee;
+    std::string              callee;
     std::vector<std::unique_ptr<Exp>> args;
 };
 

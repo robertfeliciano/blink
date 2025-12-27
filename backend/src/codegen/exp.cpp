@@ -272,23 +272,29 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         args.push_back(val);
     }
 
-    if (std::holds_alternative<EId>(e.callee->val)) {
-        const EId&      idNode = std::get<EId>(e.callee->val);
-        llvm::Function* callee = gen.mod->getFunction(idNode.id);
+    const auto& calleeId = e.callee;
 
-        if (!callee) {
-            Value* fnPtr = gen.codegenExp(*e.callee);
-            if (!fnPtr)
-                llvm_unreachable("Failed to get function pointer");
+    llvm::Function* callee = gen.mod->getFunction(calleeId);
+
+    return gen.builder->CreateCall(callee, args, "call");
+
+    // if (std::holds_alternative<EId>(e.callee->val)) {
+    //     const EId&      idNode = std::get<EId>(e.callee->val);
+    //     llvm::Function* callee = gen.mod->getFunction(idNode.id);
+
+    //     if (!callee) {
+    //         Value* fnPtr = gen.codegenExp(*e.callee);
+    //         if (!fnPtr)
+    //             llvm_unreachable("Failed to get function pointer");
         
-            auto* fnTy = llvm::cast<llvm::FunctionType>(gen.codegenType(e.ty));
-            return gen.builder->CreateCall(fnTy, fnPtr, args);
-        } else {
-            return gen.builder->CreateCall(callee, args, "call");
-        }
-    } else {
-        llvm_unreachable("Callee guaranteed to be Id from desugaring stage.");
-    }
+    //         auto* fnTy = llvm::cast<llvm::FunctionType>(gen.codegenType(e.ty));
+    //         return gen.builder->CreateCall(fnTy, fnPtr, args);
+    //     } else {
+    //         return gen.builder->CreateCall(callee, args, "call");
+    //     }
+    // } else {
+    //     llvm_unreachable("Callee guaranteed to be Id from desugaring stage.");
+    // }
     // } else if (std::holds_alternative<EProj>(e.callee->val)) {
     //     // this is only the case for lambdas
     //     // we store the function pointer in an object

@@ -1,4 +1,4 @@
-open Desugared_ast
+(* open Desugared_ast
 module StringSet = Set.Make (String)
 
 type result = { reads : StringSet.t; writes : StringSet.t }
@@ -107,4 +107,4 @@ and analyze_block (locals_init : StringSet.t) (blk : block) : result =
 
 (* Entry point *)
 let free_vars_of_lambda (params : (id * ty) list) (body : block) : result =
-  analyze_lambda params body
+  analyze_lambda params body *)

@@ -82,7 +82,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
           ( Bop (Eqeq, step_, zero, TBool),
             [
               SCall
-                ( Id ("exit", TRef (RFun ([], RetVoid))),
+                ( "exit",
                   [ Int ("1", TSigned Ti32) ] );
             ],
             [ step_inc ] )
@@ -91,12 +91,12 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | ForEach (iter, collection, of_ty, body) ->
       let coll_stmts, coll' = desugar_exp collection in
       (* let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in *)
-      let cond = D.Call (Id (Methods.hasNext, TBool), [], TBool) in
+      let cond = D.Call (Methods.hasNext, [], TBool) in
       let of_ty = convert_ty of_ty in
       let set_iter =
         D.Assn
           ( Id (iter, of_ty),
-            Call (Id (Methods.iterate, of_ty), [ coll' ], of_ty),
+            Call (Methods.iterate, [ coll' ], of_ty),
             (* Call (Proj (coll', Methods.iterate, of_ty), [], of_ty), *)
             TBool )
       in
@@ -106,24 +106,24 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
       cstmts @ [ While (cond', body') ]
-  | SCall (Proj (inst, pname, cname, t), args, types, ret) ->
+  | SCall (Proj (inst, pname, cname, _t), args, types, ret) ->
       let istmts, inst' = desugar_exp inst in
       let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
       let args_stmts, args' = List.map desugar_exp args |> flatten in
       let mangled = mangle_name ~enclosing_class:cname pname dtypes dret in
       istmts @ args_stmts
-      @ [ SCall (Id (mangled, convert_ty t), inst' :: args') ]
+      @ [ SCall (mangled, inst' :: args') ]
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id (fname, t) -> sf @ sa @ [ SCall (Id (fname, t), args') ]
+      | D.Id (fname, _t) -> sf @ sa @ [ SCall (fname, args') ]
       | _ ->
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVoid)) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          sf @ [ tmp_decl ] @ sa @ [ SCall (Id (fn_store, fn_ty), args') ])
+          sf @ [ tmp_decl ] @ sa @ [ SCall (fn_store, args') ])
   | Decl v ->
       let estmts, v' = desugar_vdecl v in
       estmts @ [ Decl v' ]
@@ -201,14 +201,13 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let si, inst' = desugar_exp inst in
       let sa, args' = List.map desugar_exp args |> flatten in
-      let t' = convert_ty t in
+      let _t' = convert_ty t in
       let dtys, dty = (List.map convert_ty tys, convert_ty ty) in
       let first_ty = D.TRef (RClass cname) in
       let mangled_name =
         mangle_name ~enclosing_class:cname pname (first_ty :: dtys) (RetVal dty)
       in
-      Printf.printf "mangled name from stmt:   %s\n" mangled_name;
-      (si @ sa, D.Call (D.Id (mangled_name, t'), inst' :: args', convert_ty ty))
+      (si @ sa, D.Call (mangled_name, inst' :: args', convert_ty ty))
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
@@ -216,7 +215,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
       match fn' with
-      | D.Id (fname, _t) -> (sf @ sa, D.Call (Id (fname, ty'), args', ty'))
+      | D.Id (fname, _t) -> (sf @ sa, D.Call (fname, args', ty'))
       | _ ->
           (* will expand chained calls: 
         ```
@@ -242,7 +241,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          (sf @ [ tmp_decl ] @ sa, D.Call (Id (fn_store, fn_ty), args', ty')))
+          (sf @ [ tmp_decl ] @ sa, D.Call (fn_store, args', ty')))
   | Lambda (scope, args, ret_ty, body) ->
       (* TODO desugar lambdas to structs and function pointers *)
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in

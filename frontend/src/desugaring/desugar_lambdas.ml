@@ -1,4 +1,4 @@
-open Desugared_ast
+(* open Desugared_ast
 open Desugar_util
 
 (* transforms lambda types into their corresponding struct types
@@ -381,4 +381,4 @@ let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     if return is of a lambda type: 
       return lambda struct instead
       creating structs as needed
- *)
+ *) *)

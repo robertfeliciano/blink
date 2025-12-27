@@ -68,7 +68,7 @@ struct EId {
 };
 
 struct ECall {
-    std::unique_ptr<Exp>              callee;
+    std::string                       callee;
     std::vector<std::unique_ptr<Exp>> args;
     Ty                                ty;
 };

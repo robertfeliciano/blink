@@ -52,12 +52,7 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
         args.push_back(val);
     }
 
-    if (!std::holds_alternative<EId>(s.callee->val))
-        llvm_unreachable("We do not currently support higher-order functions.");
-
-    const EId& idNode = std::get<EId>(s.callee->val);
-
-    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+    llvm::Function* callee = gen.mod->getFunction(s.callee);
 
     if (!callee)
         llvm_unreachable("Calling unknown function.");

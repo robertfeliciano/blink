@@ -48,7 +48,7 @@ type exp =
   | Float of float * float_ty
   | Str of string
   | Id of id * ty
-  | Call of exp * exp list * ty
+  | Call of id * exp list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
@@ -65,7 +65,7 @@ and stmt =
   | Assn of exp * exp * ty
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list
+  | SCall of id * exp list
   | If of exp * block * block
   | While of exp * block
   | Free of exp list

@@ -208,7 +208,7 @@ struct ExpToStringVisitor {
     std::string operator()(const EStr& e) const { return "\"" + e.value + "\""; }
     std::string operator()(const EId& e) const { return e.id; }
     std::string operator()(const ECall& e) const {
-        std::string res = expToString(*e.callee) + "(";
+        std::string res = e.callee + "(";
         for (size_t i = 0; i < e.args.size(); ++i) {
             res += expToString(*e.args[i]);
             if (i + 1 < e.args.size())
@@ -272,7 +272,7 @@ struct StmtToStringVisitor {
             return indent(indentLevel) + "return;";
     }
     std::string operator()(const SCall& s) const {
-        std::string res = indent(indentLevel) + expToString(*s.callee) + "(";
+        std::string res = indent(indentLevel) + s.callee + "(";
         for (size_t i = 0; i < s.args.size(); ++i) {
             res += expToString(*s.args[i]);
             if (i + 1 < s.args.size())
