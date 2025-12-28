@@ -99,7 +99,7 @@ let create_ptr_to t = D.TRef (RPtr t)
 let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
     : D.cdecl =
   let env_ty = create_ptr_to (TInt (TSigned Ti8)) in
-  (* using generic i8* for env -> LLVM GEP uses opaque ptr *)
+  (* using generic i8* for env -> LLVM GEP uses opaque ptr anyway *)
   let fptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
   let env_field : D.field =
     { prelude = []; fieldName = "envptr"; ftyp = env_ty; init = Null env_ty }
