@@ -27,7 +27,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | Assn (lhs, op, rhs, t) when op <> Eq ->
       let op' = base_op op in
       let lhs_stmts, lhs' = desugar_exp lhs in
-      let rhs_stmts, rhs' = desugar_exp rhs in
+      let rhs_stmts, rhs' = desugar_exp ~rhs_assn:true rhs in
       let t' = convert_ty t in
       let bop = D.Bop (op', lhs', rhs', t') in
       lhs_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
@@ -136,10 +136,10 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
 
 and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
   (* vdecls may also produce pre-statements now *)
-  let estmts, e' = desugar_exp e in
+  let estmts, e' = desugar_exp ~rhs_assn:true e in
   (estmts, (id, convert_ty ty, e', is_const))
 
-and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
+and desugar_exp ?(rhs_assn=false) (e : Typed.exp) : D.stmt list * D.exp =
   match e with
   | Bool b -> ([], D.Bool b)
   | Int (i, ity) -> ([], D.Int (Z.to_string i, convert_int_ty ity))
@@ -258,6 +258,7 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
       in
       let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
       let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
-      (ls @ [ ldecl ], Id (tmp_lambda, lty))
+      (* rhs_assn prevents duplication of lambdas when they are on rhs of vdecl or assn *)
+      ((if rhs_assn then ls else ls @ [ ldecl ]), Id (tmp_lambda, lty))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b
