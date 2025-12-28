@@ -1,4 +1,4 @@
-(* open Desugared_ast
+open Desugared_ast
 open Desugar_util
 
 (* transforms lambda types into their corresponding struct types
@@ -163,8 +163,9 @@ and lift_lambdas_from_exps (cs : cdecl list) (fs : fdecl list) (lctxt : id list)
       in
       (lenv :: lstruct :: cs, fs' :: fs, s, nid, Some lfun)
   | Call (e, es, ty) ->
-      let cs', fs', s, de, _lfun =
-        lift_lambdas_from_exps cs fs lctxt vname_opt e
+      let cs', fs', s, _de, _lfun =
+        lift_lambdas_from_exps cs fs lctxt vname_opt
+          (Id (e, TRef (RClass "tmp")))
       in
       let (cs'', fs'', s'), des =
         List.fold_left_map
@@ -184,7 +185,7 @@ and lift_lambdas_from_exps (cs : cdecl list) (fs : fdecl list) (lctxt : id list)
         -> `let lfun = lstruct.lambdaptr;
         -> `lfun(lstruct.envptr, x, y)`      
       *)
-      (cs'', fs'', s', Call (de, des, ty), None)
+      (cs'', fs'', s', Call ("tmp", des, ty), None)
   | Array (es, t) ->
       let (cs', fs', s), des =
         List.fold_left_map
@@ -311,74 +312,26 @@ and lift_lambda_from_block cs fs lctxt block =
   in
   (final_cs, final_fs, new_block)
 
-(* and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list) (lctxt : id list)
-    = function
-  | Decl (vname, (TRef (RFun _)), e, _) ->
-    (* TODO create function that just stores fptr of another function *)
-      let cs', fs', ss, _, _ = lift_lambdas_from_exps cs fs lctxt (Some vname) e in
-      let lctxt = vname :: lctxt in
-      cs', fs', ss, lctxt
-  | _ -> desugar_error "hi"
-
-let lift_lambda_from_fdecl (cs : cdecl list) (fs : fdecl) =
-  let lctxt =
-    List.fold_left
-      (fun lctxt (t, i) ->
-        match t with TRef (RFun _) -> (i, t) :: lctxt | _ -> lctxt)
-      [] fs.args
-  in
-  let new_fs = [] in
-  let _ = List.fold_left
-    (fun acc _a -> fst acc, 1::(snd acc)) (cs, new_fs) fs.body in
-    let _ = List.map2 *)
-let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
-    cdecl list * fdecl list * fdecl =
-  (* 1. Initialize lctxt from arguments that are functions *)
-  let lctxt_initial =
-    List.fold_left
-      (fun acc (t, i) -> match t with TRef (RFun _) -> i :: acc | _ -> acc)
-      [] f.args
-  in
-
-  (* 2. Process the body statements *)
-  let final_cs, new_lifted_fs, transformed_body =
-    lift_lambda_from_block cs [] lctxt_initial f.body
-  in
-
-  (* 3. Transform the return type of the function itself *)
-  let frtyp', cs_after_ret = transform_ret_ty f.frtyp final_cs in
-
-  (* 4. Transform the argument types of the function itself *)
-  let args', cs_final =
+let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) : fdecl =
+  (* cdecl list * fdecl list * fdecl = *)
+  let _lctxt_initial, args', cs_args =
     List.fold_right
-      (fun (t, i) (args_acc, cs_acc) ->
-        let t', cs_acc', _ = transform_ty t cs_acc in
-        ((t', i) :: args_acc, cs_acc'))
-      f.args ([], cs_after_ret)
+      (fun (t, i) (lambda_ctxt, args_acc, cs_acc) ->
+        match t with
+        | TRef (RFun _) ->
+            let t', cs_acc', _ = transform_ty t cs_acc in
+            ((i, Some t') :: lambda_ctxt, (t', i) :: args_acc, cs_acc')
+        | _ -> (lambda_ctxt, (t, i) :: args_acc, cs_acc))
+      f.args ([], [], cs)
   in
 
-  (* Return the updated class declarations, all new lifted functions, and the cleaned-up original function *)
-  ( cs_final,
-    new_lifted_fs,
-    { f with frtyp = frtyp'; args = args'; body = transformed_body } )
+  let frtyp', _cs_ret = transform_ret_ty f.frtyp cs_args in
 
-(* in lctxt *)
-(* desugar_error "hi" *)
+  (* 2. Process the body statements
+  let final_cs, new_lifted_fs, transformed_body =
+    lift_lambda_from_block cs_ret [] (List.map fst lctxt_initial) f.body
+  in *)
 
-(* *)
-(* 
-  add any lambdas in the args to the lambda ctxt
-  for each line: 
-    if rhs of decl or assn is lambda type:
-      add lhs id to lctxt
-      create new lambda scope struct
-      create new lambda struct if need to
-      change assn/decl to struct type
-
-    if callee of function call is in lambda ctxt: 
-      do a method call of the function ptr
-
-    if return is of a lambda type: 
-      return lambda struct instead
-      creating structs as needed
- *) *)
+  (* ( final_cs,
+    new_lifted_fs, *)
+  { f with frtyp = frtyp'; args = args' }

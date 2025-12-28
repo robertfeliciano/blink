@@ -80,11 +80,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let zero_check =
         D.If
           ( Bop (Eqeq, step_, zero, TBool),
-            [
-              SCall
-                ( "exit",
-                  [ Int ("1", TSigned Ti32) ] );
-            ],
+            [ SCall ("exit", [ Int ("1", TSigned Ti32) ]) ],
             [ step_inc ] )
       in
       prelude @ [ step_decl; iter_decl; zero_check ]
@@ -111,8 +107,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
       let args_stmts, args' = List.map desugar_exp args |> flatten in
       let mangled = mangle_name ~enclosing_class:cname pname dtypes dret in
-      istmts @ args_stmts
-      @ [ SCall (mangled, inst' :: args') ]
+      istmts @ args_stmts @ [ SCall (mangled, inst' :: args') ]
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
@@ -243,7 +238,6 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
           (sf @ [ tmp_decl ] @ sa, D.Call (fn_store, args', ty')))
   | Lambda (scope, args, ret_ty, body) ->
-      (* TODO desugar lambdas to structs and function pointers *)
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
       let converted_ret = convert_ret_ty ret_ty in
       let desugared_body = desugar_block body in
@@ -257,6 +251,13 @@ and desugar_exp (e : Typed.exp) : D.stmt list * D.exp =
                 desugar_error "currently only accept varnames for lambda scope")
           scope'
       in
-      (ls, Lambda (s, converted_args, converted_ret, desugared_body))
+      (* need to create a temporary declaration *)
+      let tmp_lambda = gensym "lambda" in
+      let new_lambda =
+        D.Lambda (s, converted_args, converted_ret, desugared_body)
+      in
+      let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
+      let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
+      (ls @ [ ldecl ], Id (tmp_lambda, lty))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

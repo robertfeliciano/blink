@@ -89,10 +89,10 @@ let mangle_lambda (t : D.ref_ty) =
 let lambdasym sfx =
   let n = !counter in
   incr counter;
-  Int.to_string n ^ sfx
+  Int.to_string n ^ "." ^ sfx
 
-let lifted_lambda_name (lname : string) = "Lifted." ^ lname
-let lambda_env_struct_name (lname : string) = "Env." ^ lname
+let lifted_lambda_name (lname : string) = "Lifted" ^ lname
+let lambda_env_struct_name (lname : string) = "Env" ^ lname
 let lambda_struct_name (lname : string) = "Struct." ^ lname
 let create_ptr_to t = D.TRef (RPtr t)
 

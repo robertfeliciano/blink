@@ -62,7 +62,7 @@ let test_desugar_call_proj _ =
       match fns with
       | fn' :: _ -> (
           match List.hd fn'.body with
-          | SCall ( _, [ Id ("o", _); _ ]) -> ()
+          | SCall (_, [ Id ("o", _); _ ]) -> ()
           | bad ->
               assert_failure ("proj call not desugared: \n" ^ DP.show_stmt bad))
       | _ -> assert_failure "no functions")

@@ -86,9 +86,7 @@ let rec show_exp ?(lvl = 0) = function
       let args_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
       in
-      Printf.sprintf "Call(%s, [%s], %s)"
-        (fn)
-        args_s (show_ty ty)
+      Printf.sprintf "Call(%s, [%s], %s)" fn args_s (show_ty ty)
   | Bop (op, lhs, rhs, ty) ->
       Printf.sprintf "Bop(%s,\n%s%s,\n%s%s,\n%s%s)" (show_binop op)
         (indent (lvl + 1))
@@ -171,9 +169,7 @@ and show_stmt ?(lvl = 0) = function
       let args_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
       in
-      Printf.sprintf "%sSCall(%s, [%s])" (indent lvl)
-        (fn)
-        args_s
+      Printf.sprintf "%sSCall(%s, [%s])" (indent lvl) fn args_s
   | If (cond, tblock, eblock) ->
       Printf.sprintf "%sIf(\n%scond=%s,\n%sthen=[\n%s\n%s],\n%selse=[\n%s\n%s])"
         (indent lvl)
