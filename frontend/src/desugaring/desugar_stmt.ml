@@ -258,7 +258,9 @@ and desugar_exp ?(rhs_assn=false) (e : Typed.exp) : D.stmt list * D.exp =
       in
       let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
       let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
-      (* rhs_assn prevents duplication of lambdas when they are on rhs of vdecl or assn *)
+      (* rhs_assn prevents duplication of lambdas when they are on rhs of vdecl or assn 
+        it just lifts them to a new variable when they are raw lambdas in calls
+      *)
       ((if rhs_assn then ls else ls @ [ ldecl ]), Id (tmp_lambda, lty))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b
