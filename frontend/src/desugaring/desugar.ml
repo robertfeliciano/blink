@@ -28,38 +28,27 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
 
 let desugar_program (prog : Typed.program) : program =
   let (Prog (fns, cns, pns)) = prog in
-  let desugared_fns = List.map (fun f -> desugar_fn f) fns in
+  let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
-  let fn_list = List.flatten extracted_methods @ desugared_fns in
-  (* Prog (fn_list, structs, desugared_protos) *)
+  let initial_fn_list = List.flatten extracted_methods @ desugared_fns in
 
-  let fns' = List.map (lift_lambda_from_fdecl structs) fn_list in
-
-  (* 1. First Pass: Update all top-level signatures to use Lambda structs *)
-  (* let fn_list_transformed, structs_with_interfaces =
-    check_fdecls fn_list structs
+  (* Thread the struct list (cs) through each function.
+       Accumulate all functions (lifted ones + transformed originals).
+    *)
+  let final_cs, final_fns =
+    List.fold_left
+      (fun (acc_cs, acc_fs) f ->
+        let next_cs, new_lifted_fs = lift_lambda_from_fdecl acc_cs f in
+        (* next_cs: structs including any new env/lambda structs
+           acc_fs @ new_lifted_fs: 
+           collecting all generated code into one list
+        *)
+        (next_cs, acc_fs @ new_lifted_fs))
+      (structs, []) initial_fn_list
   in
 
-  (* 2. Second Pass: Lift lambdas from bodies and collect new functions *)
-  let final_structs, final_fns =
-    List.fold_left
-      (fun (cs_acc, fs_acc) f ->
-        (* Thread the current struct list into the lifter *)
-        let next_cs, new_lifted_fs, transformed_f =
-          lift_lambda_from_fdecl cs_acc f
-        in
-        (* Accumulate: 
-         - Updated structs (next_cs)
-         - All previous functions + new lifted ones + the transformed original
-      *)
-        (next_cs, fs_acc @ new_lifted_fs @ [ transformed_f ]))
-      (structs_with_interfaces, [])
-      fn_list_transformed
-  in *)
-
-  (* Prog (final_fns, final_structs, desugared_protos) *)
-  Prog (fns', structs, desugared_protos)
+  Prog (final_fns, final_cs, desugared_protos)
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

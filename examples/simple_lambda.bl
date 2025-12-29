@@ -1,3 +1,5 @@
+/*
+
 @C fun puts(s: string) => void;
 
 
@@ -10,16 +12,17 @@ fun takesLambda(lam: [i32, f64] -> u8) => u8 {
 fun returnsLambda() => [string, i32] -> string { 
     return fn [](str, x) { return str; };
 }
+*/
 
 
 fun main() => i32 {
-    let q = 12;
-    
+    let q = 10;
     let f: [i32, i32] -> i32 = fn [q](a, b) {
-        return a+b+q;
+        return a+b*q;
     };
 
-    let x:i32 = fn (j,k){ return j+k; }(4,5) ;
-    
-    return 22;
+    return f(3,4);
+
+
+    //let x:i32 = fn (j,k){ return j+k; }(4,5) ;
 }

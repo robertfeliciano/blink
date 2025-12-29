@@ -3,6 +3,7 @@
 #include <bridge/types.h>
 #include <caml/custom.h>
 #include <caml/mlvalues.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -10,7 +11,6 @@
 #include <stdexcept>
 #include <util/constants.h>
 #include <vector>
-#include <cstdio>
 
 UnOp convert_unop(value v) {
     switch (Int_val(v)) {
@@ -178,8 +178,8 @@ Exp convert_exp(value v) {
         }
         case Constants::EXP_Call: { // Call of exp * exp list * ty
             std::string callee = String_val(Field(v, 0));
-            value args_v   = Field(v, 1);
-            value ty_v     = Field(v, 2);
+            value       args_v = Field(v, 1);
+            value       ty_v   = Field(v, 2);
 
             // auto                              callee = std::make_unique<Exp>(convert_exp(callee_v));
             std::vector<std::unique_ptr<Exp>> args;

@@ -88,7 +88,7 @@ RefTy convert_ref_ty(value v) {
                 break;
             }
             case Constants::REFTY_Ptr: {
-                ref.tag = RefTyTag::RPtr;
+                ref.tag       = RefTyTag::RPtr;
                 ref.pointedTy = std::make_unique<Ty>(convert_ty(Field(v, 0)));
                 break;
             }

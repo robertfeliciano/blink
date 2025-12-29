@@ -251,16 +251,19 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
                 desugar_error "currently only accept varnames for lambda scope")
           scope'
       in
-      (* need to create a temporary declaration *)
-      let tmp_lambda = gensym "lambda" in
-      let new_lambda =
-        D.Lambda (s, converted_args, converted_ret, desugared_body)
-      in
-      let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
-      let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
       (* rhs_assn prevents duplication of lambdas when they are on rhs of vdecl or assn 
         it just lifts them to a new variable when they are raw lambdas in calls
       *)
-      ((if rhs_assn then ls else ls @ [ ldecl ]), Id (tmp_lambda, lty))
+      if rhs_assn then
+        (ls, Lambda (s, converted_args, converted_ret, desugared_body))
+      else
+        (* need to create a temporary declaration *)
+        let tmp_lambda = gensym "lambda" in
+        let new_lambda =
+          D.Lambda (s, converted_args, converted_ret, desugared_body)
+        in
+        let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
+        let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
+        (ls @ [ ldecl ], Id (tmp_lambda, lty))
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

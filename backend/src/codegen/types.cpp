@@ -80,7 +80,7 @@ llvm::Type* TypeToLLGenerator::codegenRefTy(const RefTy& rt) {
         case RefTyTag::RFun:
             return getFunctionPointerType(rt);
 
-        case RefTyTag::RPtr: 
+        case RefTyTag::RPtr:
             return llvm::PointerType::getUnqual(*gen.ctxt);
 
         default:

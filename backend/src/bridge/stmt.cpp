@@ -52,7 +52,7 @@ Stmt convert_stmt(value v) {
             }
             case Constants::STMT_SCall: { // SCall of exp * exp list
                 // auto                              callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-                std::string callee = String_val(Field(v, 0));
+                std::string                       callee = String_val(Field(v, 0));
                 value                             args_v = Field(v, 1);
                 std::vector<std::unique_ptr<Exp>> args;
                 while (args_v != Val_emptylist) {

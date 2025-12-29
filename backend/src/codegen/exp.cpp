@@ -2,6 +2,8 @@
 #include <codegen/generator.h>
 #include <cstdio>
 
+#include <util/debug.h>
+
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
         switch (e.int_ty->uint) {
@@ -64,11 +66,7 @@ Value* ExpToLLVisitor::operator()(const EId& e) {
     // 1. Check local variable environment (alloca/pointers)
     auto it = gen.varEnv.find(e.id);
     if (it != gen.varEnv.end()) {
-        return gen.builder->CreateLoad(
-            it->second->getAllocatedType(), 
-            it->second, 
-            e.id.c_str()
-        );
+        return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
     }
 
     // 2. Check for a global function in the module
@@ -264,49 +262,50 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
     std::vector<Value*> args;
     args.reserve(e.args.size());
 
+    std::vector<llvm::Type*> argTys;
+    argTys.reserve(e.args.size());
+
     for (const auto& arg : e.args) {
         Value* val = gen.codegenExp(*arg);
         if (!val)
             llvm_unreachable("Failed to create LL argument.");
-
         args.push_back(val);
+
+        const Ty& argTy = gen.getExpTy(*arg);
+        argTys.push_back(gen.codegenType(argTy));
     }
 
-    const auto& calleeId = e.callee;
+    const std::string& calleeId = e.callee;
 
-    llvm::Function* callee = gen.mod->getFunction(calleeId);
+    // direct call of a global function
+    if (llvm::Function* calleeFn = gen.mod->getFunction(calleeId)) {
+        return gen.builder->CreateCall(calleeFn, args, "call");
+    }
 
-    return gen.builder->CreateCall(callee, args, "call");
+    // indirect call of a lambda (function pointer)
+    auto it = gen.varEnv.find(calleeId);
+    if (it != gen.varEnv.end()) {
+        llvm::AllocaInst* calleeSlot = it->second;
 
-    // if (std::holds_alternative<EId>(e.callee->val)) {
-    //     const EId&      idNode = std::get<EId>(e.callee->val);
-    //     llvm::Function* callee = gen.mod->getFunction(idNode.id);
+        // load function pointer
+        Value* calleePtr =
+            gen.builder->CreateLoad(
+                llvm::Type::getInt8PtrTy(*gen.ctxt),
+                calleeSlot,
+                calleeId + "_load");
 
-    //     if (!callee) {
-    //         Value* fnPtr = gen.codegenExp(*e.callee);
-    //         if (!fnPtr)
-    //             llvm_unreachable("Failed to get function pointer");
-        
-    //         auto* fnTy = llvm::cast<llvm::FunctionType>(gen.codegenType(e.ty));
-    //         return gen.builder->CreateCall(fnTy, fnPtr, args);
-    //     } else {
-    //         return gen.builder->CreateCall(callee, args, "call");
-    //     }
-    // } else {
-    //     llvm_unreachable("Callee guaranteed to be Id from desugaring stage.");
-    // }
-    // } else if (std::holds_alternative<EProj>(e.callee->val)) {
-    //     // this is only the case for lambdas
-    //     // we store the function pointer in an object
-    //     const EProj& calleeNode = std::get<EProj>(e.callee->val);
-    //     Value*       callee     = gen.codegenExp(*calleeNode.obj);
+        llvm::Type* retTy = gen.codegenType(e.ty);
 
-    //     if (!callee)
-    //         llvm_unreachable("Calling unknown function.");
+        // get function type
+        llvm::FunctionType* fnTy =
+            llvm::FunctionType::get(retTy, argTys, /*isVarArg=*/false);
 
-    //     return gen.builder->CreateCall((llvm::Function*)callee, args, "lambdaCall");
-    // }
+        return gen.builder->CreateCall(fnTy, calleePtr, args, "indirect_call");
+    }
+
+    llvm_unreachable(("Unknown callee: " + calleeId).c_str());
 }
+
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
@@ -417,14 +416,11 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
             // float to unsigned int
             return gen.builder->CreateFPToUI(source, destTy, "fptouitmp");
         }
-    }
-
-    else if (sourceTy->isPointerTy() && destTy->isPointerTy()) {
-        // TODO this will require thorough testing
+    } else if (sourceTy->isPointerTy() && destTy->isPointerTy()) {
         return gen.builder->CreateBitCast(source, destTy, "ptrbitcast");
-    }
-
-    else {
+    } else {
+        PRINT_VAR_TYPE(sourceTy);
+        PRINT_VAR_TYPE(destTy);
         throw std::runtime_error("Unsupported cast operation detected in codegen.");
     }
 }
