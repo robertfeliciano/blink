@@ -185,12 +185,12 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
 and lift_lambdas_from_list (lctxt : (id * lambda_converter) list) (vname_opt : id option)
     (cs_acc, fs_acc, stmts_acc) (e : exp) =
   (* 1. Lift lambdas from the current expression *)
-  let ncs, nf_opt, ns, _lambda_opt, _fptr_opt, ne, _env =
+  let ncs, nfs, ns, _lambda_opt, _fptr_opt, ne, _env =
     lift_lambdas_from_exps cs_acc lctxt vname_opt e
   in
   (* 3. Collect new functions and statements *)
   let updated_fs =
-    match nf_opt with Some nf -> nf :: fs_acc | None -> fs_acc
+    match nfs with [] -> fs_acc | _ -> nfs @ fs_acc
   in
   (* Return the new state and the transformed expression *)
   ((ncs, updated_fs, stmts_acc @ ns), ne)
@@ -200,15 +200,14 @@ and lift_lambdas_from_exps (cs : cdecl list) (lctxt : (id * lambda_converter) li
   | Lambda (scope, args, rty, body) ->
       let res = lift_lambda cs vname_opt (scope, args, rty, body) in
       ( res.lambda_structs @ cs,
-        Some res.lifted_fdecl,
+        [res.lifted_fdecl],
         res.setup_stmts,
         Some res.lambda_var,
         Some res.fn_ptr_var,
         Id (fst res.lambda_var, snd res.lambda_var),
         Some (fst res.env_var) )
   | Call (callee, es, ty) -> (
-    (* TODO update signature to return list fdecls instead of option, return nfs *)
-      let (ncs, _nfs, nstmts), es' =
+      let (ncs, nfs, nstmts), es' =
         List.fold_left_map
           (lift_lambdas_from_list lctxt vname_opt)
           (cs, [], []) es
@@ -218,17 +217,17 @@ and lift_lambdas_from_exps (cs : cdecl list) (lctxt : (id * lambda_converter) li
       | Some cnv ->
         let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
         let transformed_call = Call (cnv.fptr_var, Id (cnv.env_var, i8_ptr)::es', ty) in
-          (ncs, None, nstmts, None, None, transformed_call, None)
+          (ncs, nfs, nstmts, None, None, transformed_call, None)
       | None -> 
-          (ncs, None, nstmts, None, None, (Call (callee, es', ty)), None))
-  | e -> (cs, None, [], None, None, e, None)
+          (ncs, [], nstmts, None, None, (Call (callee, es', ty)), None))
+  | e -> (cs, [], [], None, None, e, None)
   (* | _ -> failwith "burp" *)
 
 and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
   | Decl (vname, (TRef (RFun _) as ty), e, _const) ->
       (*  lift lambda from initialization exp *)
-      let ncs, nf, ns, _l, fptr_opt, _ne, env_opt =
+      let ncs, nfs, ns, _l, fptr_opt, _ne, env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
       in
       let fptr =
@@ -254,12 +253,12 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
             else dnc :: (ncs @ cs)
         | None -> cs
       in
-      (cs', (match nf with Some f -> f :: fs | None -> fs), nlctxt, ns)
+      (cs', (match nfs with [] -> fs | _ -> nfs@fs), nlctxt, ns)
   | Ret rval -> (
       match rval with
       | Some e ->
-          let cs', nf, ns, _l, _fptr_opt, e', _env = lift_lambdas_from_exps cs lctxt None e in
-          (cs', (match nf with Some f -> f :: fs | None -> fs), lctxt, ns @ [Ret (Some e')])
+          let cs', nfs, ns, _l, _fptr_opt, e', _env = lift_lambdas_from_exps cs lctxt None e in
+          (cs', (match nfs with [] -> fs | _ -> nfs@fs), lctxt, ns @ [Ret (Some e')])
       | None -> (cs, fs, lctxt, [ Ret rval ]))
   | s -> (cs, fs, lctxt, [ s ])
 (* | _ -> failwith "hi" *)
