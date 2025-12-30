@@ -187,13 +187,13 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
 
 and lift_lambdas_from_list (lctxt : (id * lambda_converter) list)
     (vname_opt : id option) (cs_acc, fs_acc, stmts_acc) (e : exp) =
-  (* 1. Lift lambdas from the current expression *)
+  (* lift lambdas from the current expression *)
   let ncs, nfs, ns, _lambda_opt, _fptr_opt, ne, _env =
     lift_lambdas_from_exps cs_acc lctxt vname_opt e
   in
-  (* 3. Collect new functions and statements *)
+  (* collect new functions and statements *)
   let updated_fs = match nfs with [] -> fs_acc | _ -> nfs @ fs_acc in
-  (* Return the new state and the transformed expression *)
+  (* return the new state and the transformed expression *)
   ((ncs, updated_fs, stmts_acc @ ns), ne)
 
 and lift_lambdas_from_exps (cs : cdecl list)
@@ -343,13 +343,13 @@ and lift_lambda_from_block cs lctxt block =
 
 let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     cdecl list * fdecl list =
-  (* 1. Process arguments: identify functional types and create unpacking logic *)
+  (* process arguments *)
   let lctxt_initial, args_transformed, unpack_stmts, cs_args =
     List.fold_right
       (fun (t, i) (lctxt_acc, args_acc, stmts_acc, cs_acc) ->
         match t with
         | TRef (RFun (arg_tys, rty)) ->
-            (* Convert the functional type to its struct representation *)
+            (* convert lambda type to struct *)
             let t', cd_opt = transform_ty t cs_acc in
             let cs' =
               match cd_opt with
@@ -357,13 +357,12 @@ let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
               | None -> cs_acc
             in
 
-            (* Create local variables to hold the unpacked fptr and env *)
+            (* create local variables to hold the unpacked fptr and env *)
             let fptr_name = gensym (i ^ "_fptr") in
             let env_name = gensym (i ^ "_env") in
             let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
             let lambda_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
 
-            (* Projections: val fptr = arg.lambdaptr; val env = arg.envptr; *)
             let p_fptr =
               Decl
                 ( fptr_name,
@@ -383,13 +382,13 @@ let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
       f.args ([], [], [], cs)
   in
 
-  (* 2. Handle return type transformation *)
+  (* return type transformation *)
   let frtyp', cd_ret_opt = transform_ret_ty f.frtyp cs_args in
   let cs_ret =
     match cd_ret_opt with Some cd -> add_cdecl cd cs_args | None -> cs_args
   in
 
-  (* 3. Lift lambdas from body, prefixing the body with our unpack statements *)
+  (* lift lambdas from body, prefixing the body with our unpack statements *)
   let body_with_unpacks = unpack_stmts @ f.body in
   let final_cs, lifted_fs, transformed_body =
     lift_lambda_from_block cs_ret lctxt_initial body_with_unpacks
