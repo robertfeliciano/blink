@@ -3,16 +3,19 @@
 @C fun puts(s: string) => void;
 
 /*
-fun takesLambda(lam: [i32, f64] -> u8) => u8 {
-    puts("taking in lambda...");
-    return lam(9, 12.0);
-}
-
-
-fun returnsLambda() => [string, i32] -> string { 
-    return fn [](str, x) { return str; };
+fun takesLambda(lam: [i32, i32] -> i32) => i32 {
+    let temp = lam(3,4);
+    return temp + 1;
 }
 */
+
+
+fun returnsLambda() => [string, i32] -> i32 { 
+    return fn [](str, x) { 
+        puts(str);
+        return x * 2;
+    };
+}
 
 
 fun main() => i32 {
@@ -27,15 +30,26 @@ fun main() => i32 {
     */
     
 
-    // TODO need to fix this
-    //let x:i32 = fn (j:i32,k:i32)->i32{ return j+k; }(4,5);
+    //return fn (j:i32,k:i32)->i32{ return j+k; }(4,5);
 
     //return x;
 
+    /*
+    let f: [i32, i32] -> i32 = fn [q](a, b) {
+        puts("hello world!");
+        return (q*a) + b;
+    };
+    */
+
+    return returnsLambda()("sup", 19);
+
+    //return takesLambda(f);
+
+/*
     return fn [q, z](a:i32, b: i32) -> i32{
         return a+b*q - z;
     }(5,10);
-    
+    */
     
     //return f(3,4);
 

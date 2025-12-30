@@ -4,6 +4,8 @@ open Desugar_class
 open Desugared_ast
 open Desugar_lambdas
 
+(* open Pprint_desugared_ast *)
+
 (* open Desugar_lambdas *)
 open Conversions
 module Typed = Typing.Typed_ast
@@ -32,9 +34,11 @@ let desugar_program (prog : Typed.program) : program =
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
   let initial_fn_list = List.flatten extracted_methods @ desugared_fns in
+  (* let p_init = Prog (initial_fn_list, structs, desugared_protos) in  *)
 
-  (* Thread the struct list (cs) through each function.
-       Accumulate all functions (lifted ones + transformed originals).
+  (* Printf.printf "%s\n" (show_desugared_program p_init); *)
+  (* thread struct list and accumalte lifted functions while updating 
+    fdecl body
     *)
   let final_cs, final_fns =
     List.fold_left

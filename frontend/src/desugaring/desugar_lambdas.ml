@@ -32,13 +32,16 @@ type lifted_lambda_result = {
   setup_stmts : stmt list; (* Decls for env and lambda structs *)
   lambda_var : id * ty; (* The struct instance (vname, lstruct_ty) *)
   fn_ptr_var : id * ty; (* The temporary function pointer variable *)
-  env_var : id * ty (* The env variable *)
+  env_var : id * ty (* The env variable *);
 }
 
-type lambda_converter = {
-  fptr_var : id; 
-  env_var : id;
-}
+type lambda_converter = { fptr_var : id; env_var : id }
+
+let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
+  if List.exists (fun c -> c.cname = cd.cname) cs then cs else cd :: cs
+
+let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
+  List.fold_left (fun acc cd -> add_cdecl cd acc) old_cs new_cs
 
 let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
     (scope, args, rty, body) : lifted_lambda_result =
@@ -182,28 +185,26 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
     env_var = (vname_env, env_ty);
   }
 
-and lift_lambdas_from_list (lctxt : (id * lambda_converter) list) (vname_opt : id option)
-    (cs_acc, fs_acc, stmts_acc) (e : exp) =
+and lift_lambdas_from_list (lctxt : (id * lambda_converter) list)
+    (vname_opt : id option) (cs_acc, fs_acc, stmts_acc) (e : exp) =
   (* 1. Lift lambdas from the current expression *)
   let ncs, nfs, ns, _lambda_opt, _fptr_opt, ne, _env =
     lift_lambdas_from_exps cs_acc lctxt vname_opt e
   in
   (* 3. Collect new functions and statements *)
-  let updated_fs =
-    match nfs with [] -> fs_acc | _ -> nfs @ fs_acc
-  in
+  let updated_fs = match nfs with [] -> fs_acc | _ -> nfs @ fs_acc in
   (* Return the new state and the transformed expression *)
   ((ncs, updated_fs, stmts_acc @ ns), ne)
 
-and lift_lambdas_from_exps (cs : cdecl list) (lctxt : (id * lambda_converter) list)
-    (vname_opt : id option) = function
+and lift_lambdas_from_exps (cs : cdecl list)
+    (lctxt : (id * lambda_converter) list) (vname_opt : id option) = function
   | Lambda (scope, args, rty, body) ->
       let res = lift_lambda cs vname_opt (scope, args, rty, body) in
-      ( res.lambda_structs @ cs,
-        [res.lifted_fdecl],
+      ( add_cdecls res.lambda_structs cs,
+        [ res.lifted_fdecl ],
         res.setup_stmts,
         Some res.lambda_var,
-        Some res.fn_ptr_var,
+        Some (fst res.fn_ptr_var),
         Id (fst res.lambda_var, snd res.lambda_var),
         Some (fst res.env_var) )
   | Call (callee, es, ty) -> (
@@ -212,62 +213,126 @@ and lift_lambdas_from_exps (cs : cdecl list) (lctxt : (id * lambda_converter) li
           (lift_lambdas_from_list lctxt vname_opt)
           (cs, [], []) es
       in
-      (* get fptr from context if we are calling a lambda variable *)
       match List.assoc_opt callee lctxt with
       | Some cnv ->
-        let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-        let transformed_call = Call (cnv.fptr_var, Id (cnv.env_var, i8_ptr)::es', ty) in
-          (ncs, nfs, nstmts, None, None, transformed_call, None)
-      | None -> 
-          (ncs, [], nstmts, None, None, (Call (callee, es', ty)), None))
+          (* local lambda in lctxt *)
+          let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+          let transformed_call =
+            Call (cnv.fptr_var, Id (cnv.env_var, i8_ptr) :: es', ty)
+          in
+          ( ncs,
+            nfs,
+            nstmts,
+            None,
+            Some cnv.fptr_var,
+            transformed_call,
+            Some cnv.env_var )
+      | None -> (
+          let base_call = Call (callee, es', ty) in
+          match ty with
+          | TRef (RFun (arg_tys, rty)) ->
+              (* calling function that returns a lambda *)
+              let tmp_v = "%tmp_Fn" in
+              let fptr_v = gensym (tmp_v ^ "_fptr") in
+              let env_v = gensym (tmp_v ^ "_env") in
+              let struct_ty, _ = transform_ty ty ncs in
+              let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+              let l_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
+
+              let binding_stmts =
+                [
+                  Decl (tmp_v, struct_ty, base_call, true);
+                  Decl
+                    ( fptr_v,
+                      l_ptr_ty,
+                      Proj (Id (tmp_v, struct_ty), "lambdaptr", l_ptr_ty),
+                      true );
+                  Decl
+                    ( env_v,
+                      i8_ptr,
+                      Proj (Id (tmp_v, struct_ty), "envptr", i8_ptr),
+                      true );
+                ]
+              in
+              ( ncs,
+                nfs,
+                nstmts @ binding_stmts,
+                Some (tmp_v, struct_ty),
+                Some fptr_v,
+                Id (tmp_v, struct_ty),
+                Some env_v )
+          | _ -> (ncs, nfs, nstmts, None, None, base_call, None)))
+  | Id (i, ty) as e -> (
+      match List.assoc_opt i lctxt with
+      | Some cnv ->
+          (* if we use a lambda variable we already have the necessary things in lctxt *)
+          let ty', ncs_opt = transform_ty ty cs in
+          let cs' =
+            match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
+          in
+          (cs', [], [], None, Some cnv.fptr_var, Id (i, ty'), Some cnv.env_var)
+      | None -> (cs, [], [], None, None, e, None))
   | e -> (cs, [], [], None, None, e, None)
-  (* | _ -> failwith "burp" *)
 
 and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
-  | Decl (vname, (TRef (RFun _) as ty), e, _const) ->
+  | Decl (vname, (TRef (RFun (args, rty)) as ty), e, _const) ->
       (*  lift lambda from initialization exp *)
-      let ncs, nfs, ns, _l, fptr_opt, _ne, env_opt =
+      let ncs, nfs, ns, _l, fptr_opt, ne, env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
       in
-      let fptr =
-        match fptr_opt with
-        | Some fptr -> fst fptr
-        | None ->
-            desugar_error
-              "Guaranteed to get a function pointer when rhs is \
-               lambda/function type"
+      let fptr, env, extra_stmts =
+        match (fptr_opt, env_opt) with
+        | Some f, Some e -> (f, e, [])
+        | _ ->
+            let f_name = gensym (vname ^ "_fptr") in
+            let e_name = gensym (vname ^ "_env") in
+            let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+            let l_ptr_ty = create_ptr_to (TRef (RFun (args, rty))) in
+            ( f_name,
+              e_name,
+              [
+                Decl (f_name, l_ptr_ty, Proj (ne, "lambdaptr", l_ptr_ty), true);
+                Decl (e_name, i8_ptr, Proj (ne, "envptr", i8_ptr), true);
+              ] )
       in
-      let env = match env_opt with Some en -> en | None -> 
-        desugar_error
-          "Guaranteed to get an environment var when rhs is \
-           lambda/function type" in
+      let dcs = add_cdecls ncs cs in
       (* update ty of decl if necessary *)
       let _ty', dnc_opt = transform_ty ty ncs in
       (* if this variable is a lambda, add it to our context for Call sites *)
-      let nlctxt = (vname, {fptr_var = fptr; env_var = env}) :: lctxt in
+      let nlctxt = (vname, { fptr_var = fptr; env_var = env }) :: lctxt in
       let cs' =
-        match dnc_opt with
-        | Some dnc ->
-            if List.exists (fun c -> c.cname = dnc.cname) ncs then ncs
-            else dnc :: (ncs @ cs)
-        | None -> cs
+        match dnc_opt with Some dnc -> add_cdecl dnc dcs | None -> cs
       in
-      (cs', (match nfs with [] -> fs | _ -> nfs@fs), nlctxt, ns)
+      ( cs',
+        (match nfs with [] -> fs | _ -> nfs @ fs),
+        nlctxt,
+        ns @ extra_stmts )
+  | Decl (vname, ty, e, const) ->
+      let cs', nfs, ns, _l, _fptr_opt, ne, _env_opt =
+        lift_lambdas_from_exps cs lctxt (Some vname) e
+      in
+      ( cs',
+        (match nfs with [] -> fs | _ -> nfs @ fs),
+        lctxt,
+        ns @ [ Decl (vname, ty, ne, const) ] )
   | Ret rval -> (
       match rval with
       | Some e ->
-          let cs', nfs, ns, _l, _fptr_opt, e', _env = lift_lambdas_from_exps cs lctxt None e in
-          (cs', (match nfs with [] -> fs | _ -> nfs@fs), lctxt, ns @ [Ret (Some e')])
+          let cs', nfs, ns, _l, _fptr_opt, e', _env =
+            lift_lambdas_from_exps cs lctxt None e
+          in
+          ( cs',
+            (match nfs with [] -> fs | _ -> nfs @ fs),
+            lctxt,
+            ns @ [ Ret (Some e') ] )
       | None -> (cs, fs, lctxt, [ Ret rval ]))
   | s -> (cs, fs, lctxt, [ s ])
-(* | _ -> failwith "hi" *)
 
 and lift_lambda_from_block cs lctxt block =
   let final_cs, lifted_fs, _, new_block =
     List.fold_left
       (fun (curr_cs, curr_fs, curr_lctxt, block_acc) stmt ->
-        (* Printf.printf "%s\n" (show_stmt stmt); *)
         let next_cs, next_fs, next_lctxt, new_stmts =
           lift_lambdas_from_stmt curr_cs curr_fs curr_lctxt stmt
         in
@@ -278,32 +343,60 @@ and lift_lambda_from_block cs lctxt block =
 
 let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     cdecl list * fdecl list =
-  let lctxt_initial, args', cs_args =
+  (* 1. Process arguments: identify functional types and create unpacking logic *)
+  let lctxt_initial, args_transformed, unpack_stmts, cs_args =
     List.fold_right
-      (fun (t, i) (lambda_ctxt, args_acc, cs_acc) ->
+      (fun (t, i) (lctxt_acc, args_acc, stmts_acc, cs_acc) ->
         match t with
-        | TRef (RFun _) -> (
-            (* TODO get env and function ptr at beginning of function and add to lctxt*)
+        | TRef (RFun (arg_tys, rty)) ->
+            (* Convert the functional type to its struct representation *)
             let t', cd_opt = transform_ty t cs_acc in
-            ( lambda_ctxt,
+            let cs' =
+              match cd_opt with
+              | Some cd -> add_cdecl cd cs_acc
+              | None -> cs_acc
+            in
+
+            (* Create local variables to hold the unpacked fptr and env *)
+            let fptr_name = gensym (i ^ "_fptr") in
+            let env_name = gensym (i ^ "_env") in
+            let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+            let lambda_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
+
+            (* Projections: val fptr = arg.lambdaptr; val env = arg.envptr; *)
+            let p_fptr =
+              Decl
+                ( fptr_name,
+                  lambda_ptr_ty,
+                  Proj (Id (i, t'), "lambdaptr", lambda_ptr_ty),
+                  true )
+            in
+            let p_env =
+              Decl (env_name, i8_ptr, Proj (Id (i, t'), "envptr", i8_ptr), true)
+            in
+
+            ( (i, { fptr_var = fptr_name; env_var = env_name }) :: lctxt_acc,
               (t', i) :: args_acc,
-              match cd_opt with Some cd -> cd :: cs_acc | None -> cs_acc ))
-        | _ -> (lambda_ctxt, (t, i) :: args_acc, cs_acc))
-      f.args ([], [], cs)
+              p_fptr :: p_env :: stmts_acc,
+              cs' )
+        | _ -> (lctxt_acc, (t, i) :: args_acc, stmts_acc, cs_acc))
+      f.args ([], [], [], cs)
   in
 
+  (* 2. Handle return type transformation *)
   let frtyp', cd_ret_opt = transform_ret_ty f.frtyp cs_args in
   let cs_ret =
-    match cd_ret_opt with Some cd -> cd :: cs_args | None -> cs_args
+    match cd_ret_opt with Some cd -> add_cdecl cd cs_args | None -> cs_args
   in
 
-  (* lift lambdas from body of function *)
+  (* 3. Lift lambdas from body, prefixing the body with our unpack statements *)
+  let body_with_unpacks = unpack_stmts @ f.body in
   let final_cs, lifted_fs, transformed_body =
-    lift_lambda_from_block cs_ret lctxt_initial f.body
+    lift_lambda_from_block cs_ret lctxt_initial body_with_unpacks
   in
 
   let new_fdecl =
-    { f with frtyp = frtyp'; args = args'; body = transformed_body }
+    { f with frtyp = frtyp'; args = args_transformed; body = transformed_body }
   in
 
   (final_cs, new_fdecl :: lifted_fs)
