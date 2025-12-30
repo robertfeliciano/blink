@@ -5,33 +5,37 @@ fun takesLambda(f: [i32, i32] -> f64, x: u8) => u64 {
 
 fun main(args: [string; 2]) => u64 {
     let z = 12;
-    /*
-    fn lambda: [i32, i32] -> f64 = |a, b| {
+
+/*
+    let l1: [i32, i32] -> f64 = fn [](x, y) {
+        let a = x;
+        let b = y;
+        return (a+b+z) as f64;
+    };
+    */
+/*
+    
+    let l2: [i32, i32] -> f64 = fn (a: i32, b: i32) -> f64 {
         let x = a;
         let y = b;
         return (x+y*z) as f64;
     };
-    
-    fn lambda = (a: i32, b: i32) -> f64 {
-        let x = a;
-        let y = b;
-        return (x+y) as f64;
-    };
     */
-
-    fn lambda: [i32, i32] -> f64 = (a: i32, b: i32) -> f64 {
+    
+    let l3 = fn [z](a: i32, b: i32) -> f64 {
         let x = a;
         let y = b;
-        return (x+y) as f64;
+        return (x+y+z) as f64;
     };
     
     /*
-    fn lambda = |a,b| {
+    // SHOULD PRODUCE TYPE_ERROR
+    let l4 = fn [](a,b) {
         let x = a;
         let y = b;
         return (x+y) as f64;
     };
     */
 
-    return takesLambda(lambda, 2 as u8);
+    return takesLambda(l3, 2 as u8);
 }

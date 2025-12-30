@@ -2,6 +2,8 @@ module Range = Util.Range
 
 type 'a node = { elt : 'a; loc : Range.t }
 
+exception ParserError of Lexing.position * string
+
 let show_node show_elt { elt; loc } =
   Printf.sprintf "{ elt = %s; loc = %s }" (show_elt elt)
     (Range.string_of_range loc)
@@ -87,16 +89,18 @@ type exp =
   | Array of exp node list
   | Cast of exp node * ty
   | ObjInit of id node * (id node * exp node) list
-  | Lambda of id list * block
-  | TypedLambda of (id * ty) list * ret_ty * block
+  | Lambda of exp node list * id list * block (* scope, args, body *)
+  | TypedLambda of
+      exp node list
+      * (id * ty) list
+      * ret_ty
+      * block (* scope, args+types, ret type, body *)
   | Null
 
 and vdecl = id * ty option * exp node option * bool
-and ldecl = id node * ref_ty option * exp node
 
 and stmt =
   | Assn of exp node * aop * exp node
-  | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp node option
   | SCall of exp node * exp node list
@@ -260,14 +264,20 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
         (show_node (fun x -> x) cn)
         fields_s (indent lvl)
-  | Lambda (params, body) ->
+  | Lambda (scope, params, body) ->
+      let scope_s =
+        "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
+      in
       let params_s = String.concat ", " params in
       let body_s =
         String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
       in
-      Printf.sprintf "%sLambda(params=[%s], body=[\n%s\n%s])" (indent lvl)
-        params_s body_s (indent lvl)
-  | TypedLambda (params, ret_ty, body) ->
+      Printf.sprintf "%sLambda(scope=[%s], params=[%s], body=[\n%s\n%s])"
+        (indent lvl) scope_s params_s body_s (indent lvl)
+  | TypedLambda (scope, params, ret_ty, body) ->
+      let scope_s =
+        "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
+      in
       let params_s =
         String.concat "; "
           (List.map
@@ -277,8 +287,9 @@ let rec show_exp ?(lvl = 0) = function
       let body_s =
         String.concat ";\n" (List.map (show_node_stmt ~lvl:(lvl + 2)) body)
       in
-      Printf.sprintf "%sTypedLambda(params=[%s]; ret=%s; body=[\n%s\n%s])"
-        (indent lvl) params_s
+      Printf.sprintf
+        "%sTypedLambda(scope=[%s], params=[%s]; ret=%s; body=[\n%s\n%s])"
+        (indent lvl) scope_s params_s
         (show_ret_ty ~lvl:(lvl + 1) ret_ty)
         body_s (indent lvl)
 
@@ -292,14 +303,12 @@ and show_vdecl ?(lvl = 0) (id, ty_opt, exp_opt, is_const) =
     (if Option.is_some exp_opt then show_node show_exp (Option.get exp_opt)
      else "<default>")
 
-and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
+(* and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
   Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)
     (show_node (fun x -> x) id)
-    (match ty_opt with
-    | Some ty -> show_ref_ty ~lvl:(lvl + 1) ty
-    | None -> "None")
+    (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
     (indent (lvl + 1))
-    (show_node show_exp exp)
+    (show_node show_exp exp) *)
 
 (* Statements *)
 
@@ -313,7 +322,7 @@ and show_stmt ?(lvl = 0) = function
         (indent (lvl + 1))
         (show_node show_exp rhs)
   | Decl v -> show_vdecl ~lvl v
-  | LambdaDecl l -> show_ldecl ~lvl l
+  (* | LambdaDecl l -> show_ldecl ~lvl l *)
   | Ret exp_opt ->
       let e_s =
         match exp_opt with Some e -> show_node show_exp e | None -> "None"

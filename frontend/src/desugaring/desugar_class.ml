@@ -14,14 +14,15 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
       :: List.map (fun (t, i) -> (convert_ty t, i)) m.args
     else []
   in
+  let dfrtyp = convert_ret_ty m.frtyp in
   let mangled_name =
     mangle_name ~enclosing_class:cname m.fname
-      (List.map (fun (t, _) -> t) m.args)
-      m.frtyp
+      (List.map fst desugared_args)
+      dfrtyp
   in
   {
     annotations = List.map desugar_annotation m.annotations;
-    frtyp = convert_ret_ty m.frtyp;
+    frtyp = dfrtyp;
     fname = mangled_name;
     args = desugared_args;
     body = desugared_body;

@@ -74,15 +74,19 @@ type exp =
   | Proj of
       exp * id * id * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)
   | ObjInit of id * (id * exp) list
-  | Lambda of (id * ty) list * ret_ty * block
+  | Lambda of
+      exp list
+      * (id * ty) list
+      * ret_ty
+      * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
 
 and vdecl = id * ty * exp * bool
-and ldecl = id * ref_ty * exp
+(* and ldecl = id * ref_ty * exp *)
 
 and stmt =
   | Assn of exp * aop * exp * ty
-  | LambdaDecl of ldecl
+  (* | LambdaDecl of ldecl *)
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
   | SCall of

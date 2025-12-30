@@ -3,6 +3,7 @@
 #include <bridge/types.h>
 #include <caml/custom.h>
 #include <caml/mlvalues.h>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -176,11 +177,11 @@ Exp convert_exp(value v) {
             break;
         }
         case Constants::EXP_Call: { // Call of exp * exp list * ty
-            value callee_v = Field(v, 0);
-            value args_v   = Field(v, 1);
-            value ty_v     = Field(v, 2);
+            std::string callee = String_val(Field(v, 0));
+            value       args_v = Field(v, 1);
+            value       ty_v   = Field(v, 2);
 
-            auto                              callee = std::make_unique<Exp>(convert_exp(callee_v));
+            // auto                              callee = std::make_unique<Exp>(convert_exp(callee_v));
             std::vector<std::unique_ptr<Exp>> args;
             while (args_v != Val_emptylist) {
                 value head = Field(args_v, 0);
@@ -189,7 +190,7 @@ Exp convert_exp(value v) {
             }
 
             Ty ty      = convert_ty(ty_v);
-            result.val = ECall{std::move(callee), std::move(args), std::move(ty)};
+            result.val = ECall{callee, std::move(args), std::move(ty)};
             break;
         }
         case Constants::EXP_Bop: { // Bop of binop * exp * exp * ty

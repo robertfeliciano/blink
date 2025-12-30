@@ -52,12 +52,7 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
         args.push_back(val);
     }
 
-    if (!std::holds_alternative<EId>(s.callee->val))
-        llvm_unreachable("We do not currently support higher-order functions.");
-
-    const EId& idNode = std::get<EId>(s.callee->val);
-
-    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+    llvm::Function* callee = gen.mod->getFunction(s.callee);
 
     if (!callee)
         llvm_unreachable("Calling unknown function.");
@@ -173,7 +168,7 @@ Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
         Value* toBeFreed = gen.codegenExp(*e);
-        Value* freeVal = gen.builder->CreateCall(freeFun, {toBeFreed});
+        Value* freeVal   = gen.builder->CreateCall(freeFun, {toBeFreed});
     }
 
     return nullptr;

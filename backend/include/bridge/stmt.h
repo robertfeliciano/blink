@@ -35,7 +35,7 @@ struct Ret {
 };
 
 struct SCall {
-    std::unique_ptr<Exp>              callee;
+    std::string                       callee;
     std::vector<std::unique_ptr<Exp>> args;
 };
 
@@ -51,13 +51,11 @@ struct While {
 };
 
 struct Free {
-    std::vector<std::unique_ptr<Exp>>  exps;
+    std::vector<std::unique_ptr<Exp>> exps;
 };
 
 struct Break {};
 struct Continue {};
-
-// TODO do lambdadecl
 
 using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Free, Break, Continue>;
 

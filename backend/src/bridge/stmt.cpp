@@ -30,9 +30,6 @@ Stmt convert_stmt(value v) {
                 result.val = Assn{std::move(lhs), std::move(rhs), std::move(ty)};
                 break;
             }
-            case Constants::STMT_LambdaDecl: { // LambdaDecl of ldecl
-                throw std::runtime_error("Lambda declarations not supported in bridge conversion");
-            }
             case Constants::STMT_Decl: { // Decl of vdecl (id * ty * exp * bool)
                 value       vdecl    = Field(v, 0);
                 std::string id       = String_val(Field(vdecl, 0));
@@ -54,7 +51,8 @@ Stmt convert_stmt(value v) {
                 break;
             }
             case Constants::STMT_SCall: { // SCall of exp * exp list
-                auto                              callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                // auto                              callee = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                std::string                       callee = String_val(Field(v, 0));
                 value                             args_v = Field(v, 1);
                 std::vector<std::unique_ptr<Exp>> args;
                 while (args_v != Val_emptylist) {
@@ -62,7 +60,7 @@ Stmt convert_stmt(value v) {
                     args.push_back(std::make_unique<Exp>(convert_exp(head)));
                     args_v = Field(args_v, 1);
                 }
-                result.val = SCall{std::move(callee), std::move(args)};
+                result.val = SCall{callee, std::move(args)};
                 break;
             }
             case Constants::STMT_If: { // If of exp * block * block
@@ -80,8 +78,8 @@ Stmt convert_stmt(value v) {
             }
             case Constants::STMT_Free: { // Free of exp list
                 std::vector<std::unique_ptr<Exp>> exps;
-                value exps_v = Field(v, 0);
-                while (exps_v != Val_emptylist) { 
+                value                             exps_v = Field(v, 0);
+                while (exps_v != Val_emptylist) {
                     value head = Field(exps_v, 0);
                     exps.push_back(std::make_unique<Exp>(convert_exp(head)));
                     exps_v = Field(exps_v, 1);

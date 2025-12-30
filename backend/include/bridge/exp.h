@@ -68,7 +68,7 @@ struct EId {
 };
 
 struct ECall {
-    std::unique_ptr<Exp>              callee;
+    std::string                       callee;
     std::vector<std::unique_ptr<Exp>> args;
     Ty                                ty;
 };
@@ -112,12 +112,6 @@ struct EObjInit {
     std::string                                               id;
     std::vector<std::pair<std::string, std::unique_ptr<Exp>>> fields;
     Ty                                                        ty;
-};
-
-struct ELambda {
-    std::vector<std::pair<std::string, Ty>> params;
-    RetTy                                   ret_ty;
-    std::vector<Stmt>                       body;
 };
 
 struct ENull {

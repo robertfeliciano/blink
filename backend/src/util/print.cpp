@@ -122,6 +122,11 @@ std::string tyToString(const Ty& ty) {
                         s += tyToString(*r.ret.val);
                     return s;
                 }
+                case RefTyTag::RPtr: {
+                    std::string s = "(" + tyToString(*r.pointedTy) + ")";
+                    s += "*";
+                    return s;
+                }
             }
             break;
         }
@@ -203,7 +208,7 @@ struct ExpToStringVisitor {
     std::string operator()(const EStr& e) const { return "\"" + e.value + "\""; }
     std::string operator()(const EId& e) const { return e.id; }
     std::string operator()(const ECall& e) const {
-        std::string res = expToString(*e.callee) + "(";
+        std::string res = e.callee + "(";
         for (size_t i = 0; i < e.args.size(); ++i) {
             res += expToString(*e.args[i]);
             if (i + 1 < e.args.size())
@@ -243,7 +248,7 @@ struct ExpToStringVisitor {
         res += "}";
         return res;
     }
-    std::string operator()(const ENull& e) const { return "nullptr to " + tyToString(e.ty); }
+    std::string operator()(const ENull& e) const { return "null " + tyToString(e.ty); }
 };
 
 std::string expToString(const Exp& exp) {
@@ -267,7 +272,7 @@ struct StmtToStringVisitor {
             return indent(indentLevel) + "return;";
     }
     std::string operator()(const SCall& s) const {
-        std::string res = indent(indentLevel) + expToString(*s.callee) + "(";
+        std::string res = indent(indentLevel) + s.callee + "(";
         for (size_t i = 0; i < s.args.size(); ++i) {
             res += expToString(*s.args[i]);
             if (i + 1 < s.args.size())
@@ -295,9 +300,9 @@ struct StmtToStringVisitor {
     }
     std::string operator()(const Free& d) const {
         std::string res = indent(indentLevel) + "free ";
-        for (size_t i = 0; i < d.exps.size(); ++i){
+        for (size_t i = 0; i < d.exps.size(); ++i) {
             res += expToString(*d.exps[i]);
-            if (i + 1 < d.exps.size()) 
+            if (i + 1 < d.exps.size())
                 res += ", ";
         }
         return res + ";";
@@ -340,7 +345,7 @@ std::string fdeclToString(const FDecl& f) {
     for (size_t i = 0; i < f.annotations.size(); ++i) {
         oss << "@" << f.annotations[i] << "\n";
     }
-    oss << "fn " << f.fname << "(";
+    oss << "fun " << f.fname << "(";
     for (size_t i = 0; i < f.args.size(); ++i) {
         const auto& p = f.args[i];
         oss << tyToString(p.first) << " " << p.second;

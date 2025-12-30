@@ -11,6 +11,7 @@ and ref_ty =
   | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
+  | RPtr of ty
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -47,7 +48,7 @@ type exp =
   | Float of float * float_ty
   | Str of string
   | Id of id * ty
-  | Call of exp * exp list * ty
+  | Call of id * exp list * ty
   | Bop of binop * exp * exp * ty
   | Uop of unop * exp * ty
   | Index of exp * exp * ty
@@ -55,18 +56,16 @@ type exp =
   | Cast of exp * ty
   | Proj of exp * id * ty
   | ObjInit of id * (id * exp) list
-  | Lambda of (id * ty) list * ret_ty * block
+  | Lambda of (id * ty) list * (id * ty) list * ret_ty * block
   | Null of ty
 
 and vdecl = id * ty * exp * bool
-and ldecl = id * ref_ty * exp
 
 and stmt =
   | Assn of exp * exp * ty
-  | LambdaDecl of ldecl
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
-  | SCall of exp * exp list
+  | SCall of id * exp list
   | If of exp * block * block
   | While of exp * block
   | Free of exp list

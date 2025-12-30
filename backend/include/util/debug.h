@@ -4,7 +4,8 @@
 
 #define PRINT_VAR_TYPE(var)                                                                                            \
     do {                                                                                                               \
-        printf("type of %s: ", #var);                                                                                  \
+        llvm::outs() << "type of " << #var << ": ";                                                                    \
         (var)->print(llvm::outs());                                                                                    \
-        puts("\n");                                                                                                    \
+        llvm::outs() << "\n";                                                                                          \
+        llvm::outs().flush(); /* write immediately */ \
     } while (0)

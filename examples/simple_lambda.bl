@@ -1,0 +1,57 @@
+
+
+@C fun puts(s: string) => void;
+
+/*
+fun takesLambda(lam: [i32, i32] -> i32) => i32 {
+    let temp = lam(3,4);
+    return temp + 1;
+}
+*/
+
+
+fun returnsLambda() => [string, i32] -> i32 { 
+    return fn [](str, x) { 
+        puts(str);
+        return x * 2;
+    };
+}
+
+
+fun main() => i32 {
+    let q = 10;
+    let z = 3;
+    
+    /*
+    let f: [i32, i32] -> i32 = fn [q, z](a, b) {
+        puts("hello from inside lambda!");
+        return a+b*q - z;
+    };
+    */
+    
+
+    //return fn (j:i32,k:i32)->i32{ return j+k; }(4,5);
+
+    //return x;
+
+    /*
+    let f: [i32, i32] -> i32 = fn [q](a, b) {
+        puts("hello world!");
+        return (q*a) + b;
+    };
+    */
+
+    return returnsLambda()("sup", 19);
+
+    //return takesLambda(f);
+
+/*
+    return fn [q, z](a:i32, b: i32) -> i32{
+        return a+b*q - z;
+    }(5,10);
+    */
+    
+    //return f(3,4);
+
+
+}

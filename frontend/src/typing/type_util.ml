@@ -23,16 +23,52 @@ let get_line filename lno =
     l
   with Sys_error _ -> Printf.sprintf "<source unavailable: %s>" filename
 
+let underline_range ~offset ~start_col ~end_col line_len =
+  let s = match start_col with None -> 1 | Some c -> c in
+  let e = match end_col with None -> line_len + 1 | Some c -> c in
+  make_error_underline (s + offset) (e + offset)
+
 let type_error (l : 'a node) err =
-  let filename, (l1, c1), (_l2, c2) = l.loc in
-  let line = get_line filename l1 in
-  let line_indicator = Printf.sprintf "%4d | " l1 in
-  let offset = String.length line_indicator in
-  let underline = make_error_underline (c1 + offset) (c2 + offset) in
+  let filename, (l1, c1), (l2, c2) = l.loc in
+
+  let line_indicator ln = Printf.sprintf "%4d | " ln in
+
+  let get ln =
+    let line = get_line filename ln in
+    let indicator = line_indicator ln in
+    let offset = String.length indicator in
+    (indicator, line, offset)
+  in
+
+  let build ln =
+    let indicator, line, offset = get ln in
+    let underline =
+      if l1 = l2 then
+        underline_range ~offset ~start_col:(Some c1) ~end_col:(Some c2)
+          (String.length line)
+      else if ln = l1 then
+        underline_range ~offset ~start_col:(Some c1) ~end_col:None
+          (String.length line)
+      else if ln = l2 then
+        underline_range ~offset ~start_col:None ~end_col:(Some c2)
+          (String.length line)
+      else
+        underline_range ~offset ~start_col:None ~end_col:None
+          (String.length line)
+    in
+    indicator ^ line ^ "\n" ^ underline
+  in
+
+  let lines =
+    let span = l2 - l1 + 1 in
+    if span <= 5 then List.init span (fun i -> build (l1 + i))
+    else [ build l1; build (l1 + 1); "     | ..."; build (l2 - 1); build l2 ]
+  in
+
   raise
     (TypeError
-       (Printf.sprintf "Error at %s:%d:%d:\n%s%s\n%s\n%s" filename l1 c1
-          line_indicator line underline err))
+       (Printf.sprintf "Error at %s:%d:%d:\n%s\n%s" filename l1 c1
+          (String.concat "\n" lines) err))
 
 let type_failure err = raise (TypeError (Printf.sprintf "Error: %s" err))
 

@@ -4,6 +4,8 @@
 #include <codegen/generator.h>
 #include <codegen/lvalue.h>
 
+#include <util/print.h>
+
 Value* LValueCreator::codegenLValue(const Exp& e) {
     return std::visit(
         [&](auto const& node) -> Value* {
@@ -76,7 +78,7 @@ Value* LValueCreator::getStructFieldPtr(const EProj& e) {
     const Ty& objTy = gen.getExpTy(*e.obj);
 
     if (objTy.tag != TyTag::TRef || objTy.ref_ty->tag != RefTyTag::RClass)
-        throw std::runtime_error("Expected reference type (class)");
+        throw std::runtime_error("Expected reference type (class). Received " + tyToString(objTy));
 
     const CDecl& cd = *gen.classEnv.at(objTy.ref_ty->cname);
 

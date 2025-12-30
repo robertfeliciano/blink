@@ -6,10 +6,10 @@ fun puts(a: string);
     let y: i32;
 
     fun midpt(other: Some_C_Struct) => Some_C_Struct {
-        let x' = (this.x + other.x)/2;
+        let x' = (x + other.x)/2;
         let y': i32;
         puts("Creating new C struct");
-        y' = (this.y + other.y)/2;
+        y' = (y + other.y)/2;
         return new Some_C_Struct { x = x', y = y' };
     }
 }

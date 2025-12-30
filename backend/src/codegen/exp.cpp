@@ -2,6 +2,8 @@
 #include <codegen/generator.h>
 #include <cstdio>
 
+#include <util/debug.h>
+
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
         switch (e.int_ty->uint) {
@@ -61,11 +63,20 @@ Value* ExpToLLVisitor::operator()(const EBool& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EId& e) {
+    // 1. Check local variable environment (alloca/pointers)
     auto it = gen.varEnv.find(e.id);
-    if (it == gen.varEnv.end()) {
-        llvm_unreachable("Unknown identifier");
+    if (it != gen.varEnv.end()) {
+        return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
     }
-    return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
+
+    // 2. Check for a global function in the module
+    if (auto* func = gen.mod->getFunction(e.id)) {
+        // In LLVM, functions are treated as constant pointers to the function code.
+        // We return the function pointer directly without a 'load'.
+        return func;
+    }
+
+    llvm_unreachable(("Unknown identifier: " + e.id).c_str());
 }
 
 Value* ExpToLLVisitor::operator()(const EFloat& e) {
@@ -251,26 +262,50 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
     std::vector<Value*> args;
     args.reserve(e.args.size());
 
+    std::vector<llvm::Type*> argTys;
+    argTys.reserve(e.args.size());
+
     for (const auto& arg : e.args) {
         Value* val = gen.codegenExp(*arg);
         if (!val)
             llvm_unreachable("Failed to create LL argument.");
-
         args.push_back(val);
+
+        const Ty& argTy = gen.getExpTy(*arg);
+        argTys.push_back(gen.codegenType(argTy));
     }
 
-    if (!std::holds_alternative<EId>(e.callee->val))
-        llvm_unreachable("We do not currently support higher-order functions.");
+    const std::string& calleeId = e.callee;
 
-    const EId& idNode = std::get<EId>(e.callee->val);
+    // direct call of a global function
+    if (llvm::Function* calleeFn = gen.mod->getFunction(calleeId)) {
+        return gen.builder->CreateCall(calleeFn, args, "call");
+    }
 
-    llvm::Function* callee = gen.mod->getFunction(idNode.id);
+    // indirect call of a lambda (function pointer)
+    auto it = gen.varEnv.find(calleeId);
+    if (it != gen.varEnv.end()) {
+        llvm::AllocaInst* calleeSlot = it->second;
 
-    if (!callee)
-        llvm_unreachable("Calling unknown function.");
+        // load function pointer
+        Value* calleePtr =
+            gen.builder->CreateLoad(
+                llvm::Type::getInt8PtrTy(*gen.ctxt),
+                calleeSlot,
+                calleeId + "_load");
 
-    return gen.builder->CreateCall(callee, args, "call");
+        llvm::Type* retTy = gen.codegenType(e.ty);
+
+        // get function type
+        llvm::FunctionType* fnTy =
+            llvm::FunctionType::get(retTy, argTys, /*isVarArg=*/false);
+
+        return gen.builder->CreateCall(fnTy, calleePtr, args, "indirect_call");
+    }
+
+    llvm_unreachable(("Unknown callee: " + calleeId).c_str());
 }
+
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
@@ -381,14 +416,11 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
             // float to unsigned int
             return gen.builder->CreateFPToUI(source, destTy, "fptouitmp");
         }
-    }
-
-    else if (sourceTy->isPointerTy() && destTy->isPointerTy()) {
-        // TODO this will require thorough testing
+    } else if (sourceTy->isPointerTy() && destTy->isPointerTy()) {
         return gen.builder->CreateBitCast(source, destTy, "ptrbitcast");
-    }
-
-    else {
+    } else {
+        PRINT_VAR_TYPE(sourceTy);
+        PRINT_VAR_TYPE(destTy);
         throw std::runtime_error("Unsupported cast operation detected in codegen.");
     }
 }
@@ -453,6 +485,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         }
 
         for (auto& stmtPtr : fd.prelude) {
+            // TODO think this goes with codegen exp of fields...
             gen.codegenStmt(*stmtPtr);
         }
 
