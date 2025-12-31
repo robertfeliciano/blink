@@ -1,41 +1,20 @@
-fun takesLambda(f: [i32, i32] -> f64, x: u8) => u64 {
-    return f(2, 3) as u64;
+fun takesLambda(f: [i32, i32] -> i32, x: u8) => i32 {
+    return f(10, 10) + (x as i32);
 }
 
 
-fun main(args: [string; 2]) => u64 {
+fun main(args: [string; 2]) => i32 {
     let z = 12;
 
-/*
-    let l1: [i32, i32] -> f64 = fn [](x, y) {
-        let a = x;
-        let b = y;
-        return (a+b+z) as f64;
+    let f: [i32, i32] -> i32 = fn[z](a, b) {
+        return a + b * z;
     };
-    */
-/*
-    
-    let l2: [i32, i32] -> f64 = fn (a: i32, b: i32) -> f64 {
-        let x = a;
-        let y = b;
-        return (x+y*z) as f64;
-    };
-    */
-    
-    let l3 = fn [z](a: i32, b: i32) -> f64 {
-        let x = a;
-        let y = b;
-        return (x+y+z) as f64;
-    };
-    
-    /*
-    // SHOULD PRODUCE TYPE_ERROR
-    let l4 = fn [](a,b) {
-        let x = a;
-        let y = b;
-        return (x+y) as f64;
-    };
-    */
 
-    return takesLambda(l3, 2 as u8);
+    let y = takesLambda(
+        f, 
+        5 as u8);
+
+    return fn[z](x: i32, y: i32) -> i32 { 
+        return (x*2) + (y*2) + z;
+    }(10,10) + 3;
 }

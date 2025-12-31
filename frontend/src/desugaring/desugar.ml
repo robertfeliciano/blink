@@ -34,9 +34,6 @@ let desugar_program (prog : Typed.program) : program =
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
   let initial_fn_list = List.flatten extracted_methods @ desugared_fns in
-  (* let p_init = Prog (initial_fn_list, structs, desugared_protos) in  *)
-
-  (* Printf.printf "%s\n" (show_desugared_program p_init); *)
   (* thread struct list and accumalte lifted functions while updating 
     fdecl body
     *)

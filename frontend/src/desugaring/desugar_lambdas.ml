@@ -6,6 +6,7 @@ open Desugar_util
   also adds the new lambda-structs to the cdecl list
 *)
 let transform_ty (t : ty) (cs : cdecl list) : ty * cdecl option =
+  (* TODO make this recursively check nested types *)
   match t with
   | TRef (RFun (arg_tys, rty) as r) ->
       let lname = mangle_lambda r in
@@ -272,7 +273,66 @@ and lift_lambdas_from_exps (cs : cdecl list)
           in
           (cs', [], [], None, Some cnv.fptr_var, Id (i, ty'), Some cnv.env_var)
       | None -> (cs, [], [], None, None, e, None))
-  | e -> (cs, [], [], None, None, e, None)
+  | Bop (b, e1, e2, ty) ->
+      (* bop is never between lambdas, no need to transform_ty *)
+      let cs1, fs1, ss1, _, _, e1', _ =
+        lift_lambdas_from_exps cs lctxt None e1
+      in
+      let cs2, fs2, ss2, _, _, e2', _ =
+        lift_lambdas_from_exps cs lctxt None e2
+      in
+      let cs' = add_cdecls cs2 (add_cdecls cs1 cs) in
+      let fs' = fs1 @ fs2 in
+      let ss = ss1 @ ss2 in
+      (cs', fs', ss, None, None, Bop (b, e1', e2', ty), None)
+  | Uop (u, e, ty) ->
+      (* uop is never between lambdas, no need to transform_ty *)
+      let ncs, nfs, ss, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
+      (add_cdecls ncs cs, nfs, ss, None, None, Uop (u, e', ty), None)
+  | Index (coll, idx, ty) ->
+      let ty', ncs_opt = transform_ty ty cs in
+      let coll_cs, coll_fs, coll_ss, _, _, coll', _ =
+        lift_lambdas_from_exps cs lctxt None coll
+      in
+      let idx_cs, idx_fs, idx_ss, _, _, idx', _ =
+        lift_lambdas_from_exps cs lctxt None idx
+      in
+      let tcs =
+        match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
+      in
+      let cs' = add_cdecls idx_cs (add_cdecls coll_cs tcs) in
+      ( cs',
+        coll_fs @ idx_fs,
+        coll_ss @ idx_ss,
+        None,
+        None,
+        Index (coll', idx', ty'),
+        None )
+  | Array (es, ty) ->
+      let ty', nc_opt = transform_ty ty cs in
+      let (ecs, efs, ess), es' =
+        List.fold_left_map
+          (lift_lambdas_from_list lctxt vname_opt)
+          (cs, [], []) es
+      in
+      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let cs' = add_cdecls ecs ncs in
+      (cs', efs, ess, None, None, Array (es', ty'), None)
+  | Cast _ as ce ->
+      (* TODO update typechecker *)
+      (* cannot cast lambdas *)
+      (cs, [], [], None, None, ce, None)
+  | Proj (e, i, ty) ->
+      let ty', nc_opt = transform_ty ty cs in
+      let ecs, efs, ess, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
+      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let cs' = add_cdecls ecs ncs in
+      (cs', efs, ess, None, None, Proj (e', i, ty'), None)
+  | ObjInit _ as oe ->
+      (* no lambdas allowed as class fields *)
+      (cs, [], [], None, None, oe, None)
+  | (Bool _ | Int _ | Float _ | Str _ | Null _) as e ->
+      (cs, [], [], None, None, e, None)
 
 and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
@@ -327,7 +387,29 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
             lctxt,
             ns @ [ Ret (Some e') ] )
       | None -> (cs, fs, lctxt, [ Ret rval ]))
-  | s -> (cs, fs, lctxt, [ s ])
+  | SCall (i, es) ->
+      let (ecs, efs, ess), es' =
+        List.fold_left_map (lift_lambdas_from_list lctxt None) (cs, [], []) es
+      in
+      (ecs, efs, lctxt, ess @ [ SCall (i, es') ])
+  | If (e, tb, eb) ->
+      let ecs, efs, ess, _l, _fptr_opt, e', _env =
+        lift_lambdas_from_exps cs lctxt None e
+      in
+      let tbcs, tbfs, tb' = lift_lambda_from_block cs lctxt tb in
+      let ebcs, ebfs, eb' = lift_lambda_from_block tbcs lctxt eb in
+      let cs' = add_cdecls ebcs (add_cdecls tbcs (add_cdecls ecs cs)) in
+      (cs', efs @ tbfs @ ebfs, lctxt, ess @ [ If (e', tb', eb') ])
+  | While (e, b) ->
+      let ecs, efs, ess, _l, _, e', _ =
+        lift_lambdas_from_exps cs lctxt None e
+      in
+      (* TODO think about updating lctxt *)
+      let cs' = add_cdecls ecs cs in
+      let bcs, bfs, b' = lift_lambda_from_block cs' lctxt b in
+      (add_cdecls bcs cs', efs @ bfs, lctxt, ess @ [ While (e', b') ])
+      (* TODO update typechecking for Free, finish desugar lambdas in Assn *)
+  | (Assn _ | Free _ | Break | Continue) as s -> (cs, fs, lctxt, [ s ])
 
 and lift_lambda_from_block cs lctxt block =
   let final_cs, lifted_fs, _, new_block =

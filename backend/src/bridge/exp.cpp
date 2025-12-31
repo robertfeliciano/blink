@@ -270,7 +270,7 @@ Exp convert_exp(value v) {
             break;
         }
         case Constants::EXP_Lambda: { // Lambda of (id * ty) list * ret_ty * block
-            throw std::runtime_error("Lambdas not supported yet!");
+            throw std::runtime_error("lambdas cannot get to backend!");
         }
         case Constants::EXP_Null: { // Null of ref_ty
             Ty null_ty = convert_ty(Field(v, 0));
