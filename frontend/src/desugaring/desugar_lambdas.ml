@@ -75,7 +75,7 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   (* the lambda must have been assigned to a variable after initial desugaring pass *)
   let vname = match vname_opt with Some v -> v | None -> gensym "lambda" in
   let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-  let vname_env = gensym (vname ^ ".env") in
+  let vname_env = vname ^ ".env" in
   let env_ty = TRef (RClass lifted_lambda_scope) in
   let env_ptr_ty = create_ptr_to env_ty in
   let i8_name = vname_env ^ "i8" in
@@ -111,7 +111,7 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   in
   (* set the fields of the lambda struct *)
   let lambda_ptr_ty = create_ptr_to lty in
-  let new_lambda_fn = gensym (vname ^ "_fun") in
+  let new_lambda_fn = vname ^ ".fun" in
   let set_lambda_struct_fields =
     [
       ("envptr", Id (vname_env, i8_ptr));
@@ -233,7 +233,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
           match ty with
           | TRef (RFun (arg_tys, rty)) ->
               (* calling function that returns a lambda *)
-              let tmp_v = "%tmp_Fn" in
+              let tmp_v = "%fn" in
               let fptr_v = gensym (tmp_v ^ "_fptr") in
               let env_v = gensym (tmp_v ^ "_env") in
               let struct_ty, _ = transform_ty ty ncs in
@@ -266,13 +266,91 @@ and lift_lambdas_from_exps (cs : cdecl list)
   | Id (i, ty) as e -> (
       match List.assoc_opt i lctxt with
       | Some cnv ->
-          (* if we use a lambda variable we already have the necessary things in lctxt *)
+          (* known lambda variable/parameter with converters in lctxt *)
           let ty', ncs_opt = transform_ty ty cs in
           let cs' =
             match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
           in
           (cs', [], [], None, Some cnv.fptr_var, Id (i, ty'), Some cnv.env_var)
-      | None -> (cs, [], [], None, None, e, None))
+      | None -> (
+          match ty with
+          | TRef (RFun (arg_tys, rty)) ->
+              (*  global function being used as an rvalue *)
+              let ty', ncs_opt = transform_ty ty cs in
+              let cs' =
+                match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
+              in
+              let struct_name =
+                match ty' with TRef (RClass cn) -> cn | _ -> ""
+              in
+
+              (* thunk to box the global function *)
+              let thunk_sym = lambdasym (i ^ "_thunk") in
+              let thunk_name = lifted_lambda_name thunk_sym in
+              let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+
+              let arg_names =
+                List.mapi (fun idx _ -> "a" ^ string_of_int idx) arg_tys
+              in
+              let thunk_args =
+                (i8_ptr, gensym "unused_env") :: List.combine arg_tys arg_names
+              in
+
+              let call_exp =
+                Call
+                  ( i,
+                    List.map2 (fun t n -> Id (n, t)) arg_tys arg_names,
+                    match rty with RetVal t -> t | RetVoid -> TBool )
+              in
+
+              let thunk_fdecl =
+                {
+                  annotations = [];
+                  frtyp = rty;
+                  fname = thunk_name;
+                  args = List.map (fun (t, n) -> (t, n)) thunk_args;
+                  body =
+                    [
+                      (match rty with
+                      | RetVoid ->
+                          SCall
+                            ( i,
+                              List.map2 (fun t n -> Id (n, t)) arg_tys arg_names
+                            )
+                      | _ -> Ret (Some call_exp));
+                    ];
+                }
+              in
+
+              let tmp_v = gensym (i ^ "_val") in
+              let env_v = gensym (i ^ "_env") in
+              let l_ptr_ty = create_ptr_to ty in
+
+              let stmts =
+                [
+                  (* global functions have no state, so env is Null *)
+                  Decl (env_v, i8_ptr, Null i8_ptr, true);
+                  Decl
+                    ( tmp_v,
+                      ty',
+                      ObjInit
+                        ( struct_name,
+                          [
+                            ("envptr", Id (env_v, i8_ptr));
+                            ("lambdaptr", Id (thunk_name, l_ptr_ty));
+                          ] ),
+                      true );
+                ]
+              in
+
+              ( cs',
+                [ thunk_fdecl ],
+                stmts,
+                Some (tmp_v, ty'),
+                Some thunk_name,
+                Id (tmp_v, ty'),
+                Some env_v )
+          | _ -> (cs, [], [], None, None, e, None)))
   | Bop (b, e1, e2, ty) ->
       (* bop is never between lambdas, no need to transform_ty *)
       let cs1, fs1, ss1, _, _, e1', _ =
@@ -364,34 +442,25 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let cs' =
         match dnc_opt with Some dnc -> add_cdecl dnc dcs | None -> cs
       in
-      ( cs',
-        (match nfs with [] -> fs | _ -> nfs @ fs),
-        nlctxt,
-        ns @ extra_stmts )
+      (cs', nfs @ fs, nlctxt, ns @ extra_stmts)
   | Decl (vname, ty, e, const) ->
       let cs', nfs, ns, _l, _fptr_opt, ne, _env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
       in
-      ( cs',
-        (match nfs with [] -> fs | _ -> nfs @ fs),
-        lctxt,
-        ns @ [ Decl (vname, ty, ne, const) ] )
+      (cs', nfs @ fs, lctxt, ns @ [ Decl (vname, ty, ne, const) ])
   | Ret rval -> (
       match rval with
       | Some e ->
           let cs', nfs, ns, _l, _fptr_opt, e', _env =
             lift_lambdas_from_exps cs lctxt None e
           in
-          ( cs',
-            (match nfs with [] -> fs | _ -> nfs @ fs),
-            lctxt,
-            ns @ [ Ret (Some e') ] )
+          (cs', nfs @ fs, lctxt, ns @ [ Ret (Some e') ])
       | None -> (cs, fs, lctxt, [ Ret rval ]))
   | SCall (i, es) ->
       let (ecs, efs, ess), es' =
         List.fold_left_map (lift_lambdas_from_list lctxt None) (cs, [], []) es
       in
-      (ecs, efs, lctxt, ess @ [ SCall (i, es') ])
+      (ecs, efs @ fs, lctxt, ess @ [ SCall (i, es') ])
   | If (e, tb, eb) ->
       let ecs, efs, ess, _l, _fptr_opt, e', _env =
         lift_lambdas_from_exps cs lctxt None e
@@ -399,17 +468,67 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let tbcs, tbfs, tb' = lift_lambda_from_block cs lctxt tb in
       let ebcs, ebfs, eb' = lift_lambda_from_block tbcs lctxt eb in
       let cs' = add_cdecls ebcs (add_cdecls tbcs (add_cdecls ecs cs)) in
-      (cs', efs @ tbfs @ ebfs, lctxt, ess @ [ If (e', tb', eb') ])
+      (cs', efs @ tbfs @ ebfs @ fs, lctxt, ess @ [ If (e', tb', eb') ])
   | While (e, b) ->
       let ecs, efs, ess, _l, _, e', _ =
         lift_lambdas_from_exps cs lctxt None e
       in
-      (* TODO think about updating lctxt *)
       let cs' = add_cdecls ecs cs in
       let bcs, bfs, b' = lift_lambda_from_block cs' lctxt b in
-      (add_cdecls bcs cs', efs @ bfs, lctxt, ess @ [ While (e', b') ])
-      (* TODO update typechecking for Free, finish desugar lambdas in Assn *)
-  | (Assn _ | Free _ | Break | Continue) as s -> (cs, fs, lctxt, [ s ])
+      (add_cdecls bcs cs', efs @ bfs @ fs, lctxt, ess @ [ While (e', b') ])
+  | Free es ->
+      let final_cs, final_fs, all_setup_stmts, desugared_exps =
+        List.fold_left
+          (fun (cs_acc, fs_acc, stmts_acc, exps_acc) e ->
+            let ncs, nfs, ns, l_opt, f_ptr_opt, e', env_opt =
+              lift_lambdas_from_exps cs_acc lctxt None e
+            in
+            let final_es =
+              match (l_opt, f_ptr_opt, env_opt) with
+              | _, Some _, Some env_ptr ->
+                  Id (env_ptr, create_ptr_to (TInt (TSigned Ti8)))
+                  (* :: Id (f_ptr, create_ptr_to t) *)
+                  :: exps_acc
+              | _ -> e' :: exps_acc
+            in
+            (ncs, fs_acc @ nfs, stmts_acc @ ns, final_es))
+          (cs, fs, [], []) es
+      in
+
+      (final_cs, final_fs, lctxt, all_setup_stmts @ [ Free desugared_exps ])
+  | Assn (l, r, ty) ->
+      let lcs, lfs, lss, _, _, l', _ = lift_lambdas_from_exps cs lctxt None l in
+      let rcs, rfs, rss, _, fptr_opt, r', env_opt =
+        lift_lambdas_from_exps cs lctxt None r
+      in
+
+      let ty', tc_opt = transform_ty ty cs in
+      let cs' = add_cdecls rcs (add_cdecls lcs cs) in
+      let cs' = match tc_opt with Some tc -> add_cdecl tc cs' | None -> cs' in
+
+      (* update pointers of LHS if we are tracking it *)
+      let extra_assns =
+        match l' with
+        | Id (name, _) -> (
+            match (List.assoc_opt name lctxt, fptr_opt, env_opt) with
+            | Some cnv, Some f_new, Some e_new ->
+                let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+                (* always same ty when re-assigning *)
+                let f_ptr_ty = create_ptr_to ty in
+                [
+                  Assn
+                    (Id (cnv.fptr_var, f_ptr_ty), Id (f_new, f_ptr_ty), f_ptr_ty);
+                  Assn (Id (cnv.env_var, i8_ptr), Id (e_new, i8_ptr), i8_ptr);
+                ]
+            | _ -> [])
+        | _ -> []
+      in
+
+      ( cs',
+        lfs @ rfs @ fs,
+        lctxt,
+        lss @ rss @ [ Assn (l', r', ty') ] @ extra_assns )
+  | (Break | Continue) as s -> (cs, fs, lctxt, [ s ])
 
 and lift_lambda_from_block cs lctxt block =
   let final_cs, lifted_fs, _, new_block =

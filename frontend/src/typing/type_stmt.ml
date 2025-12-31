@@ -211,7 +211,7 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
           (fun acc en ->
             let te, ety = type_exp tc en enclosing_class in
             match ety with
-            | Typed_ast.TRef (RClass _) -> te :: acc
+            | Typed_ast.TRef _ -> te :: acc
             (* other TRefs are on the stack or global (strings) not suited for deletion *)
             | _ -> type_error en "Expected reference type for freeing!")
           [] ens
