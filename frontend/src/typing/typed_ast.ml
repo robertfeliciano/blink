@@ -107,7 +107,7 @@ and stmt =
   | While of exp * block
   | Break
   | Continue
-  | Free of (exp * ty) list
+  | Free of exp list
 
 and block = stmt list
 

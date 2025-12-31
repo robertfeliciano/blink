@@ -131,9 +131,8 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | Break -> [ Break ]
   | Continue -> [ Continue ]
   | Free es ->
-      let sa, des = (List.map (fun (e, _) -> desugar_exp e) es) |> flatten in
-      let dtys = List.map (fun (_, t) -> convert_ty t) es in
-      sa @ [ Free (List.combine des dtys) ]
+      let sa, des = List.map desugar_exp es |> flatten in
+      sa @ [ Free des ]
 
 and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
   (* vdecls may also produce pre-statements now *)

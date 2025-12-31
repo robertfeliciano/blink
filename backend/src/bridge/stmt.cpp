@@ -80,8 +80,7 @@ Stmt convert_stmt(value v) {
                 std::vector<std::unique_ptr<Exp>> exps;
                 value                             exps_v = Field(v, 0);
                 while (exps_v != Val_emptylist) {
-                    value pair = Field(exps_v, 0);
-                    value head = Field(pair, 0);
+                    value head = Field(exps_v, 0);
                     exps.push_back(std::make_unique<Exp>(convert_exp(head)));
                     exps_v = Field(exps_v, 1);
                 }
