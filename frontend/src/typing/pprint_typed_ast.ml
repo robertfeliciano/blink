@@ -256,7 +256,7 @@ and show_stmt ?(lvl = 0) = function
   | Continue -> Printf.sprintf "%sContinue" (indent lvl)
   | Free es ->
       Printf.sprintf "%sFree %s" (indent lvl)
-        (String.concat ", " (List.map show_exp es))
+        (String.concat ", " (List.map (fun (e, _) -> show_exp e) es))
 
 and show_block ?(lvl = 0) b =
   String.concat ";\n" (List.map (fun s -> show_stmt ~lvl s) b)

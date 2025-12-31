@@ -479,17 +479,19 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
   | Free es ->
       let final_cs, final_fs, all_setup_stmts, desugared_exps =
         List.fold_left
-          (fun (cs_acc, fs_acc, stmts_acc, exps_acc) e ->
-            let ncs, nfs, ns, l_opt, f_ptr_opt, e', env_opt =
+          (fun (cs_acc, fs_acc, stmts_acc, exps_acc) (e, t) ->
+            let ncs, nfs, ns, _l_opt, _f_ptr_opt, e', env_opt =
               lift_lambdas_from_exps cs_acc lctxt None e
             in
             let final_es =
-              match (l_opt, f_ptr_opt, env_opt) with
-              | _, Some _, Some env_ptr ->
-                  Id (env_ptr, create_ptr_to (TInt (TSigned Ti8)))
-                  (* :: Id (f_ptr, create_ptr_to t) *)
+              match env_opt with
+              | Some env_ptr ->
+                let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+                let _f_ptr_ty = create_ptr_to t in
+                  (Id (env_ptr, i8_ptr), i8_ptr)
+                  :: (e', t)
                   :: exps_acc
-              | _ -> e' :: exps_acc
+              | _ -> (e', t) :: exps_acc
             in
             (ncs, fs_acc @ nfs, stmts_acc @ ns, final_es))
           (cs, fs, [], []) es

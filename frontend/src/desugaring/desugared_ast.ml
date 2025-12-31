@@ -68,7 +68,7 @@ and stmt =
   | SCall of id * exp list
   | If of exp * block * block
   | While of exp * block
-  | Free of exp list
+  | Free of (exp * ty) list
   | Break
   | Continue
 
