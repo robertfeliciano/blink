@@ -1,0 +1,22 @@
+@C fun puts(s: string) => void;
+
+
+class List {
+    let arr = [0,0,0,0,0,0,0,0,0,0];
+}
+
+
+fun fold_left(f: [i32, i32] -> i32, acc: i32, l: List) => i32 {
+    for n in l.arr {
+        acc = f(n, acc);
+    }
+    return acc;
+}
+
+fun main() => i32 {
+    let sum: [i32, i32] -> i32 = fn (a, b) { return a + b; };
+    let l = new List { arr = [1,2,3,4,5,6,7,8,9,10] };
+    let res = fold_left(sum, 0, l);
+    free sum, l;
+    return res;
+}
