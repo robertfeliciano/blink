@@ -385,13 +385,16 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
   | Array _ -> type_array enclosing_class expected tc e
-  | Cast (e, t) ->
-      let te, e_ty = type_exp tc e enclosing_class in
+  | Cast (ec, t) ->
+      let te, e_ty = type_exp tc ec enclosing_class in
       let tty = convert_ty t in
-      check_expected_ty expected tty e;
+      check_expected_ty expected tty ec;
+      (match t with 
+      | TRef (RFun _) -> type_error e "Cannot cast functions/lambdas."
+      | _ -> ());
       if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
       else
-        type_error e
+        type_error ec
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
          ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
   | Proj (ec, f) -> (

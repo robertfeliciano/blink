@@ -397,7 +397,6 @@ and lift_lambdas_from_exps (cs : cdecl list)
       let cs' = add_cdecls ecs ncs in
       (cs', efs, ess, None, None, Array (es', ty'), None)
   | Cast _ as ce ->
-      (* TODO update typechecker *)
       (* cannot cast lambdas *)
       (cs, [], [], None, None, ce, None)
   | Proj (e, i, ty) ->
