@@ -28,6 +28,8 @@ setup.log
 # Local OPAM switch
 _opam/
 
+blink.opam.locked
+
 src/*.exe
 
 *.so
