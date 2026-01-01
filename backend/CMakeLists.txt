@@ -1,7 +1,7 @@
 # clang++ -std=c++20 -fPIC -shared -Iinclude -I$(ocamlc -where) src/bridge/*.cpp main.cpp -o my_ast_bindings.so
 
 cmake_minimum_required(VERSION 3.16)
-project(my_ast_project LANGUAGES CXX)
+project(blink LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
