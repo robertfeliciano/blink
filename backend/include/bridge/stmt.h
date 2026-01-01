@@ -17,12 +17,6 @@ struct Assn {
     Ty                   ty;
 };
 
-struct LambdaDecl {
-    std::string          id;
-    RefTy                refTy;
-    std::unique_ptr<Exp> lambda;
-};
-
 struct VDecl {
     std::string          id;
     Ty                   ty;

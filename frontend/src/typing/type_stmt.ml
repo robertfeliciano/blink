@@ -10,6 +10,11 @@ The mutual recursion introduced by lambda expressions has forced me to combine e
 into one file. 
 *)
 
+let var_exists stmt_n i tc = 
+  match Tctxt.lookup_local_option i tc with 
+  | Some _ -> type_error stmt_n ("Variable " ^ i ^ " already exists.")
+  | None -> ()
+
 let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
     (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node) (in_loop : bool) :
     Tctxt.t * Typed_ast.stmt * bool =
@@ -17,17 +22,19 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
   match stmt with
   | Decl (_, None, None, _) ->
       type_error stmt_n "Must provide type or initial value."
-      (* TODO check if i exsists in tctxt at any level *)
   | Decl (i, Some ty, None, const) ->
+      var_exists stmt_n i tc;
       let e = create_default_init stmt_n tc ty in
       let e_ty = convert_ty ty in
       let tc' = Tctxt.add_local tc i (e_ty, const) in
       (tc', Typed_ast.Decl (i, e_ty, e, const), false)
   | Decl (i, None, Some en, const) ->
+      var_exists stmt_n i tc;
       let te, e_ty = type_exp tc en enclosing_class in
       let tc', resolved_ty = (Tctxt.add_local tc i (e_ty, const), e_ty) in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
   | Decl (i, Some given_ty_ast, Some en, const) ->
+      var_exists stmt_n i tc;
       let given_ty = convert_ty given_ty_ast in
       let te, e_ty = type_exp ~expected:given_ty tc en enclosing_class in
       let tc', resolved_ty =
@@ -64,7 +71,6 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
                ^ " does not match inferred type " ^ Printer.show_ty e_ty)
       in
       (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  (* | LambdaDecl _ -> failwith "derp" type_lambda tc stmt_n *)
   | Assn (lhs, op, rhs) ->
       (match lhs.elt with
       | Id i -> (

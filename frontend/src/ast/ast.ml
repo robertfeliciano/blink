@@ -303,13 +303,6 @@ and show_vdecl ?(lvl = 0) (id, ty_opt, exp_opt, is_const) =
     (if Option.is_some exp_opt then show_node show_exp (Option.get exp_opt)
      else "<default>")
 
-(* and show_ldecl ?(lvl = 0) (id, ty_opt, exp) =
-  Printf.sprintf "%sLambda{id=%s; ty=%s ;\n%sinit=%s}" (indent lvl)
-    (show_node (fun x -> x) id)
-    (match ty_opt with Some ty -> show_ty ~lvl:(lvl + 1) ty | None -> "None")
-    (indent (lvl + 1))
-    (show_node show_exp exp) *)
-
 (* Statements *)
 
 and show_stmt ?(lvl = 0) = function
@@ -322,7 +315,6 @@ and show_stmt ?(lvl = 0) = function
         (indent (lvl + 1))
         (show_node show_exp rhs)
   | Decl v -> show_vdecl ~lvl v
-  (* | LambdaDecl l -> show_ldecl ~lvl l *)
   | Ret exp_opt ->
       let e_s =
         match exp_opt with Some e -> show_node show_exp e | None -> "None"

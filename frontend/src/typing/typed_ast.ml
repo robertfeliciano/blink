@@ -86,7 +86,6 @@ and vdecl = id * ty * exp * bool
 
 and stmt =
   | Assn of exp * aop * exp * ty
-  (* | LambdaDecl of ldecl *)
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp option
   | SCall of
