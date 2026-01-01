@@ -1,3 +1,5 @@
+.vscode/
+
 *.annot
 *.cmo
 *.cma
@@ -35,7 +37,6 @@ src/*.exe
 *.so
 backend/build/
 
-.vscode/
 
 **/*.ll
 
