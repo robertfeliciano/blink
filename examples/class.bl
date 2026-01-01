@@ -2,9 +2,13 @@ class Point {
     let x: i32 = 0;
     let y: i32 = 0;
 
+    //let f = fn [](a: i32, b: i32) -> i32 { return a + b; };
+
+    /*
     fun distance_squared(other: Point) => i32 {
         return (this.x - other.x)**2 - (this.y - other.y)**2;
     }
+    */
 }
 
 fun main(argv: [string; 2]) => i32 {
@@ -13,5 +17,5 @@ fun main(argv: [string; 2]) => i32 {
     
     let p = new Point { x = 2, y = 4 };
     let p2 = new Point { x = 4, y = 9 };
-    return p.distance_squared(p2);
+    return p.x + p2.x;
 }

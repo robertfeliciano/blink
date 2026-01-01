@@ -62,16 +62,32 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
   let { elt = vd; loc } = fn in
   let fieldName, fty_opt, en_opt, _const = vd in
   let stmt_n = { elt = Decl vd; loc } in
-  let te, e_ty =
-    match (fty_opt, en_opt) with
-    | Some t, Some e -> type_exp ~expected:(convert_ty t) tc e (Some cname)
-    | None, Some e -> type_exp tc e (Some cname)
-    | Some t, None ->
-        let e = create_default_init stmt_n tc t in
-        (e, convert_ty t)
-    | None, None -> type_error stmt_n "Must provide type or initial value."
-  in
-  { fieldName; ftyp = e_ty; init = te }
+  match fty_opt with
+  | Some (TRef (RFun _)) ->
+      type_error stmt_n
+        "Lambdas not allowed at class field level - please use function \
+         instead."
+  | _ -> (
+      match en_opt with
+      | Some { elt = Lambda _; loc = _ } | Some { elt = TypedLambda _; loc = _ }
+        ->
+          type_error stmt_n
+            "Lambdas not allowed at class field level - please use function \
+             instead."
+      | _ ->
+          ();
+          let te, e_ty =
+            match (fty_opt, en_opt) with
+            | Some t, Some e ->
+                type_exp ~expected:(convert_ty t) tc e (Some cname)
+            | None, Some e -> type_exp tc e (Some cname)
+            | Some t, None ->
+                let e = create_default_init stmt_n tc t in
+                (e, convert_ty t)
+            | None, None ->
+                type_error stmt_n "Must provide type or initial value."
+          in
+          { fieldName; ftyp = e_ty; init = te })
 
 let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
   let { elt = { annotations; cname; impls; fields; methods }; loc = _ } = cn in
@@ -198,7 +214,6 @@ let check_undefined_protos tc =
   let unique_protos =
     List.fold_right
       (fun (id, data) acc ->
-        (* TODO maybe use a set to keep track for faster lookup*)
         if List.mem_assoc id acc then acc else (id, snd data) :: acc)
       tc.protos []
   in

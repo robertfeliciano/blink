@@ -10,8 +10,8 @@ The mutual recursion introduced by lambda expressions has forced me to combine e
 into one file. 
 *)
 
-let var_exists stmt_n i tc = 
-  match Tctxt.lookup_local_option i tc with 
+let var_exists stmt_n i tc =
+  match Tctxt.lookup_local_option i tc with
   | Some _ -> type_error stmt_n ("Variable " ^ i ^ " already exists.")
   | None -> ()
 
