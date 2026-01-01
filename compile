@@ -35,7 +35,7 @@ run_blink() {
 }
 
 compile_ll_to_s() {
-    if ! llc "$LLVM_LL" -o "$LLVM_S"; then
+    if ! llc --relocation-model=pic "$LLVM_LL" -o "$LLVM_S"; then
         printf "Error: llc failed\n" >&2
         return 1
     fi
