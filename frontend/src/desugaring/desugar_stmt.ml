@@ -84,20 +84,52 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
             [ step_inc ] )
       in
       prelude @ [ step_decl; iter_decl; zero_check ]
-  | ForEach (iter, collection, of_ty, body) ->
+  | ForEach (iter, collection, coll_ty, body) -> (
       let coll_stmts, coll' = desugar_exp collection in
-      (* let cond = D.Call (Proj (coll', Methods.hasNext, TBool), [], TBool) in *)
-      let cond = D.Call (Methods.hasNext, [], TBool) in
-      let of_ty = convert_ty of_ty in
-      let set_iter =
-        D.Assn
-          ( Id (iter, of_ty),
-            Call (Methods.iterate, [ coll' ], of_ty),
-            (* Call (Proj (coll', Methods.iterate, of_ty), [], of_ty), *)
-            TBool )
-      in
-      let body' = set_iter :: desugar_block body in
-      coll_stmts @ [ While (cond, body') ]
+      let cty = convert_ty coll_ty in
+      match cty with
+      | TRef (RArray (elem_ty, size)) as d_coll_ty ->
+          let i_name = gensym "idx" in
+          let c_name = gensym "arr" in
+          let i32 = D.TInt (TSigned Ti32) in
+
+          let arr_decl = D.Decl (c_name, d_coll_ty, coll', true) in
+
+          let idx_decl =
+            D.Decl (i_name, i32, D.Int ("0", TSigned Ti32), false)
+          in
+
+          let idx_id = D.Id (i_name, i32) in
+          let arr_id = D.Id (c_name, d_coll_ty) in
+
+          (* condition: idx < len(coll) *)
+          let cond =
+            D.Bop (Lt, idx_id, D.Int (string_of_int size, TSigned Ti32), TBool)
+          in
+
+          (* iter =  coll[idx]*)
+          let iter_setup =
+            D.(Decl (iter, elem_ty, Index (arr_id, idx_id, elem_ty), false))
+          in
+
+          (* incr idx *)
+          let increment =
+            D.(
+              Assn (idx_id, Bop (Add, idx_id, Int ("1", TSigned Ti32), i32), i32))
+          in
+
+          let body' = [ iter_setup ] @ desugar_block body @ [ increment ] in
+          coll_stmts @ [ arr_decl; idx_decl; While (cond, body') ]
+      | _ ->
+          (* must be some kind of class that implements these methods *)
+          (* TODO need to mangle these methods *)
+          let cond = D.Call (Methods.hasNext, [], TBool) in
+          let set_iter =
+            (* todo check cty *)
+            D.Decl (iter, cty, D.Call (Methods.iterate, [ coll' ], cty), false)
+          in
+          let body' = set_iter :: desugar_block body in
+          coll_stmts @ [ While (cond, body') ])
   | While (cond, body) ->
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
