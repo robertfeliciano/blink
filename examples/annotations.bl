@@ -1,16 +1,15 @@
 @C
 fun puts(a: string);
 
-@C class Some_C_Struct {
+class Point {
     let x: i32; 
     let y: i32;
 
-    fun midpt(other: Some_C_Struct) => Some_C_Struct {
+    fun midpt(other: Point) => Point {
         let x' = (x + other.x)/2;
-        let y': i32;
-        puts("Creating new C struct");
-        y' = (y + other.y)/2;
-        return new Some_C_Struct { x = x', y = y' };
+        let y' = (y + other.y)/2;
+        puts("Creating midpoint struct");
+        return new Point { x = x', y = y' };
     }
 }
 
@@ -20,12 +19,14 @@ fun midpt(a: i32, b: i32) => i32 {
 
 fun main() => i32 {
     puts("Hello, World!");
-    let p = new Some_C_Struct { x = 10, y = 10 };
-    let p2 = new Some_C_Struct { x = 20, y = 20 };
+    let p = new Point { x = 10, y = 10 };
+    let p2 = new Point { x = 20, y = 20 };
+
     let o' = midpt(10, 0);
     let mp = p.midpt(p2);
+
     let retVal = mp.x + o';
     free p, p2, mp;
+    
     return retVal;
-    //return 0;
 }

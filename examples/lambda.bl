@@ -1,8 +1,8 @@
-/*
+
 fun takesLambda(f: [i32, i32] -> i32, x: u8) => i32 {
     return f(10, 10) + (x as i32);
 }
-*/
+
 
 fun addTwoNumbers(a: i32, b: i32) => i32 { 
     return a + b;
@@ -10,26 +10,15 @@ fun addTwoNumbers(a: i32, b: i32) => i32 {
 
 
 fun main(args: [string; 2]) => i32 {
-    let z = 12;
-
-    let f: [i32, i32] -> i32 = fn[z](a, b) {
-        return a + b * z;
+    let tmp = takesLambda(addTwoNumbers, 5 as u8);
+    let x = 10;
+    let mult = fn [x](a:i32, b:i32) -> i32 {
+        return (a * b) + x;
     };
 
+    let tmp2 = takesLambda(mult, 5 as u8);
 
-    //f = fn (x, y) { return x * y; };
-    //f = addTwoNumbers;
-    let res = f(3, 4);
-    free f;
-    return res;
-
-    /*
-    let y = takesLambda(
-        f, 
-        5 as u8);
+    free mult;
     
-    return fn[z](x: i32, y: i32) -> i32 { 
-        return (x*2) + (y*2) + z;
-    }(10,10) + 3;
-    */
+    return tmp + tmp2;
 }
