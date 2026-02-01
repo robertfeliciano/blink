@@ -1,3 +1,4 @@
+@C fun puts(s: string);
 
 fun takesLambda(f: [i32, i32] -> i32, x: u8) => i32 {
     return f(10, 10) + (x as i32);
@@ -8,17 +9,18 @@ fun addTwoNumbers(a: i32, b: i32) => i32 {
     return a + b;
 }
 
-
 fun main(args: [string; 2]) => i32 {
-    let tmp = takesLambda(addTwoNumbers, 5 as u8);
+    let box = addTwoNumbers;
+    let tmp = takesLambda(box, 5 as u8);
     let x = 10;
     let mult = fn [x](a:i32, b:i32) -> i32 {
+        puts("hello from lambda!");
         return (a * b) + x;
     };
 
     let tmp2 = takesLambda(mult, 5 as u8);
 
-    free mult;
+    free mult, box;
     
     return tmp + tmp2;
 }
