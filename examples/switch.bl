@@ -1,0 +1,20 @@
+@C fun puts(s: string) => void;
+
+
+fun main() => i32 {
+    let x = 10;
+    switch x {
+        case 1: {
+            puts("hi");
+            return 10;
+        }
+        case 10: {
+            puts("hello!");
+            return 5;
+        }
+        default: {
+            puts("hmmm...");
+            return 100;
+        }
+    }
+}

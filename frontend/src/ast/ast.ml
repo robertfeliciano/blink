@@ -113,6 +113,7 @@ and stmt =
       * exp node option
       * block
   | While of exp node * block
+  | Switch of exp node * (exp node option * block) list
   | Break
   | Continue
   | Free of exp node list
@@ -343,6 +344,21 @@ and show_stmt ?(lvl = 0) = function
         (String.concat ";\n"
            (List.map (show_node_stmt ~lvl:(lvl + 2)) else_block))
         (indent lvl)
+  
+  | Switch (v, cases) -> 
+    Printf.sprintf "%sSwitch(\n%svar=%s,\ncases=%s)"
+      (indent lvl)
+      (indent (lvl + 1))
+      (show_node show_exp v)
+      (String.concat ";\n"
+          (List.map (fun (eno, body) -> 
+            let case_head = match eno with 
+            | Some en -> Printf.sprintf "case %s" (show_node show_exp en)
+            | None -> "default" in 
+            let case_body = 
+              (String.concat "" (List.map (show_node_stmt ~lvl:(lvl + 2)) body))
+            in Printf.sprintf "%s: {\n%s%s\n%s}" case_head (indent (lvl+1)) case_body (indent (lvl+1))
+            ) cases))
   | ForEach (id, start, body) ->
       Printf.sprintf "%sForEach(%s in %s) [\n%s\n%s]" (indent lvl)
         (show_node (fun x -> x) id)
@@ -367,6 +383,7 @@ and show_stmt ?(lvl = 0) = function
   | Free es ->
       Printf.sprintf "%sFree %s" (indent lvl)
         (String.concat ", " (List.map (show_node show_exp) es))
+
 
 and show_node_stmt ?(lvl = 0) stmt_node =
   Printf.sprintf "%s;\n" (show_node (show_stmt ~lvl) stmt_node)

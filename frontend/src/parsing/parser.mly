@@ -99,6 +99,9 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token BREAK     /* break */
 %token CONT      /* continue */
 %token RETURN    /* return */
+%token SWITCH
+%token CASE
+%token DEFAULT
 // %token STATIC    /* static */
 %token TRUE      /* true */
 %token FALSE     /* false */
@@ -487,6 +490,12 @@ by_step:
    Statements
    ----------------------- *)
 
+case_block:
+  | CASE e=exp COLON b=block
+    { (Some e, b) }
+  | DEFAULT COLON b=block
+    { (None, b) }
+
 stmt:
   | d=vdecl SEMI
       { loc $startpos $endpos @@ Decl(d) }
@@ -498,6 +507,8 @@ stmt:
       { ifs }
   | RETURN e=exp? SEMI
       { loc $startpos $endpos @@ Ret(e) }
+  | SWITCH e=exp LBRACE cases=list(case_block) RBRACE
+      { loc $startpos $endpos @@ Switch(e, cases) }
   | WHILE e=exp b=block
       { loc $startpos $endpos @@ While(e, b) }
   | FOR iter=iterator IN iterable=exp b=block

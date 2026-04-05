@@ -144,6 +144,7 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
         type_block tc frtyp else_branch in_loop enclosing_class
       in
       (tc, Typed_ast.If (tcond, t_then, t_else), if_ret && else_ret)
+  | Switch _ -> failwith "switch not implemented yet"
   | While (cond, body) ->
       let tcond, cond_ty = type_exp ~expected:TBool tc cond enclosing_class in
       if cond_ty <> Typed_ast.TBool then

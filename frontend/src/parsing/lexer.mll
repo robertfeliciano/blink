@@ -111,6 +111,9 @@ rule read = parse
   | "break" { BREAK }
   | "continue" { CONT }
   | "return" { RETURN }
+  | "switch" { SWITCH }
+  | "case" { CASE }
+  | "default" { DEFAULT }
   (* | "static" { STATIC } *)
   | "true" { TRUE }
   | "false" { FALSE }
