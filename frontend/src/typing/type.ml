@@ -89,8 +89,9 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
           in
           { fieldName; ftyp = e_ty; init = te })
 
-let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
-  let { elt = { annotations; cname; impls; fields; methods }; loc = _ } = cn in
+let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list)
+    (cn : cdecl node) : Typed_ast.cdecl =
+  let { elt = { annotations; cname; impls; methods; _ }; loc = _ } = cn in
   let () =
     match
       List.find_opt
@@ -103,7 +104,6 @@ let type_class (tc : Tctxt.t) (cn : cdecl node) : Typed_ast.cdecl =
         else ()
     | None -> ()
   in
-  let tfields = List.map (type_field tc cname) fields in
   let globals' =
     List.map
       (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false)))
@@ -178,13 +178,14 @@ let create_fn_ctxt (tc : Tctxt.t) (fns : fdecl node list) : Tctxt.t =
   in
   aux tc fns
 
-let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
+let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) :
+    Tctxt.t * Typed_ast.field list list =
   let get_method_header ({ fname; frtyp; args; _ } : fdecl) : method_header =
     ( fname,
       convert_ret_ty frtyp,
       List.map (fun (t, name) -> (convert_ty t, name)) args )
   in
-  let rec aux (tc : Tctxt.t) = function
+  let rec aux (tc : Tctxt.t) typed_fields = function
     | cn :: t -> (
         match lookup_class_option cn.elt.cname tc with
         | Some _ ->
@@ -192,23 +193,22 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
               ("Class with name " ^ cn.elt.cname ^ " already exists.")
         | None ->
             let cname = cn.elt.cname in
+            let tfields = List.map (type_field tc cname) cn.elt.fields in
             let fields =
               List.map
-                (fun fn ->
-                  let { elt = cid, _ty_opt, en_opt, const; loc = _ } = fn in
-                  (* TODO figure out how to not call type_field twice... *)
-                  let fld = type_field tc cid fn in
+                (fun (fn, (fld : Typed_ast.field)) ->
+                  let { elt = _, _ty_opt, en_opt, const; loc = _ } = fn in
                   (fld.fieldName, fld.ftyp, const, Option.is_some en_opt))
-                cn.elt.fields
+                (List.combine cn.elt.fields tfields)
             in
             let method_headers =
               List.map (fun mn -> get_method_header mn.elt) cn.elt.methods
             in
             let new_tc = Tctxt.add_class tc cname fields method_headers in
-            aux new_tc t)
-    | [] -> tc
+            aux new_tc (tfields :: typed_fields) t)
+    | [] -> (tc, List.rev typed_fields)
   in
-  aux tc cns
+  aux tc [] cns
 
 let check_undefined_protos tc =
   let unique_protos =
@@ -230,11 +230,11 @@ let check_undefined_protos tc =
 let type_program (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   let (Prog (fns, cns, pns)) = prog in
-  let cc = create_class_ctxt Tctxt.empty cns in
+  let cc, typed_fields = create_class_ctxt Tctxt.empty cns in
   let pc = create_proto_ctxt cc pns in
   let fc = create_fn_ctxt pc fns in
   check_undefined_protos fc;
-  let typed_classes = List.map (type_class fc) cns in
+  let typed_classes = List.map2 (type_class fc) typed_fields cns in
   let typed_protos = List.map (type_proto fc) pns in
   let typed_funs = List.map (type_fn fc) fns in
   Prog (typed_funs, typed_classes, typed_protos)
