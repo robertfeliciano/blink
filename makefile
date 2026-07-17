@@ -3,10 +3,8 @@
 all: backend frontend
 
 backend: 
-	@if [ ! -d backend/build ]; then \
-		cd backend && ./builder; \
-	fi
-	cd backend/build && make -j$(nproc)
+	cmake -S backend -B backend/build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+	cmake --build backend/build --parallel
 
 frontend: 
 	cd frontend && dune build && mv ./_build/default/src/blink.exe ../blink -f

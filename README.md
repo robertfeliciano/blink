@@ -1,6 +1,43 @@
 # Blink
 and you'll miss it...
 
+## Develop with Docker
+
+The development image contains the complete Blink toolchain: OCaml 4.14.2,
+opam and the frontend packages, LLVM/Clang 16, CMake, and the native build
+dependencies. The repository is mounted into the container, so edits made on
+the host are immediately available inside it.
+
+Build the image and open a shell:
+
+```sh
+docker compose build
+docker compose run --rm dev
+```
+
+Then build and test Blink from the container shell:
+
+```sh
+make
+cd frontend && dune runtest && cd ..
+./compile examples/simple.bl
+./new_output.o
+```
+
+After changing source code, run `make` again. Rebuild the image only when the
+Dockerfile or `frontend/blink.opam` dependencies change:
+
+```sh
+docker compose build
+```
+
+The container user defaults to UID/GID 1000 so generated files remain editable
+on most Linux hosts. If your IDs differ, pass them when building:
+
+```sh
+USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose build
+```
+
 ## How to build this project
 
 ### Dependencies
