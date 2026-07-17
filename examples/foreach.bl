@@ -1,10 +1,6 @@
-@C fun puts(s: string) => void;
-
-
 class List {
-    let arr = [0,0,0,0,0,0,0,0,0,0];
+    let arr: [i32; 10];
 }
-
 
 fun fold_left(f: [i32, i32] -> i32, acc: i32, l: List) => i32 {
     for n in l.arr {

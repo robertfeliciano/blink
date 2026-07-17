@@ -1,0 +1,1 @@
+this project uses llvm 16. this is not good because this version is severely outdated, i want to use the latest and greatest version which is LLVM 22.1.0 follow the steps in the README of this to install this newer version or research online how to install. the only difference is we must install this version of LLVM

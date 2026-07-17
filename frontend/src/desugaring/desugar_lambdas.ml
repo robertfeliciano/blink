@@ -377,10 +377,19 @@ and lift_lambdas_from_exps (cs : cdecl list)
 
 and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
-  | Decl (vname, (TRef (RFun (args, rty)) as ty), e, _const) ->
+  | Decl (vname, (TRef (RFun (args, rty)) as ty), e, const) ->
       (*  lift lambda from initialization exp *)
       let ncs, nfs, ns, _l, fptr_opt, ne, env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
+      in
+      (* update ty of decl if necessary *)
+      let ty', dnc_opt = transform_ty ty ncs in
+      let ns_with_decl =
+        match ne with
+        | Id (name, _) when name = vname -> ns
+        | _ ->
+            (* Box a global function when it initializes a local lambda value. *)
+            ns @ [ Decl (vname, ty', ne, const) ]
       in
       let fptr, env, extra_stmts =
         match (fptr_opt, env_opt) with
@@ -398,14 +407,12 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
               ] )
       in
       let dcs = add_cdecls ncs cs in
-      (* update ty of decl if necessary *)
-      let _ty', dnc_opt = transform_ty ty ncs in
       (* if this variable is a lambda, add it to our context for Call sites *)
       let nlctxt = (vname, { fptr_var = fptr; env_var = env }) :: lctxt in
       let cs' =
         match dnc_opt with Some dnc -> add_cdecl dnc dcs | None -> cs
       in
-      (cs', nfs @ fs, nlctxt, ns @ extra_stmts)
+      (cs', nfs @ fs, nlctxt, ns_with_decl @ extra_stmts)
   | Decl (vname, ty, e, const) ->
       let cs', nfs, ns, _l, _fptr_opt, ne, _env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
@@ -460,7 +467,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       (final_cs, final_fs, lctxt, all_setup_stmts @ [ Free desugared_exps ])
   | Assn (l, r, ty) ->
       let lcs, lfs, lss, _, _, l', _ = lift_lambdas_from_exps cs lctxt None l in
-      let rcs, rfs, rss, _, fptr_opt, r', env_opt =
+      let rcs, rfs, rss, _, _fptr_opt, r', _env_opt =
         lift_lambdas_from_exps cs lctxt None r
       in
 
@@ -468,28 +475,8 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let cs' = add_cdecls rcs (add_cdecls lcs cs) in
       let cs' = match tc_opt with Some tc -> add_cdecl tc cs' | None -> cs' in
 
-      (* update pointers of LHS if we are tracking it *)
-      let extra_assns =
-        match l' with
-        | Id (name, _) -> (
-            match (List.assoc_opt name lctxt, fptr_opt, env_opt) with
-            | Some cnv, Some f_new, Some e_new ->
-                let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-                (* always same ty when re-assigning *)
-                let f_ptr_ty = create_ptr_to ty in
-                [
-                  Assn
-                    (Id (cnv.fptr_var, f_ptr_ty), Id (f_new, f_ptr_ty), f_ptr_ty);
-                  Assn (Id (cnv.env_var, i8_ptr), Id (e_new, i8_ptr), i8_ptr);
-                ]
-            | _ -> [])
-        | _ -> []
-      in
-
-      ( cs',
-        lfs @ rfs @ fs,
-        lctxt,
-        lss @ rss @ [ Assn (l', r', ty') ] @ extra_assns )
+      (* TODO: update the lambda context when reassigning a lambda value. *)
+      (cs', lfs @ rfs @ fs, lctxt, lss @ rss @ [ Assn (l', r', ty') ])
   | (Break | Continue) as s -> (cs, fs, lctxt, [ s ])
 
 and lift_lambda_from_block cs lctxt block =
