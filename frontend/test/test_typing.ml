@@ -183,16 +183,16 @@ let test_object_initialization _ =
   assert_program_type_checks
     "class Box { let value: i32 = 0; }\n\
      fun main() => i32 {\n\
-     \  let box = new Box { value = 9 };\n\
-     \  return box.value;\n\
+    \  let box = new Box { value = 9 };\n\
+    \  return box.value;\n\
      }"
 
 let test_object_rejects_unknown_field _ =
   assert_program_type_error
     "class Box { let value: i32 = 0; }\n\
      fun main() => i32 {\n\
-     \  let box = new Box { missing = 9 };\n\
-     \  return box.value;\n\
+    \  let box = new Box { missing = 9 };\n\
+    \  return box.value;\n\
      }"
 
 let test_capturing_lambda _ =

@@ -187,6 +187,79 @@ let test_lambda_lifting _ =
         (Printf.sprintf "unexpected lambda lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let rec exp_contains_lambda (exp : DA.exp) =
+  match exp with
+  | DA.Lambda _ -> true
+  | DA.Call (_, args, _) | DA.Array (args, _) ->
+      List.exists exp_contains_lambda args
+  | DA.ObjInit (_, fields) ->
+      List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
+  | DA.Bop (_, lhs, rhs, _) ->
+      exp_contains_lambda lhs || exp_contains_lambda rhs
+  | DA.Uop (_, exp, _) | DA.Cast (exp, _) | DA.Proj (exp, _, _) ->
+      exp_contains_lambda exp
+  | DA.Index (collection, index, _) ->
+      exp_contains_lambda collection || exp_contains_lambda index
+  | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
+
+let rec stmt_contains_lambda (stmt : DA.stmt) =
+  match stmt with
+  | DA.Assn (lhs, rhs, _) -> exp_contains_lambda lhs || exp_contains_lambda rhs
+  | DA.Decl (_, _, init, _) -> exp_contains_lambda init
+  | DA.Ret (Some exp) -> exp_contains_lambda exp
+  | DA.Ret None -> false
+  | DA.SCall (_, args) | DA.Free args -> List.exists exp_contains_lambda args
+  | DA.If (cond, then_block, else_block) ->
+      exp_contains_lambda cond
+      || List.exists stmt_contains_lambda then_block
+      || List.exists stmt_contains_lambda else_block
+  | DA.While (cond, body) ->
+      exp_contains_lambda cond || List.exists stmt_contains_lambda body
+  | DA.Break | DA.Continue -> false
+
+let test_nested_lambda_lifting _ =
+  let source =
+    {|
+fun main() => i32 {
+    let x: i32 = 10;
+    let outer: [i32] -> i32 = fn [x](y) {
+        let inner: [i32] -> i32 = fn [x, y](z) {
+            return x + y + z;
+        };
+        return inner(3);
+    };
+    return outer(2);
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (functions, classes, []) ->
+      let lifted_functions =
+        List.filter
+          (fun (fn : DA.fdecl) ->
+            Core.String.is_prefix fn.fname ~prefix:"Lifted")
+          functions
+      in
+      let environment_structs =
+        List.filter
+          (fun (class_ : DA.cdecl) ->
+            Core.String.is_prefix class_.cname ~prefix:"Env")
+          classes
+      in
+      assert_equal ~msg:"both lambdas should be lifted" 2
+        (List.length lifted_functions);
+      assert_equal ~msg:"both closures should have environments" 2
+        (List.length environment_structs);
+      assert_bool "no lambda expressions should remain"
+        (not
+           (List.exists
+              (fun (fn : DA.fdecl) -> List.exists stmt_contains_lambda fn.body)
+              functions))
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected nested lambda lowering:\n%s"
+           (Printer.show_desugared_program program))
+
 let suite =
   let pipeline_tests =
     List.map
@@ -201,5 +274,6 @@ let suite =
          "array foreach" >:: test_array_foreach;
          "class method extraction" >:: test_class_method_extraction;
          "lambda lifting" >:: test_lambda_lifting;
+         "nested lambda lifting" >:: test_nested_lambda_lifting;
          "parsed and typed programs" >::: pipeline_tests;
        ]

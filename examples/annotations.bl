@@ -27,6 +27,6 @@ fun main() => i32 {
 
     let retVal = mp.x + o';
     free p, p2, mp;
-    
+
     return retVal;
 }

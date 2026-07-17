@@ -19,7 +19,8 @@ let assert_success_silently label command =
   let stdout_file = "command.stdout" in
   let stderr_file = "command.stderr" in
   let redirected =
-    Printf.sprintf "%s > %s 2> %s" command (Filename.quote stdout_file)
+    Printf.sprintf "%s > %s 2> %s" command
+      (Filename.quote stdout_file)
       (Filename.quote stderr_file)
   in
   match Core_unix.system redirected with
@@ -29,8 +30,9 @@ let assert_success_silently label command =
       let stderr = Core.In_channel.read_all stderr_file in
       assert_failure
         (Printf.sprintf "%s failed: %s\nstdout:\n%s\nstderr:\n%s\ncommand: %s"
-           label (Core_unix.Exit_or_signal.to_string_hum status) stdout stderr
-           command)
+           label
+           (Core_unix.Exit_or_signal.to_string_hum status)
+           stdout stderr command)
 
 let assert_exit_code expected command =
   match (expected, Core_unix.system command) with

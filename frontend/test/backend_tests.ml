@@ -15,7 +15,9 @@ let test_fixture fixture test_context =
     Native_test_support.executable_path "backend_fixture_compiler.exe"
   in
   Native_test_support.in_temp_dir
-    ~prefix:("blink-backend-" ^ fixture.name ^ "-") test_context (fun () ->
+    ~prefix:("blink-backend-" ^ fixture.name ^ "-")
+    test_context
+    (fun () ->
       let command =
         Printf.sprintf "%s %s" (Filename.quote compiler)
           (Filename.quote fixture.name)

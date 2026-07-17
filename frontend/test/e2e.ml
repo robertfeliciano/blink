@@ -108,8 +108,10 @@ let check_frontend_stages fixture =
 let test_fixture fixture test_context =
   check_frontend_stages fixture;
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
-  Native_test_support.in_temp_dir ~prefix:("blink-" ^ fixture.name ^ "-")
-    test_context (fun () ->
+  Native_test_support.in_temp_dir
+    ~prefix:("blink-" ^ fixture.name ^ "-")
+    test_context
+    (fun () ->
       Core.Out_channel.write_all "program.bl" ~data:fixture.source;
       let compile_command =
         Printf.sprintf "%s %s" (Filename.quote compiler)
@@ -117,8 +119,7 @@ let test_fixture fixture test_context =
       in
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
-      Native_test_support.compile_and_run
-        ~expected_exit:fixture.expected_exit)
+      Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
 
 let test_parse_failure_stops_at_parser _ =
   let source = "fun main( => i32 { return 1; }" in

@@ -4,14 +4,7 @@ let i32 = DA.TInt (DA.TSigned DA.Ti32)
 let int value = DA.Int (string_of_int value, DA.TSigned DA.Ti32)
 
 let function_ ?(args = []) name body =
-  DA.
-    {
-      annotations = [];
-      frtyp = RetVal i32;
-      fname = name;
-      args;
-      body;
-    }
+  DA.{ annotations = []; frtyp = RetVal i32; fname = name; args; body }
 
 let arithmetic () =
   let result = DA.Bop (DA.Add, int 20, int 22, i32) in
@@ -19,11 +12,10 @@ let arithmetic () =
 
 let function_call () =
   let double =
-    function_ ~args:[ (i32, "value") ] "double"
-      [
-        DA.Ret
-          (Some (DA.Bop (DA.Mul, DA.Id ("value", i32), int 2, i32)));
-      ]
+    function_
+      ~args:[ (i32, "value") ]
+      "double"
+      [ DA.Ret (Some (DA.Bop (DA.Mul, DA.Id ("value", i32), int 2, i32))) ]
   in
   let main =
     function_ "main" [ DA.Ret (Some (DA.Call ("double", [ int 21 ], i32))) ]
@@ -35,12 +27,8 @@ let array_index () =
   let body =
     [
       DA.Decl
-        ( "values",
-          array_ty,
-          DA.Array ([ int 4; int 8; int 15 ], array_ty),
-          true );
-      DA.Ret
-        (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
+        ("values", array_ty, DA.Array ([ int 4; int 8; int 15 ], array_ty), true);
+      DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
   DA.Prog ([ function_ "main" body ], [], [])
