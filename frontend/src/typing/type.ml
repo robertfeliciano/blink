@@ -89,8 +89,8 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
           in
           { fieldName; ftyp = e_ty; init = te })
 
-let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list)
-    (cn : cdecl node) : Typed_ast.cdecl =
+let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
+    : Typed_ast.cdecl =
   let { elt = { annotations; cname; impls; methods; _ }; loc = _ } = cn in
   let () =
     match

@@ -389,7 +389,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let te, e_ty = type_exp tc ec enclosing_class in
       let tty = convert_ty t in
       check_expected_ty expected tty ec;
-      (match t with 
+      (match t with
       | TRef (RFun _) -> type_error e "Cannot cast functions/lambdas."
       | _ -> ());
       if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)

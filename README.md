@@ -19,7 +19,7 @@ Then build and test Blink from the container shell:
 
 ```sh
 make
-cd frontend && dune runtest && cd ..
+make test
 ./compile examples/simple.bl
 ./new_output.o
 ```
@@ -80,6 +80,37 @@ sudo ninja install
 Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`.
 
 To build the frontend, you can simply run `dune build` in `frontend/`. 
+
+### Tests
+
+Run all frontend unit tests and compiler end-to-end tests from the repository
+root:
+
+```sh
+make test
+```
+
+For a quicker development loop, the suites can be run separately:
+
+```sh
+make test-unit
+make test-e2e
+make test-backend
+```
+
+The end-to-end suite checks parsing, type checking, and desugaring before it
+invokes the Blink compiler, lowers the generated LLVM IR with `llc`, links it
+with `clang`, and asserts the native program's exit status. Each case uses an
+OUnit-managed temporary directory, so generated `.ll` files, object files, and
+executables are removed automatically and never written into the repository.
+The end-to-end suite therefore requires the complete backend/LLVM toolchain;
+run `make` first after a clean checkout.
+
+The backend-only suite skips parsing, type checking, and desugaring. Its helper
+constructs `Desugared_ast.program` values directly in OCaml and passes them to
+the C++ bridge/code generator, then links and runs the result. This isolates
+bridge and LLVM codegen behavior while retaining the same temporary-directory
+cleanup and exit-status assertions as the full end-to-end suite.
 
 ### How to Use Blink
 Take a look at the examples in `examples/`. You can compile a program to an executable using `./compile` which will generate `new_output.o`. Take a look at the compile script if you want to customize the final executable.
