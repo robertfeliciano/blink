@@ -1,10 +1,8 @@
 open Desugared_ast
 open Desugar_util
-(* open Pprint_desugared_ast *)
 
-(* transforms lambda types into their corresponding struct types
-  also adds the new lambda-structs to the cdecl list
-*)
+(** Replace a function value with its closure-struct representation. The caller
+    is responsible for adding the returned declaration to the program. *)
 let transform_ty (t : ty) (cs : cdecl list) : ty * cdecl option =
   (* TODO make this recursively check nested types *)
   match t with
@@ -27,13 +25,13 @@ let transform_ret_ty (rt : ret_ty) (cs : cdecl list) : ret_ty * cdecl option =
       (RetVal t', cd_opt)
   | RetVoid -> (RetVoid, None)
 
-type lifted_lambda_result = {
-  lambda_structs : cdecl list; (* (env_struct, lstruct_cdecl) *)
-  lifted_fdecl : fdecl; (* The actual lifted function *)
-  setup_stmts : stmt list; (* Decls for env and lambda structs *)
-  lambda_var : id * ty; (* The struct instance (vname, lstruct_ty) *)
-  fn_ptr_var : id * ty; (* The temporary function pointer variable *)
-  env_var : id * ty (* The env variable *);
+type lifted_lambda = {
+  structs : cdecl list;
+  function_decl : fdecl;
+  setup : stmt list;
+  value : id * ty;
+  function_pointer : id;
+  environment : id;
 }
 
 type lambda_converter = { fptr_var : id; env_var : id }
@@ -44,8 +42,12 @@ let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
 let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
   List.fold_left (fun acc cd -> add_cdecl cd acc) old_cs new_cs
 
+(** Closure conversion produces:
+    - an environment struct containing captured values;
+    - a lifted function whose first argument is an opaque environment pointer;
+    - a closure value containing the environment and function pointers. *)
 let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
-    (scope, args, rty, body) : lifted_lambda_result =
+    (scope, args, rty, body) : lifted_lambda =
   let r = RFun (List.map snd args, rty) in
   let lty = TRef r in
   (* get the lambda struct we are desugaring down to *)
@@ -90,12 +92,15 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   in
   (* load the lambda scope variables from the lifted env struct *)
   (* this lifted env struct is passed to lambda (1) *)
+  let captured_var_decls =
+    List.map
+      (fun (i, t) -> Decl (i, t, Proj (Id (vname_env, env_ty), i, t), false))
+      scope
+  in
   let body' =
     Decl (vname_env, env_ptr_ty, Cast (Id (i8_name, i8_ptr), env_ptr_ty), false)
-    :: List.fold_left
-         (fun acc (i, t) ->
-           Decl (i, t, Proj (Id (vname_env, env_ty), i, t), false) :: acc)
-         body scope
+    :: captured_var_decls
+    @ body
   in
   let lifted_lambda_fname = lifted_lambda_name sym in
   let lifted_fn =
@@ -105,7 +110,6 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
       (* (1) add the env to the params *)
       args = (i8_ptr, i8_name) :: List.map (fun (i, t) -> (t, i)) args;
       body = body';
-      (* TODO desugar lambdas in body of lambdas..*)
       annotations = [];
     }
   in
@@ -118,23 +122,14 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
       ("lambdaptr", Id (lifted_lambda_fname, lambda_ptr_ty));
     ]
   in
-  let s =
+  let setup =
     [
       lambda_env_decl;
-      (* 
-        declare new lambda struct instance
-        need to use the original variable name to store the struct 
-        so we do not need to modify passing lamdbas and returning lambdas
-      *)
       Decl
         ( vname,
           lstruct_ty,
           ObjInit (lstruct_cdecl.cname, set_lambda_struct_fields),
           false );
-      (* 
-        we will store the function pointer in a new variable
-        this way we can just substitute lambda names with this when calling
-      *)
       Decl
         ( new_lambda_fn,
           lambda_ptr_ty,
@@ -142,72 +137,41 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
           true );
     ]
   in
-  (* 
-    let a = 10;
-    let f: [i32; i32] -> i32 = fn [a](x,y) { return x+y*a; };
-    let r = f(2, 3);
-
-    turns into...
-
-    class Env0.lambda_i32_i32__i32 {
-      let a: i32 = 0;
-    }
-
-    fun Lifted0.lambda_i32_i32__i32("f.env": i8*, x: i32, y: i32) => i32 {
-      let a = "f.env".a;
-      return x+y*a;
-    }
-
-    let a = 10;
-    const "f.env": i8* = ( i8* ) new Env0.lambda_i32_i32__i32 { a = a };
-    let f: Struct.lambda_i32_i32__i32 = new Struct.lambda_i32_i32__i32 { 
-      envptr: i8* = "f.env",
-      lambdaptr: (i32, i32 -> i32)* = Lifted0.lambda_i32_i32__i32
-    };
-
-    let %tmp_f_fun1 = f.lambdaptr;
-
-    let r = %tmp_f_fun1(2, 3);  
-  *)
-
-  (* 
-      return the new cdecls (env and lambda structs),
-      the new fdecl,
-      the required statements for declaring the desugared variables,
-      the lambda struct instance bound to the original lambda name,
-      and the variable storing the function pointer to the lifted lambda
-  *)
   {
-    lambda_structs = lambda_env :: [ lstruct_cdecl ];
-    lifted_fdecl = lifted_fn;
-    setup_stmts = s;
-    lambda_var = (vname, lstruct_ty);
-    fn_ptr_var = (new_lambda_fn, lambda_ptr_ty);
-    env_var = (vname_env, env_ty);
+    structs = [ lambda_env; lstruct_cdecl ];
+    function_decl = lifted_fn;
+    setup;
+    value = (vname, lstruct_ty);
+    function_pointer = new_lambda_fn;
+    environment = vname_env;
   }
 
 and lift_lambdas_from_list (lctxt : (id * lambda_converter) list)
     (vname_opt : id option) (cs_acc, fs_acc, stmts_acc) (e : exp) =
-  (* lift lambdas from the current expression *)
   let ncs, nfs, ns, _lambda_opt, _fptr_opt, ne, _env =
     lift_lambdas_from_exps cs_acc lctxt vname_opt e
   in
-  (* collect new functions and statements *)
-  let updated_fs = match nfs with [] -> fs_acc | _ -> nfs @ fs_acc in
-  (* return the new state and the transformed expression *)
-  ((ncs, updated_fs, stmts_acc @ ns), ne)
+  ((ncs, nfs @ fs_acc, stmts_acc @ ns), ne)
 
 and lift_lambdas_from_exps (cs : cdecl list)
     (lctxt : (id * lambda_converter) list) (vname_opt : id option) = function
   | Lambda (scope, args, rty, body) ->
       let res = lift_lambda cs vname_opt (scope, args, rty, body) in
-      ( add_cdecls res.lambda_structs cs,
-        [ res.lifted_fdecl ],
-        res.setup_stmts,
-        Some res.lambda_var,
-        Some (fst res.fn_ptr_var),
-        Id (fst res.lambda_var, snd res.lambda_var),
-        Some (fst res.env_var) )
+      let outer_cs = add_cdecls res.structs cs in
+      (* A lifted lambda is an ordinary function declaration. Running it through
+         the function-level pass recursively lifts any lambdas in its body and
+         prepares lambda-valued parameters and return values in exactly the same
+         way as a source-level function. *)
+      let final_cs, lifted_fdecls =
+        lift_lambda_from_fdecl outer_cs res.function_decl
+      in
+      ( final_cs,
+        lifted_fdecls,
+        res.setup,
+        Some res.value,
+        Some res.function_pointer,
+        Id (fst res.value, snd res.value),
+        Some res.environment )
   | Call (callee, es, ty) -> (
       let (ncs, nfs, nstmts), es' =
         List.fold_left_map
@@ -540,7 +504,7 @@ and lift_lambda_from_block cs lctxt block =
   in
   (final_cs, lifted_fs, new_block)
 
-let lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
+and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     cdecl list * fdecl list =
   (* process arguments *)
   let lctxt_initial, args_transformed, unpack_stmts, cs_args =

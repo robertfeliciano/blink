@@ -189,6 +189,84 @@ let test_desugar_from_example_matrix _ =
       | Error e -> assert_failure (Core.Error.to_string_hum e))
   | None -> assert_failure "parse/type failed"
 
+let rec exp_contains_lambda (exp : Desugaring.Desugared_ast.exp) =
+  let open Desugaring.Desugared_ast in
+  match exp with
+  | Lambda _ -> true
+  | Call (_, args, _) | Array (args, _) -> List.exists exp_contains_lambda args
+  | ObjInit (_, fields) ->
+      List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
+  | Bop (_, lhs, rhs, _) -> exp_contains_lambda lhs || exp_contains_lambda rhs
+  | Uop (_, exp, _) | Cast (exp, _) | Proj (exp, _, _) ->
+      exp_contains_lambda exp
+  | Index (collection, index, _) ->
+      exp_contains_lambda collection || exp_contains_lambda index
+  | Bool _ | Int _ | Float _ | Str _ | Id _ | Null _ -> false
+
+let rec stmt_contains_lambda (stmt : Desugaring.Desugared_ast.stmt) =
+  let open Desugaring.Desugared_ast in
+  match stmt with
+  | Assn (lhs, rhs, _) -> exp_contains_lambda lhs || exp_contains_lambda rhs
+  | Decl (_, _, init, _) -> exp_contains_lambda init
+  | Ret (Some exp) -> exp_contains_lambda exp
+  | Ret None -> false
+  | SCall (_, args) | Free args -> List.exists exp_contains_lambda args
+  | If (cond, then_block, else_block) ->
+      exp_contains_lambda cond
+      || List.exists stmt_contains_lambda then_block
+      || List.exists stmt_contains_lambda else_block
+  | While (cond, body) ->
+      exp_contains_lambda cond || List.exists stmt_contains_lambda body
+  | Break | Continue -> false
+
+let has_prefix prefix value =
+  let prefix_len = String.length prefix in
+  String.length value >= prefix_len && String.sub value 0 prefix_len = prefix
+
+let test_desugar_nested_lambda _ =
+  let source =
+    {|
+fun main() => i32 {
+    let x: i32 = 10;
+    let outer: [i32] -> i32 = fn [x](y) {
+        let inner: [i32] -> i32 = fn [x, y](z) {
+            return x + y + z;
+        };
+        return inner(3);
+    };
+    return outer(2);
+}
+|}
+  in
+  match parse_and_type source with
+  | None -> assert_failure "nested lambda parse/type failed"
+  | Some tprog -> (
+      match D.desugar_prog tprog with
+      | Error e -> assert_failure (Core.Error.to_string_hum e)
+      | Ok (Prog (fns, structs, _)) ->
+          let lifted_fns =
+            List.filter
+              (fun (fn : Desugaring.Desugared_ast.fdecl) ->
+                has_prefix "Lifted" fn.fname)
+              fns
+          in
+          let env_structs =
+            List.filter
+              (fun (struct_ : Desugaring.Desugared_ast.cdecl) ->
+                has_prefix "Env" struct_.cname)
+              structs
+          in
+          assert_equal ~msg:"both lambdas should be lifted" 2
+            (List.length lifted_fns);
+          assert_equal ~msg:"both closures should have environments" 2
+            (List.length env_structs);
+          assert_bool "no lambda expressions should remain"
+            (not
+               (List.exists
+                  (fun (fn : Desugaring.Desugared_ast.fdecl) ->
+                    List.exists stmt_contains_lambda fn.body)
+                  fns)))
+
 let test_desugar_method_extraction _ =
   (* simple class - desugar_class extracts methods (smoke) *)
   let cname = "C" in
@@ -237,6 +315,7 @@ let suite =
          "desugar pemdas" >:: test_desugar_from_example_pemdas;
          "desugar double_loop" >:: test_desugar_from_example_double_loop;
          "desugar matrix" >:: test_desugar_from_example_matrix;
+         "desugar nested lambda" >:: test_desugar_nested_lambda;
          "method extraction" >:: test_desugar_method_extraction;
        ]
 
