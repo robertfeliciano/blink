@@ -1,6 +1,12 @@
+(library
+ (name test_support)
+ (wrapped false)
+ (modules native_test_support)
+ (libraries ounit2 core core_unix))
+
 (test
  (name frontend_tests)
- (modules frontend_tests test_typing test_parsing test_desugaring e2e util)
+ (modules frontend_tests test_typing test_parsing test_desugaring)
  (libraries
   blink.parsing
   blink.desugaring
@@ -9,5 +15,33 @@
   ounit2
   zarith
   core)
+ (preprocess
+  (pps ppx_jane)))
+
+(test
+ (name e2e)
+ (modules e2e)
+ (deps ../src/blink.exe)
+ (libraries
+  blink.parsing
+  blink.desugaring
+  blink.typing
+  test_support
+  ounit2
+  core
+  core_unix)
+ (preprocess
+  (pps ppx_jane)))
+
+(executable
+ (name backend_fixture_compiler)
+ (modules backend_fixture_compiler)
+ (libraries blink.desugaring))
+
+(test
+ (name backend_tests)
+ (modules backend_tests)
+ (deps backend_fixture_compiler.exe)
+ (libraries test_support ounit2 core core_unix)
  (preprocess
   (pps ppx_jane)))

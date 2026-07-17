@@ -1,122 +1,122 @@
 open OUnit2
 open Ast
-open Util
-open Parsing.Parse
 
-let lexbuf_of_string s = Lexing.from_string s
+let parse source = Parsing.Parse.parse_prog (Lexing.from_string source)
 
-let assert_ok_parse lexbuf =
-  match parse_prog lexbuf with
-  | Ok _ -> ()
-  | Error e ->
+let parse_exn source =
+  match parse source with
+  | Ok program -> program
+  | Error error ->
       assert_failure
-        (Printf.sprintf "Parse failed: %s" (Core.Error.to_string_hum e))
+        (Printf.sprintf "expected parsing to succeed:\n%s"
+           (Core.Error.to_string_hum error))
 
-let test_parse_string_simple _ =
-  let s = "fun main(argv: [string; 1]) => u64 { return 1; }" in
-  assert_ok_parse (lexbuf_of_string s)
-
-let test_parse_examples_super_simple _ =
-  let ch = test_file_channel "super_simple.bl" in
-  assert_ok_parse (lexbuf_of_string ch)
-
-let test_parse_examples_simple _ =
-  let ch = test_file_channel "simple.bl" in
-  assert_ok_parse (lexbuf_of_string ch)
-
-let test_parse_examples_sum _ =
-  let ch = test_file_channel "sum.bl" in
-  assert_ok_parse (lexbuf_of_string ch)
-
-let test_show_manual_ast _ =
-  (* manually construct a tiny program and ensure show_prog runs *)
-  let fn =
-    {
-      elt =
-        {
-          annotations = [];
-          frtyp = RetVal (TInt (TSigned Ti32));
-          fname = "f";
-          args = [ (TInt (TSigned Ti32), "x") ];
-          body = [];
-        };
-      loc = Ast.Range.norange;
-    }
-  in
-  let prog = Prog ([ fn ], [], []) in
-  let _ = show_prog prog in
-  ()
-
-let test_parse_string_with_comment _ =
-  let s = "fun main() => u64 { // comment\n return 0; }" in
-  assert_ok_parse (lexbuf_of_string s)
-
-let test_parse_examples_pemdas _ =
-  let ch = test_file_channel "pemdas.bl" in
-  assert_ok_parse (lexbuf_of_string ch)
-
-let test_parse_examples_double_loop _ =
-  let ch = test_file_channel "double_loop.bl" in
-  assert_ok_parse (lexbuf_of_string ch)
-
-let test_parse_invalid_syntax _ =
-  let s = "fun main( => u64 { return 1; }" in
-  match parse_prog (lexbuf_of_string s) with
-  | Ok _ -> assert_failure "Expected parse error"
+let assert_parse_error source =
+  match parse source with
   | Error _ -> ()
+  | Ok program ->
+      assert_failure
+        (Printf.sprintf "expected parsing to fail, got:\n%s" (show_prog program))
 
-let test_parse_object _ =
-  let s =
-    "class Point { \n\
-    \    let x: i8 = 0;\n\
-    \    let y: bool = false;\n\
-     }\n\n\
-     fun main(argv: [string; 2]) => i32 {\n\
-    \    let p = new Point { x = 2, y = true};\n\
-    \    let x = p.x + (9 as i8);\n\
-    \    return (x + 14 as i8) as i32;\n\
-    \    //let y = p.y;\n\
-     }"
-  in
-  assert_ok_parse (lexbuf_of_string s)
+let valid_programs =
+  [
+    ("minimal function", "fun main() => i32 { return 1; }");
+    ("comments", "// before\nfun main() => i32 { /* inside */ return 0; }");
+    ( "prototype",
+      "@C fun puts(s: string) => i32;\nfun main() => i32 { return 0; }" );
+    ( "class and method",
+      "class Point {\n  let x: i32 = 0;\n  fun get() => i32 { return x; }\n}" );
+    ( "control flow",
+      "fun main() => i32 {\n\
+      \  let total = 0;\n\
+      \  while total < 3 { total += 1; }\n\
+      \  for i in 0..3 { total += i; }\n\
+      \  return total;\n\
+       }" );
+    ( "arrays and indexing",
+      "fun main() => i32 { let xs = [1, 2, 3]; return xs[1]; }" );
+    ( "capturing lambda",
+      "fun main() => i32 {\n\
+      \  let scale = 4;\n\
+      \  let apply: [i32] -> i32 = fn[scale](value) {\n\
+      \    return value * scale;\n\
+      \  };\n\
+      \  return apply(3);\n\
+       }" );
+  ]
 
-let test_show_prog_complex _ =
-  let fn1 =
-    {
-      elt =
-        { annotations = []; frtyp = RetVoid; fname = "a"; args = []; body = [] };
-      loc = Ast.Range.norange;
-    }
+let invalid_programs =
+  [
+    ("broken argument list", "fun main( => i32 { return 1; }");
+    ("missing semicolon", "fun main() => i32 { return 1 }");
+    ("unclosed block", "fun main() => i32 { return 1;");
+    ("invalid declaration", "fun main() => i32 { let = 1; return 0; }");
+  ]
+
+let test_valid_program source _ = ignore (parse_exn source)
+let test_invalid_program source _ = assert_parse_error source
+
+let test_top_level_declarations _ =
+  let source =
+    "fun helper() => void;\n\
+     class Box { let value: i32 = 0; }\n\
+     fun main() => i32 { return 0; }"
   in
-  let fn2 =
-    {
-      elt =
-        {
-          annotations = [];
-          frtyp = RetVal (TInt (TSigned Ti32));
-          fname = "b";
-          args = [];
-          body = [];
-        };
-      loc = Ast.Range.norange;
-    }
-  in
-  let _ = show_prog (Prog ([ fn1; fn2 ], [], [])) in
-  ()
+  match parse_exn source with
+  | Prog (functions, classes, prototypes) ->
+      assert_equal ~printer:string_of_int 1 (List.length functions);
+      assert_equal ~printer:string_of_int 1 (List.length classes);
+      assert_equal ~printer:string_of_int 1 (List.length prototypes)
+
+let test_operator_precedence _ =
+  match parse_exn "fun main() => i32 { return 2 + 3 * 4; }" with
+  | Prog ([ function_ ], [], []) -> (
+      match function_.elt.body with
+      | [ { elt = Ret (Some expression); _ } ] -> (
+          match expression.elt with
+          | Bop
+              ( Add,
+                { elt = Int two; _ },
+                {
+                  elt = Bop (Mul, { elt = Int three; _ }, { elt = Int four; _ });
+                  _;
+                } ) ->
+              assert_equal (Z.of_int 2) two;
+              assert_equal (Z.of_int 3) three;
+              assert_equal (Z.of_int 4) four
+          | _ ->
+              assert_failure "multiplication should bind tighter than addition")
+      | _ -> assert_failure "expected a single return statement")
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected AST for precedence test:\n%s"
+           (show_prog program))
+
+let test_error_has_source_position _ =
+  match parse "fun main() => i32 {\n  let = 1;\n}" with
+  | Ok _ -> assert_failure "expected a parse error"
+  | Error error ->
+      let message = Core.Error.to_string_hum error in
+      assert_bool
+        (Printf.sprintf "expected source position in error, got: %s" message)
+        (Core.String.is_substring message ~substring:"line 2")
 
 let suite =
-  "Parsing tests"
+  let valid_tests =
+    List.map
+      (fun (name, source) -> name >:: test_valid_program source)
+      valid_programs
+  in
+  let invalid_tests =
+    List.map
+      (fun (name, source) -> name >:: test_invalid_program source)
+      invalid_programs
+  in
+  "Parsing"
   >::: [
-         "parse simple string" >:: test_parse_string_simple;
-         "show manual ast" >:: test_show_manual_ast;
-         "parse with comment" >:: test_parse_string_with_comment;
-         "invalid syntax" >:: test_parse_invalid_syntax;
-         "show prog complex" >:: test_show_prog_complex;
-         "parse super simple" >:: test_parse_examples_super_simple;
-         "parse simple" >:: test_parse_examples_simple;
-         "parse pemdas" >:: test_parse_examples_pemdas;
-         "parse double loop" >:: test_parse_examples_double_loop;
-         "parse sum" >:: test_parse_examples_sum;
+         "valid programs" >::: valid_tests;
+         "invalid programs" >::: invalid_tests;
+         "top-level declarations" >:: test_top_level_declarations;
+         "operator precedence" >:: test_operator_precedence;
+         "errors include positions" >:: test_error_has_source_position;
        ]
-
-let () = run_test_tt_main suite

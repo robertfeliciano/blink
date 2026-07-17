@@ -1,7 +1,8 @@
 (rule
  (target llvm_libs.sexp)
  (action
-  (with-stdout-to %{target}
+  (with-stdout-to
+   %{target}
    (bash "echo \"($(llvm-config --ldflags --libs --system-libs))\""))))
 
 (library
@@ -15,4 +16,6 @@
  (c_library_flags
   (:standard
    -lstdc++
-   (:include llvm_libs.sexp)))) ;; Include the generated file here
+   (:include llvm_libs.sexp))))
+
+;; Include the generated file here
