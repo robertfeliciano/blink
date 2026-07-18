@@ -111,7 +111,7 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
       args = (i8_ptr, i8_name) :: List.map (fun (i, t) -> (t, i)) args;
       body = body';
       annotations = [];
-      inline = false;
+      inline = true;
     }
   in
   (* set the fields of the lambda struct *)
@@ -284,7 +284,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
                             )
                       | _ -> Ret (Some call_exp));
                     ];
-                  inline = false;
+                  inline = true;
                 }
               in
 
