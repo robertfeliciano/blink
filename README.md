@@ -20,7 +20,7 @@ Then build and test Blink from the container shell:
 ```sh
 make
 make test
-./compile examples/simple.bl
+./compile -O2 examples/simple.bl
 ./new_output.o
 ```
 
@@ -77,7 +77,7 @@ sudo ninja install
 
 ### Build
 
-Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`.
+Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`. The compiler accepts `-O0`, `-O1`, `-O2`, and `-O3`; when omitted, `-O0` is used.
 
 To build the frontend, you can simply run `dune build` in `frontend/`. 
 
@@ -113,4 +113,19 @@ bridge and LLVM codegen behavior while retaining the same temporary-directory
 cleanup and exit-status assertions as the full end-to-end suite.
 
 ### How to Use Blink
-Take a look at the examples in `examples/`. You can compile a program to an executable using `./compile` which will generate `new_output.o`. Take a look at the compile script if you want to customize the final executable.
+Take a look at the examples in `examples/`. You can compile a program to an
+executable using `./compile -O2 program.bl`, which will generate
+`new_output.o`. The optimization flag is optional and may appear before or
+after the filename; it defaults to `-O0`. Take a look at the compile script if
+you want to customize the final executable.
+
+Functions and methods can request LLVM inlining with the `inline` modifier:
+
+```blink
+inline fun add_one(value: i32) => i32 {
+  return value + 1;
+}
+```
+
+The modifier uses LLVM's always-inliner and is honored even when compiling with
+`-O0`.

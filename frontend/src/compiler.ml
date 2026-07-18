@@ -14,10 +14,12 @@ let printer should_print specific_printer prog =
   if should_print then printf "%s\n" (specific_printer prog); 
   Ok prog
 
-let compile ?(print_ast = false) ?(print_tast = false) ?(print_dast = false) (lexbuf : Lexing.lexbuf) =
+let compile ?(print_ast = false) ?(print_tast = false) ?(print_dast = false)
+    ?(optimization_level = Util.Optimization_level.default)
+    (lexbuf : Lexing.lexbuf) =
   parse_prog lexbuf 
   >>= printer print_ast Ast.show_prog
-  >>= type_prog
+  >>= type_prog ~optimization_level
   >>= printer print_tast show_typed_program
   >>= desugar_prog
   >>= printer print_dast show_desugared_program

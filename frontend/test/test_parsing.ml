@@ -21,6 +21,8 @@ let assert_parse_error source =
 let valid_programs =
   [
     ("minimal function", "fun main() => i32 { return 1; }");
+    ( "inline function",
+      "inline fun increment(value: i32) => i32 { return value + 1; }" );
     ("comments", "// before\nfun main() => i32 { /* inside */ return 0; }");
     ( "prototype",
       "@C fun puts(s: string) => i32;\nfun main() => i32 { return 0; }" );
@@ -67,6 +69,21 @@ let test_top_level_declarations _ =
       assert_equal ~printer:string_of_int 1 (List.length functions);
       assert_equal ~printer:string_of_int 1 (List.length classes);
       assert_equal ~printer:string_of_int 1 (List.length prototypes)
+
+let test_inline_modifier _ =
+  let source =
+    "inline fun increment(value: i32) => i32 { return value + 1; }\n\
+     fun main() => i32 { return increment(1); }"
+  in
+  match parse_exn source with
+  | Prog ([ inline_function; main ], [], []) ->
+      assert_bool "inline function should retain its modifier"
+        inline_function.elt.inline;
+      assert_bool "ordinary function should not be inline" (not main.elt.inline)
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected AST for inline modifier:\n%s"
+           (show_prog program))
 
 let test_operator_precedence _ =
   match parse_exn "fun main() => i32 { return 2 + 3 * 4; }" with
@@ -117,6 +134,7 @@ let suite =
          "valid programs" >::: valid_tests;
          "invalid programs" >::: invalid_tests;
          "top-level declarations" >:: test_top_level_declarations;
+         "inline modifier" >:: test_inline_modifier;
          "operator precedence" >:: test_operator_precedence;
          "errors include positions" >:: test_error_has_source_position;
        ]

@@ -84,8 +84,6 @@ Value* StmtToLLVisitor::operator()(const If& s) {
 
     gen.builder->CreateCondBr(condVal, thenBB, elseBB);
 
-    thenBB->insertInto(parentFunc);
-
     gen.builder->SetInsertPoint(thenBB);
 
     for (const auto& stmt : s.then_branch) {
@@ -113,7 +111,7 @@ Value* StmtToLLVisitor::operator()(const If& s) {
         }
     }
 
-    if (!then_terminated && !else_terminated) {
+    if (!then_terminated || !else_terminated) {
         mergeBB->insertInto(parentFunc);
         gen.builder->SetInsertPoint(mergeBB);
     }

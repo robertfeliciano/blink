@@ -6,10 +6,21 @@ module Printer = Desugaring.Pprint_desugared_ast
 
 let int_ty = TInt (TSigned Ti32)
 let int value = Int (Z.of_int value, TSigned Ti32)
+let optimization_level = Util.Optimization_level.O0
 
 let function_program body =
   Prog
-    ( [ { annotations = []; frtyp = RetVoid; fname = "test"; args = []; body } ],
+    ( optimization_level,
+      [
+        {
+          annotations = [];
+          frtyp = RetVoid;
+          fname = "test";
+          args = [];
+          body;
+          inline = false;
+        };
+      ],
       [],
       [] )
 
@@ -22,7 +33,7 @@ let desugar_exn program =
            (Core.Error.to_string_hum error))
 
 let only_function_body = function
-  | DA.Prog ([ fn ], [], []) -> fn.body
+  | DA.Prog (_, [ fn ], [], []) -> fn.body
   | program ->
       assert_failure
         (Printf.sprintf "expected one function and no declarations:\n%s"
@@ -100,6 +111,7 @@ let test_class_method_extraction _ =
       fname = "get";
       args = [];
       body = [ Ret (Some (Id ("value", int_ty))) ];
+      inline = false;
     }
   in
   let class_ =
@@ -111,9 +123,10 @@ let test_class_method_extraction _ =
       methods = [ method_ ];
     }
   in
-  match desugar_exn (Prog ([], [ class_ ], [])) with
+  match desugar_exn (Prog (optimization_level, [], [ class_ ], [])) with
   | DA.Prog
-      ( [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
+      ( _,
+        [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
         [ { cname = "Box"; fields = [ { fieldName = "value"; _ } ]; _ } ],
         [] ) ->
       assert_bool "method name should be mangled" (fname <> "get")
@@ -137,6 +150,43 @@ let parse_and_type_exn source =
       assert_failure
         (Printf.sprintf "test fixture did not type-check: %s"
            (Core.Error.to_string_hum error))
+
+let test_optimization_level_propagation _ =
+  let source = "fun main() => i32 { return 0; }" in
+  let ast =
+    match Parsing.Parse.parse_prog (Lexing.from_string source) with
+    | Ok ast -> ast
+    | Error error ->
+        assert_failure
+          (Printf.sprintf "test fixture did not parse: %s"
+             (Core.Error.to_string_hum error))
+  in
+  let requested = Util.Optimization_level.O3 in
+  let typed =
+    match Typing.Type.type_prog ~optimization_level:requested ast with
+    | Ok (Typing.Typed_ast.Prog (actual, _, _, _) as typed) ->
+        assert_equal ~msg:"type checker optimization level" requested actual;
+        typed
+    | Error error ->
+        assert_failure
+          (Printf.sprintf "test fixture did not type-check: %s"
+             (Core.Error.to_string_hum error))
+  in
+  match desugar_exn typed with
+  | DA.Prog (actual, _, _, _) ->
+      assert_equal ~msg:"desugarer optimization level" requested actual
+
+let test_inline_propagation _ =
+  let source =
+    "inline fun increment(value: i32) => i32 { return value + 1; }"
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, [ fn ], [], []) ->
+      assert_bool "desugaring should preserve inline functions" fn.inline
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected inline program:\n%s"
+           (Printer.show_desugared_program program))
 
 let pipeline_programs =
   [
@@ -177,7 +227,7 @@ let test_lambda_lifting _ =
      }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (functions, classes, []) ->
+  | DA.Prog (_, functions, classes, []) ->
       assert_bool "lambda should produce a lifted function"
         (List.length functions > 1);
       assert_bool "lambda should produce closure structs"
@@ -233,7 +283,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (functions, classes, []) ->
+  | DA.Prog (_, functions, classes, []) ->
       let lifted_functions =
         List.filter
           (fun (fn : DA.fdecl) ->
@@ -273,6 +323,9 @@ let suite =
          "for loop" >:: test_for_loop;
          "array foreach" >:: test_array_foreach;
          "class method extraction" >:: test_class_method_extraction;
+         "optimization level propagation"
+         >:: test_optimization_level_propagation;
+         "inline propagation" >:: test_inline_propagation;
          "lambda lifting" >:: test_lambda_lifting;
          "nested lambda lifting" >:: test_nested_lambda_lifting;
          "parsed and typed programs" >::: pipeline_tests;

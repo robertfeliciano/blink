@@ -18,7 +18,7 @@ static std::vector<std::unique_ptr<Stmt>> convert_block(value v) {
     return out;
 }
 
-FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; body }
+FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; body; annotations; inline }
     FDecl out;
 
     out.frtyp = convert_ret_ty(Field(v, 0));
@@ -49,6 +49,8 @@ FDecl convert_fdecl(value v) { // record fdecl = { frtyp; fname; args; body }
         out.annotations.emplace_back(annotation);
         anno_v = Field(anno_v, 1);
     }
+
+    out.isInline = Bool_val(Field(v, 5));
 
     return out;
 }

@@ -25,7 +25,9 @@ let type_annotations (tc : Tctxt.t) =
 
 let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     Typed_ast.fdecl =
-  let { elt = { annotations; frtyp; fname; args; body }; loc = _ } = fn in
+  let { elt = { annotations; frtyp; fname; args; body; inline }; loc = _ } =
+    fn
+  in
   let tc' =
     List.fold_left
       (fun acc (t, a) ->
@@ -49,6 +51,7 @@ let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     fname;
     args = args';
     body = typed_body;
+    inline;
   }
 
 let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
@@ -227,7 +230,8 @@ let check_undefined_protos tc =
       ("The following function prototypes are undefined:\n"
       ^ String.concat "\n" undefined_protos)
 
-let type_program (prog : Ast.program) : Typed_ast.program =
+let type_program ?(optimization_level = Util.Optimization_level.default)
+    (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
   let (Prog (fns, cns, pns)) = prog in
   let cc, typed_fields = create_class_ctxt Tctxt.empty cns in
@@ -237,10 +241,11 @@ let type_program (prog : Ast.program) : Typed_ast.program =
   let typed_classes = List.map2 (type_class fc) typed_fields cns in
   let typed_protos = List.map (type_proto fc) pns in
   let typed_funs = List.map (type_fn fc) fns in
-  Prog (typed_funs, typed_classes, typed_protos)
+  Prog (optimization_level, typed_funs, typed_classes, typed_protos)
 
-let type_prog (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
-  try Ok (type_program prog)
+let type_prog ?(optimization_level = Util.Optimization_level.default)
+    (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
+  try Ok (type_program ~optimization_level prog)
   with TypeError msg ->
     let err = Fmt.str "Type Error: %s" msg in
     Error (Core.Error.of_string err)

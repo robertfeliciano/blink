@@ -1,10 +1,43 @@
 #!/usr/bin/bash
 set -o pipefail
 
-FILENAME="$1"
+FILENAME=""
+OPT_LEVEL="-O0"
+OPT_LEVEL_SET=false
 LLVM_LL="new_output.ll"
 LLVM_S="new_output.s"
 LLVM_O="new_output.o"
+
+parse_args() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -O0|-O1|-O2|-O3)
+                if [[ "$OPT_LEVEL_SET" == true ]]; then
+                    printf "Error: only one optimization level may be specified\n" >&2
+                    return 1
+                fi
+                OPT_LEVEL="$arg"
+                OPT_LEVEL_SET=true
+                ;;
+            -O*)
+                printf "Error: optimization level must be one of -O0, -O1, -O2, or -O3\n" >&2
+                return 1
+                ;;
+            -*)
+                printf "Error: unknown option: %s\n" "$arg" >&2
+                return 1
+                ;;
+            *)
+                if [[ -n "$FILENAME" ]]; then
+                    printf "Error: multiple input files are not supported\n" >&2
+                    return 1
+                fi
+                FILENAME="$arg"
+                ;;
+        esac
+    done
+}
 
 sanitize_filename() {
     local fn; fn="$1"
@@ -24,7 +57,8 @@ sanitize_filename() {
 
 run_blink() {
     local fn; fn="$1"
-    if ! ./blink "$fn"; then
+    local optimization_level; optimization_level="$2"
+    if ! ./blink "$optimization_level" "$fn"; then
         printf "Error: blink failed\n" >&2
         return 1
     fi
@@ -57,11 +91,15 @@ compile_s_to_o() {
 }
 
 main() {
+    if ! parse_args "$@"; then
+        return 1
+    fi
+
     if ! sanitize_filename "$FILENAME"; then
         return 1
     fi
 
-    if ! run_blink "$FILENAME"; then
+    if ! run_blink "$FILENAME" "$OPT_LEVEL"; then
         return 1
     fi
 
@@ -76,4 +114,4 @@ main() {
     printf "Build completed: %s\n" "$LLVM_O"
 }
 
-main
+main "$@"

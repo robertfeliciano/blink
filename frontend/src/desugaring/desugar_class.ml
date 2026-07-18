@@ -26,6 +26,7 @@ let desugar_method (m : fdecl) (cname : id) : D.fdecl =
     fname = mangled_name;
     args = desugared_args;
     body = desugared_body;
+    inline = m.inline;
   }
 
 let desugar_fields fs : D.field list =

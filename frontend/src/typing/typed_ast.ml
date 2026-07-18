@@ -118,6 +118,7 @@ type fdecl = {
   fname : id;
   args : (ty * id) list;
   body : block;
+  inline : bool;
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp }
@@ -137,4 +138,5 @@ type proto = {
   args : ty list;
 }
 
-type program = Prog of fdecl list * cdecl list * proto list
+type program =
+  | Prog of Util.Optimization_level.t * fdecl list * cdecl list * proto list

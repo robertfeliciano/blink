@@ -90,6 +90,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token TSTRING   /* string */
 %token TBOOL     /* bool */
 %token FUN       /* fun */
+%token INLINE    /* inline */
 %token IF        /* if */
 %token IN        /* in */
 %token ELSE      /* else */
@@ -199,7 +200,9 @@ fdecl_list:
 
 fdecl:
   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $startpos $endpos { annotations; frtyp; fname; args; body }) }
+      { (loc $startpos $endpos { annotations; frtyp; fname; args; body; inline = false }) }
+  | annotations=list(annotation) INLINE FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
+      { (loc $startpos $endpos { annotations; frtyp; fname; args; body; inline = true }) }
 
 pdecl:
   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
@@ -538,4 +541,3 @@ else_stmt:
   | /* empty */       { [] }          (* no else -> empty block *)
   | ELSE b=block      { b }           (* else { ... } *)
   | ELSE ifs=if_stmt  { [ ifs ] }     (* else if ... -> else block with one stmt *)
-
