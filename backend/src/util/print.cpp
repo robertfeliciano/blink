@@ -345,6 +345,8 @@ std::string fdeclToString(const FDecl& f) {
     for (size_t i = 0; i < f.annotations.size(); ++i) {
         oss << "@" << f.annotations[i] << "\n";
     }
+    if (f.isInline)
+        oss << "inline ";
     oss << "fun " << f.fname << "(";
     for (size_t i = 0; i < f.args.size(); ++i) {
         const auto& p = f.args[i];

@@ -12,6 +12,7 @@
   blink.desugaring
   blink.typing
   blink.ast
+  blink.util
   ounit2
   zarith
   core)
@@ -36,7 +37,7 @@
 (executable
  (name backend_fixture_compiler)
  (modules backend_fixture_compiler)
- (libraries blink.desugaring))
+ (libraries blink.desugaring blink.util))
 
 (test
  (name backend_tests)

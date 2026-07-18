@@ -101,6 +101,7 @@ rule read = parse
   | "string" { TSTRING }
   | "bool" { TBOOL }
   | "null" { NULL }
+  | "inline" { INLINE }
   | "fun" { FUN }
   | "if" { IF }
   | "in" { IN }

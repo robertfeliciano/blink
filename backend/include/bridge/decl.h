@@ -14,6 +14,7 @@ struct FDecl {
     std::vector<std::pair<Ty, std::string>> args;
     std::vector<std::unique_ptr<Stmt>>      body;
     std::vector<std::string>                annotations;
+    bool                                    isInline;
 };
 
 struct Field {

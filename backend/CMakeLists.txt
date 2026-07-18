@@ -57,6 +57,7 @@ llvm_map_components_to_libnames(llvm_libs
     ipo
     aggressiveinstcombine
     vectorize
+    native
     frontendopenmp
     globalisel
 )

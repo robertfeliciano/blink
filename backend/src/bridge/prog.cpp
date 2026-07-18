@@ -4,11 +4,29 @@
 #include <caml/mlvalues.h>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 
 Program convert_program(value prog) {
     Program program;
 
-    value fdecls = Field(prog, 0);
+    switch (Long_val(Field(prog, 0))) {
+        case 0:
+            program.optimizationLevel = BlinkOptimizationLevel::O0;
+            break;
+        case 1:
+            program.optimizationLevel = BlinkOptimizationLevel::O1;
+            break;
+        case 2:
+            program.optimizationLevel = BlinkOptimizationLevel::O2;
+            break;
+        case 3:
+            program.optimizationLevel = BlinkOptimizationLevel::O3;
+            break;
+        default:
+            throw std::runtime_error("Unknown Blink optimization level");
+    }
+
+    value fdecls = Field(prog, 1);
 
     std::vector<FDecl> funs;
 
@@ -18,7 +36,7 @@ Program convert_program(value prog) {
         fdecls = Field(fdecls, 1);
     }
 
-    value cdecls = Field(prog, 1);
+    value cdecls = Field(prog, 2);
 
     std::vector<CDecl> cls;
 
@@ -28,7 +46,7 @@ Program convert_program(value prog) {
         cdecls = Field(cdecls, 1);
     }
 
-    value pdecls = Field(prog, 2);
+    value pdecls = Field(prog, 3);
 
     std::vector<Proto> protos;
 

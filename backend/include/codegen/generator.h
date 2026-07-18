@@ -1,23 +1,18 @@
 #pragma once
 
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/Verifier.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Passes/OptimizationLevel.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
-#include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Transforms/Scalar/Reassociate.h"
-#include "llvm/Transforms/Scalar/SimplifyCFG.h"
-#include "llvm/Transforms/Utils/Mem2Reg.h"
+#include "llvm/Target/TargetOptions.h"
 
 #include <bridge/decl.h>
 #include <bridge/exp.h>
@@ -32,9 +27,10 @@
 #include <stdlib.h>
 
 struct Generator {
-    std::unique_ptr<llvm::LLVMContext> ctxt;
-    std::unique_ptr<llvm::IRBuilder<>> builder;
-    std::unique_ptr<llvm::Module>      mod;
+    std::unique_ptr<llvm::LLVMContext>   ctxt;
+    std::unique_ptr<llvm::IRBuilder<>>   builder;
+    std::unique_ptr<llvm::Module>        mod;
+    std::unique_ptr<llvm::TargetMachine> targetMachine;
 
     std::unordered_map<std::string, llvm::AllocaInst*> varEnv;
     std::unordered_map<std::string, llvm::StructType*> structTypes;
@@ -51,7 +47,7 @@ struct Generator {
 
     void codegenStdlib();
     void configureTarget();
-    void optimize();
+    void optimize(BlinkOptimizationLevel optimizationLevel);
     Generator();
 
     llvm::Value* codegenExp(const Exp& e) { return std::visit(expVisitor, e.val); }

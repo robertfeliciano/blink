@@ -5,7 +5,7 @@ class Point {
     let x: i32; 
     let y: i32;
 
-    fun midpt(other: Point) => Point {
+    inline fun midpt(other: Point) => Point {
         let x' = (x + other.x)/2;
         let y' = (y + other.y)/2;
         puts("Creating midpoint struct");

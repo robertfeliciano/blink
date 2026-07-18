@@ -128,6 +128,7 @@ type fdecl = {
   fname : id;
   args : (ty * id) list;
   body : block;
+  inline : bool;
 }
 
 type field = { fieldName : id; ftyp : ty; init : exp node option }
@@ -401,17 +402,18 @@ let show_proto ?(lvl = 0) { elt = { annotations; frtyp; fname; args }; loc = _ }
     (show_ret_ty ~lvl:(lvl + 1) frtyp)
     args_s
 
-let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
+let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body; inline } =
   let args_s =
     String.concat "; "
       (List.map
          (fun (ty, id) -> Printf.sprintf "(%s, %s)" (show_ty ty) id)
          args)
   in
-  Printf.sprintf "%s[%s]fdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+  Printf.sprintf
+    "%s[%s]fdecl{name=%s; inline=%b; ret=%s; args=[%s]; body=[\n%s\n%s]}"
     (indent lvl)
     (show_annotations annotations)
-    fname
+    fname inline
     (show_ret_ty ~lvl:(lvl + 1) frtyp)
     args_s
     (String.concat "" (List.map (show_node_stmt ~lvl:(lvl + 1)) body))

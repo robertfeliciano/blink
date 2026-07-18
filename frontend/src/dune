@@ -8,6 +8,7 @@
   core_unix.command_unix
   fmt
   compiler
+  util
   typing
   desugaring)
  (preprocess

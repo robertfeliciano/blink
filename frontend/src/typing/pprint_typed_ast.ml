@@ -277,7 +277,7 @@ let show_proto ?(lvl = 0) { annotations; frtyp; fname; args } =
   Printf.sprintf "%s[\n%s\n%s]proto{name=%s; ret=%s; args=[%s]}" (indent lvl)
     anno_s (indent lvl) fname (show_ret_ty frtyp) args_s
 
-let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
+let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body; inline } =
   let args_s =
     String.concat "; "
       (List.map
@@ -288,8 +288,8 @@ let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body } =
     String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
   in
   Printf.sprintf
-    "%s[\n%s\n%s]fdecl{name=%s; ret=%s; args=[%s]; body=[\n%s\n%s]}"
-    (indent lvl) anno_s (indent lvl) fname (show_ret_ty frtyp) args_s
+    "%s[\n%s\n%s]fdecl{name=%s; inline=%b; ret=%s; args=[%s]; body=[\n%s\n%s]}"
+    (indent lvl) anno_s (indent lvl) fname inline (show_ret_ty frtyp) args_s
     (show_block ~lvl:(lvl + 1) body)
     (indent lvl)
 
@@ -325,10 +325,20 @@ let show_cdecl ?(lvl = 0) { annotations; cname; impls; fields; methods } =
     methods_s
     (indent (lvl + 1))
 
-let show_typed_program (Prog (fns, cns, pns)) =
+let show_typed_program (Prog (optimization_level, fns, cns, pns)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
   Printf.sprintf
-    "Program{\nClasses{\n%s\n}\nPrototypes{\n%s\n}\nFunctions{\n%s\n}}" cns_s
-    pn_s fns_s
+    "Program{optimization=%s;\n\
+     Classes{\n\
+     %s\n\
+     }\n\
+     Prototypes{\n\
+     %s\n\
+     }\n\
+     Functions{\n\
+     %s\n\
+     }}"
+    (Util.Optimization_level.to_string optimization_level)
+    cns_s pn_s fns_s

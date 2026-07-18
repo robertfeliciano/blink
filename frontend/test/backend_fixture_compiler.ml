@@ -2,13 +2,23 @@ module DA = Desugaring.Desugared_ast
 
 let i32 = DA.TInt (DA.TSigned DA.Ti32)
 let int value = DA.Int (string_of_int value, DA.TSigned DA.Ti32)
+let optimization_level = Util.Optimization_level.O0
 
 let function_ ?(args = []) name body =
-  DA.{ annotations = []; frtyp = RetVal i32; fname = name; args; body }
+  DA.
+    {
+      annotations = [];
+      frtyp = RetVal i32;
+      fname = name;
+      args;
+      body;
+      inline = false;
+    }
 
 let arithmetic () =
   let result = DA.Bop (DA.Add, int 20, int 22, i32) in
-  DA.Prog ([ function_ "main" [ DA.Ret (Some result) ] ], [], [])
+  DA.Prog
+    (optimization_level, [ function_ "main" [ DA.Ret (Some result) ] ], [], [])
 
 let function_call () =
   let double =
@@ -20,7 +30,7 @@ let function_call () =
   let main =
     function_ "main" [ DA.Ret (Some (DA.Call ("double", [ int 21 ], i32))) ]
   in
-  DA.Prog ([ double; main ], [], [])
+  DA.Prog (optimization_level, [ double; main ], [], [])
 
 let array_index () =
   let array_ty = DA.TRef (DA.RArray (i32, 3)) in
@@ -31,7 +41,7 @@ let array_index () =
       DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
-  DA.Prog ([ function_ "main" body ], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [])
 
 let object_field () =
   let field name =
@@ -62,7 +72,7 @@ let object_field () =
                 i32 )));
     ]
   in
-  DA.Prog ([ function_ "main" body ], [ box ], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [])
 
 let fixtures =
   [

@@ -26,10 +26,11 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     fname = fn.fname;
     args = List.map (fun (t, i) -> (convert_ty t, i)) fn.args;
     body;
+    inline = fn.inline;
   }
 
 let desugar_program (prog : Typed.program) : program =
-  let (Prog (fns, cns, pns)) = prog in
+  let (Prog (optimization_level, fns, cns, pns)) = prog in
   let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
@@ -49,7 +50,7 @@ let desugar_program (prog : Typed.program) : program =
       (structs, []) initial_fn_list
   in
 
-  Prog (final_fns, final_cs, desugared_protos)
+  Prog (optimization_level, final_fns, final_cs, desugared_protos)
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

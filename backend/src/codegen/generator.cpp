@@ -15,8 +15,7 @@ void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }
-    // TODO put flag in ocaml side for optimization level
-    // optimize();
+    optimize(p.optimizationLevel);
 }
 
 void Generator::codegenStdlib() {
@@ -40,18 +39,29 @@ void Generator::configureTarget() {
 
     auto triple = llvm::sys::getDefaultTargetTriple();
     mod->setTargetTriple(triple);
+
+    std::string error;
+    const llvm::Target* target = llvm::TargetRegistry::lookupTarget(triple, error);
+    if (target == nullptr) {
+        throw std::runtime_error("Could not configure target " + triple + ": " + error);
+    }
+
+    llvm::TargetOptions targetOptions;
+    targetMachine.reset(
+        target->createTargetMachine(triple, "generic", "", targetOptions, llvm::Reloc::PIC_));
+    if (targetMachine == nullptr) {
+        throw std::runtime_error("Could not create target machine for " + triple);
+    }
+    mod->setDataLayout(targetMachine->createDataLayout());
 }
 
-void Generator::optimize() {
-    llvm::PassBuilder passBuilder;
+void Generator::optimize(BlinkOptimizationLevel optimizationLevel) {
+    llvm::PassBuilder passBuilder(targetMachine.get());
 
     llvm::LoopAnalysisManager     lam;
     llvm::FunctionAnalysisManager fam;
     llvm::CGSCCAnalysisManager    cgam;
     llvm::ModuleAnalysisManager   mam;
-
-    llvm::TargetLibraryInfoImpl tlii(llvm::Triple(mod->getTargetTriple()));
-    fam.registerPass([&] { return llvm::TargetLibraryAnalysis(tlii); });
 
     passBuilder.registerModuleAnalyses(mam);
     passBuilder.registerCGSCCAnalyses(cgam);
@@ -59,20 +69,31 @@ void Generator::optimize() {
     passBuilder.registerLoopAnalyses(lam);
     passBuilder.crossRegisterProxies(lam, fam, cgam, mam);
 
-    llvm::FunctionPassManager fpm;
-
-    fpm.addPass(llvm::VerifierPass());
-    fpm.addPass(llvm::PromotePass());
-    fpm.addPass(llvm::InstCombinePass());
-    fpm.addPass(llvm::ReassociatePass());
-    fpm.addPass(llvm::GVNPass());
-    fpm.addPass(llvm::SimplifyCFGPass());
-
-    for (auto& func : *mod) {
-        if (!func.isDeclaration()) {
-            fpm.run(func, fam);
-        }
+    llvm::OptimizationLevel llvmLevel;
+    switch (optimizationLevel) {
+        case BlinkOptimizationLevel::O0:
+            llvmLevel = llvm::OptimizationLevel::O0;
+            break;
+        case BlinkOptimizationLevel::O1:
+            llvmLevel = llvm::OptimizationLevel::O1;
+            break;
+        case BlinkOptimizationLevel::O2:
+            llvmLevel = llvm::OptimizationLevel::O2;
+            break;
+        case BlinkOptimizationLevel::O3:
+            llvmLevel = llvm::OptimizationLevel::O3;
+            break;
     }
+
+    /*
+    LLVM's level-specific default pipelines are cumulative: each level
+    contains every optimization LLVM considers appropriate up to that level.
+    */
+    llvm::ModulePassManager mpm =
+        llvmLevel == llvm::OptimizationLevel::O0
+            ? passBuilder.buildO0DefaultPipeline(llvmLevel)
+            : passBuilder.buildPerModuleDefaultPipeline(llvmLevel);
+    mpm.run(*mod, mam);
 }
 
 void Generator::dumpLL(const std::string& filename) {
