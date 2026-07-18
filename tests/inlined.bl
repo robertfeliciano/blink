@@ -1,0 +1,9 @@
+fun add_two(value: i32) => i32 {
+    let result = value + 2;
+    return result;
+}
+
+
+fun main() => i32 { 
+    return add_two(40); 
+}
