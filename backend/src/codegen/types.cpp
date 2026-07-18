@@ -57,12 +57,19 @@ llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
     }
 }
 
+llvm::Type* TypeToLLGenerator::codegenValueTy(const Ty& ty) {
+    if (is_obj_ty(ty))
+        return llvm::PointerType::getUnqual(*gen.ctxt);
+
+    return codegenTy(ty);
+}
+
 llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
     switch (rty.tag) {
         case RetTyTag::RetVoid:
             return llvm::Type::getVoidTy(*gen.ctxt);
         case RetTyTag::RetVal:
-            return codegenTy(*rty.val);
+            return codegenValueTy(*rty.val);
     }
 }
 
@@ -92,7 +99,7 @@ llvm::Type* TypeToLLGenerator::getStaticArrayType(const RefTy& rt) {
     if (!rt.inner)
         throw std::runtime_error("Array type missing inner type");
 
-    llvm::Type* elemTy = codegenTy(*rt.inner);
+    llvm::Type* elemTy = codegenValueTy(*rt.inner);
 
     if (rt.size < 0)
         throw std::runtime_error("Static array size must be non-negative");
@@ -118,7 +125,7 @@ llvm::Type* TypeToLLGenerator::getFunctionPointerType(const RefTy& rt) {
     argTys.reserve(rt.args.size());
 
     for (auto& a : rt.args)
-        argTys.push_back(codegenTy(a));
+        argTys.push_back(codegenValueTy(a));
 
     llvm::Type* retTy = gen.codegenRetType(rt.ret);
 

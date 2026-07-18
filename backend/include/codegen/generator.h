@@ -56,6 +56,8 @@ struct Generator {
 
     llvm::Type* codegenType(const Ty& ty) { return typeGen.codegenTy(ty); }
 
+    llvm::Type* codegenValueType(const Ty& ty) { return typeGen.codegenValueTy(ty); }
+
     llvm::Type* codegenRetType(const RetTy& ty) { return typeGen.codegenRetTy(ty); }
 
     void codegenFunctionProtos(const Program& p) {

@@ -1,5 +1,6 @@
 #include <codegen/decl.h>
 #include <codegen/generator.h>
+#include <llvm/IR/Verifier.h>
 
 Generator::Generator()
     : ctxt(std::make_unique<llvm::LLVMContext>()), builder(std::make_unique<llvm::IRBuilder<>>(*ctxt)),
@@ -15,7 +16,13 @@ void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }
+    if (llvm::verifyModule(*mod, &llvm::errs()))
+        throw std::runtime_error("LLVM module verification failed before optimization");
+
     optimize(p.optimizationLevel);
+
+    if (llvm::verifyModule(*mod, &llvm::errs()))
+        throw std::runtime_error("LLVM module verification failed after optimization");
 }
 
 void Generator::codegenStdlib() {

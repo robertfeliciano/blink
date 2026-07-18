@@ -44,6 +44,18 @@ static llvm::APInt makeAPSInt128(unsigned numBits, __int128 v) {
     return llvm::APInt(numBits, 2, words);
 }
 
+static Value* allocateHeap(Generator& gen, llvm::Type* storageTy, const llvm::Twine& name) {
+    const llvm::DataLayout& dl   = gen.mod->getDataLayout();
+    uint64_t                size = dl.getTypeAllocSize(storageTy);
+    llvm::Type*             i64Ty = llvm::Type::getInt64Ty(*gen.ctxt);
+    Value*                  sizeVal = llvm::ConstantInt::get(i64Ty, size);
+
+    llvm::FunctionType* mallocTy =
+        llvm::FunctionType::get(llvm::Type::getInt8PtrTy(*gen.ctxt), {i64Ty}, false);
+    llvm::FunctionCallee mallocFn = gen.mod->getOrInsertFunction("malloc", mallocTy);
+    return gen.builder->CreateCall(mallocFn, {sizeVal}, name);
+}
+
 Value* ExpToLLVisitor::operator()(const EInt& e) {
     short       int_sz = getIntSize(e);
     llvm::APInt ap;
@@ -272,7 +284,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         args.push_back(val);
 
         const Ty& argTy = gen.getExpTy(*arg);
-        argTys.push_back(gen.codegenType(argTy));
+        argTys.push_back(gen.codegenValueType(argTy));
     }
 
     const std::string& calleeId = e.callee;
@@ -294,7 +306,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
                 calleeSlot,
                 calleeId + "_load");
 
-        llvm::Type* retTy = gen.codegenType(e.ty);
+        llvm::Type* retTy = gen.codegenValueType(e.ty);
 
         // get function type
         llvm::FunctionType* fnTy =
@@ -310,37 +322,15 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
-    llvm::Type* resultTy = gen.codegenType(e.ty);
-
-    if (resultTy->isAggregateType()) {
-        // some kind of collection, like an array
-        return elemPtr;
-    } else {
-        // primitive value
-        return gen.builder->CreateLoad(resultTy, elemPtr, "idx_load");
-    }
+    llvm::Type* resultTy = gen.codegenValueType(e.ty);
+    return gen.builder->CreateLoad(resultTy, elemPtr, "idx_load");
 }
 
 Value* ExpToLLVisitor::operator()(const EArray& e) {
     llvm::Type* arrTy = gen.codegenType(e.ty);
 
-    Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
+    Value* arrPtr = allocateHeap(gen, arrTy, "array_lit");
     Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
-
-    llvm::Type* innerTy     = arrTy->getArrayElementType();
-    bool        isAggregate = innerTy->isAggregateType();
-
-    llvm::DataLayout dl         = gen.mod->getDataLayout();
-    Value*           size       = nullptr;
-    unsigned         align      = 0;
-    Value*           isVolatile = nullptr;
-
-    if (isAggregate) {
-        uint64_t subArraySize = dl.getTypeStoreSize(innerTy);
-        size                  = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*gen.ctxt), subArraySize);
-        align                 = (unsigned)dl.getABITypeAlign(innerTy).value();
-        isVolatile            = llvm::ConstantInt::getFalse(*gen.ctxt);
-    }
 
     for (size_t i = 0; i < e.elements.size(); i++) {
         Value* val = gen.codegenExp(*e.elements[i]);
@@ -348,14 +338,7 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
 
         Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, {zero, idx}, "elem_ptr");
 
-        if (isAggregate) {
-            Value* dest = gen.builder->CreateBitCast(elemPtr, llvm::Type::getInt8PtrTy(*gen.ctxt), "DestI8Ptr");
-            Value* src  = gen.builder->CreateBitCast(val, llvm::Type::getInt8PtrTy(*gen.ctxt), "SrcI8Ptr");
-
-            gen.builder->CreateMemCpy(dest, llvm::MaybeAlign(align), src, llvm::MaybeAlign(align), size, isVolatile);
-        } else {
-            gen.builder->CreateStore(val, elemPtr);
-        }
+        gen.builder->CreateStore(val, elemPtr);
     }
 
     return arrPtr;
@@ -368,7 +351,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
     }
 
     llvm::Type* sourceTy = source->getType();
-    llvm::Type* destTy   = gen.codegenType(e.ty);
+    llvm::Type* destTy   = gen.codegenValueType(e.ty);
 
     if (sourceTy == destTy) {
         return source;
@@ -428,13 +411,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
 Value* ExpToLLVisitor::operator()(const EProj& e) {
     Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
-    llvm::Type* fieldTy;
-    if (is_obj_ty(e.ty)) {
-        // load a pointer for obj (struct/array) types
-        fieldTy = llvm::PointerType::getUnqual(*gen.ctxt);
-    } else {
-        fieldTy = gen.codegenType(e.ty);
-    }
+    llvm::Type* fieldTy = gen.codegenValueType(e.ty);
 
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
@@ -445,26 +422,8 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
         throw std::runtime_error("Unknown class: " + e.id);
     }
 
-    llvm::StructType*  structTy    = it->second;
-    llvm::PointerType* structPtrTy = llvm::PointerType::getUnqual(structTy);
-
-    const llvm::DataLayout& dl   = gen.mod->getDataLayout();
-    uint64_t                size = dl.getTypeAllocSize(structTy);
-
-    llvm::Type* i64Ty   = llvm::Type::getInt64Ty(*gen.ctxt);
-    Value*      sizeVal = llvm::ConstantInt::get(i64Ty, size);
-
-    // TODO add malloc to blink's stdlib
-    llvm::Function* mallocFn = gen.mod->getFunction("malloc");
-    if (!mallocFn) {
-        llvm::FunctionType* mallocFTy = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(*gen.ctxt), {i64Ty}, false);
-
-        mallocFn = llvm::Function::Create(mallocFTy, llvm::Function::ExternalLinkage, "malloc", gen.mod.get());
-    }
-
-    Value* rawPtr = gen.builder->CreateCall(mallocFn, {sizeVal}, "rawmem");
-
-    Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
+    llvm::StructType* structTy = it->second;
+    Value*           objPtr   = allocateHeap(gen, structTy, "obj");
 
     std::unordered_map<std::string, Value*> userInitMap;
 
@@ -477,12 +436,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
         const Field& fd = classDecl.fields[idx];
 
-        llvm::Type* storageTy;
-        if (is_obj_ty(fd.ftyp)) {
-            storageTy = llvm::PointerType::getUnqual(*gen.ctxt);
-        } else {
-            storageTy = gen.codegenType(fd.ftyp);
-        }
+        llvm::Type* storageTy = gen.codegenValueType(fd.ftyp);
 
         for (auto& stmtPtr : fd.prelude) {
             // TODO think this goes with codegen exp of fields...
@@ -508,9 +462,6 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const ENull& e) {
-    llvm::Type* llty = gen.codegenType(e.ty);
-
-    llvm::PointerType* ptrTy = llvm::PointerType::get(llty, 0);
-
-    return llvm::ConstantPointerNull::get(ptrTy);
+    llvm::Type* llty = gen.codegenValueType(e.ty);
+    return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(llty));
 }

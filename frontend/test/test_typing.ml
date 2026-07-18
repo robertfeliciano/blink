@@ -207,6 +207,14 @@ let test_capturing_lambda _ =
     \  return result;\n\
      }"
 
+let test_free_rejects_global_string _ =
+  assert_program_type_error
+    "fun main() => i32 {\n\
+    \  let message = \"global storage\";\n\
+    \  free message;\n\
+    \  return 0;\n\
+     }"
+
 let test_lambda_rejects_wrong_return_type _ =
   assert_program_type_error
     "fun main() => i32 {\n\
@@ -238,5 +246,6 @@ let suite =
          "object initialization" >:: test_object_initialization;
          "unknown object field" >:: test_object_rejects_unknown_field;
          "capturing lambda" >:: test_capturing_lambda;
+         "free rejects global string" >:: test_free_rejects_global_string;
          "lambda return type" >:: test_lambda_rejects_wrong_return_type;
        ]

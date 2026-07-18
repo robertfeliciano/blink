@@ -217,9 +217,12 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
           (fun acc en ->
             let te, ety = type_exp tc en enclosing_class in
             match ety with
-            | Typed_ast.TRef _ -> te :: acc
-            (* other TRefs are on the stack or global (strings) not suited for deletion *)
-            | _ -> type_error en "Expected reference type for freeing!")
+            | Typed_ast.TRef (RClass _ | RArray _ | RFun _) -> te :: acc
+            | Typed_ast.TRef RString ->
+                type_error en "Cannot free a string because string storage is global."
+            | _ ->
+                type_error en
+                  "Only heap-allocated classes, arrays, and functions can be freed.")
           [] ens
       in
       (tc, Typed_ast.Free tes, false)

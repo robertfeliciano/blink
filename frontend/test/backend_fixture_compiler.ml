@@ -74,12 +74,18 @@ let object_field () =
   in
   DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [])
 
+let invalid_ir () =
+  let array_ty = DA.TRef (DA.RArray (i32, 1)) in
+  let main = function_ "main" [ DA.Ret (Some (DA.Array ([ int 42 ], array_ty))) ] in
+  DA.Prog (optimization_level, [ main ], [], [])
+
 let fixtures =
   [
     ("arithmetic", arithmetic);
     ("function-call", function_call);
     ("array-index", array_index);
     ("object-field", object_field);
+    ("invalid-ir", invalid_ir);
   ]
 
 let () =
