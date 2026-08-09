@@ -11,8 +11,8 @@
  (preprocess
   (pps ppx_deriving.show))
  (libraries core typing util fmt zarith)
- (foreign_archives ../../lib/convert)
- (modes byte native)
+ (foreign_archives ../../lib/backend)
+ (modes native)
  (c_library_flags
   (:standard
    -lstdc++
