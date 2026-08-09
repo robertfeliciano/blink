@@ -62,18 +62,10 @@ llvm_map_components_to_libnames(llvm_libs
     globalisel
 )
 
-add_library(convert_static STATIC ${SOURCES})
-set_target_properties(convert_static PROPERTIES
-    OUTPUT_NAME "convert"
+add_library(backend STATIC ${SOURCES})
+set_target_properties(backend PROPERTIES
+    OUTPUT_NAME "backend"
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib
 )
 
-add_library(convert SHARED ${SOURCES})
-set_target_properties(convert PROPERTIES
-    OUTPUT_NAME "convert"
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib
-    PREFIX "dll"  # OCaml expects 'dllconvert.so'
-)
-
-target_link_libraries(convert PRIVATE ${llvm_libs} ${SYSTEM_LIBS})
-target_link_libraries(convert_static PRIVATE ${llvm_libs} ${SYSTEM_LIBS})
+target_link_libraries(backend PRIVATE ${llvm_libs} ${SYSTEM_LIBS})

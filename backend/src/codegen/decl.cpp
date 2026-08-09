@@ -38,7 +38,7 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
 
     llvm::Function* llfn = llvm::Function::Create(ftyp, linkage, fn.fname, gen.mod.get());
     if (fn.isInline)
-        llfn->addFnAttr(llvm::Attribute::InlineHint);
+        llfn->addFnAttr(llvm::Attribute::AlwaysInline);
 
     unsigned idx = 0;
     for (auto& arg : llfn->args()) {
