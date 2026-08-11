@@ -238,10 +238,31 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
-
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
+      let release_callee =
+        match (fn, fn') with
+        | Typed.PartialApply _, _ -> true
+        | _, D.Id (name, _) -> is_partial_result_sym name
+        | _ -> false
+      in
+      let consume_generated_partial setup fname fn_ty =
+        (* A source-anonymous partial application has no binding through which
+           the user could release its closure. Materialize the call result
+           before freeing the compiler-generated callee so the result remains
+           available to the surrounding expression. The generated result name
+           carries this ownership through another call in a longer chain. *)
+        let result_store = partial_result_sym () in
+        let result_decl =
+          D.Decl
+            (result_store, ty', D.Call (fname, args', ty'), true)
+        in
+        ( setup @ sa @ [ result_decl; D.Free [ D.Id (fname, fn_ty) ] ],
+          D.Id (result_store, ty') )
+      in
       match fn' with
+      | D.Id (fname, fn_ty) when release_callee ->
+          consume_generated_partial sf fname fn_ty
       | D.Id (fname, _t) -> (sf @ sa, D.Call (fname, args', ty'))
       | _ ->
           (* will expand chained calls: 
@@ -268,7 +289,9 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          (sf @ [ tmp_decl ] @ sa, D.Call (fn_store, args', ty')))
+          if release_callee then
+            consume_generated_partial (sf @ [ tmp_decl ]) fn_store fn_ty
+          else (sf @ [ tmp_decl ] @ sa, D.Call (fn_store, args', ty')))
   | Lambda (scope, args, ret_ty, body) ->
       let converted_args = List.map (fun (i, t) -> (i, convert_ty t)) args in
       let converted_ret = convert_ret_ty ret_ty in
@@ -297,5 +320,25 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
         let lty = D.TRef (RFun (List.map snd converted_args, converted_ret)) in
         let ldecl = D.Decl (tmp_lambda, lty, new_lambda, true) in
         (ls @ [ ldecl ], Id (tmp_lambda, lty))
+  | PartialApply (callee, args, bound_tys, remaining_tys, ret_ty) ->
+      let callee_stmts, partial_callee =
+        match callee with
+        | Typed.Id (name, _) -> ([], D.PartialNamed name)
+        | Typed.Proj (receiver, method_name, class_name, _) ->
+            let receiver_stmts, receiver' = desugar_exp receiver in
+            ( receiver_stmts,
+              D.PartialMethod (receiver', method_name, class_name) )
+        | _ ->
+            let stmts, callee' = desugar_exp callee in
+            (stmts, D.PartialValue callee')
+      in
+      let arg_stmts, args' = List.map desugar_exp args |> flatten in
+      ( callee_stmts @ arg_stmts,
+        D.PartialApply
+          ( partial_callee,
+            args',
+            List.map convert_ty bound_tys,
+            List.map convert_ty remaining_tys,
+            convert_ret_ty ret_ty ) )
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

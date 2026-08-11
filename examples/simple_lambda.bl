@@ -3,14 +3,14 @@
 @C fun puts(s: string) => void;
 
 /*
-fun takesLambda(lam: [i32, i32] -> i32) => i32 {
+fun takesLambda(lam: (i32, i32) -> i32) => i32 {
     let temp = lam(3,4);
     return temp + 1;
 }
 */
 
 
-fun returnsLambda() => [string, i32] -> i32 { 
+fun returnsLambda() => (string, i32) -> i32 {
     return fn [](str, x) { 
         puts(str);
         return x * 2;
@@ -23,7 +23,7 @@ fun main() => i32 {
     let z = 3;
     
     /*
-    let f: [i32, i32] -> i32 = fn [q, z](a, b) {
+    let f: (i32, i32) -> i32 = fn [q, z](a, b) {
         puts("hello from inside lambda!");
         return a+b*q - z;
     };
@@ -35,7 +35,7 @@ fun main() => i32 {
     //return x;
 
     /*
-    let f: [i32, i32] -> i32 = fn [q](a, b) {
+    let f: (i32, i32) -> i32 = fn [q](a, b) {
         puts("hello world!");
         return (q*a) + b;
     };

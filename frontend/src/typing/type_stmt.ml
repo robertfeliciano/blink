@@ -10,6 +10,14 @@ type typed_projection = {
   is_const : bool;
 }
 
+type typed_application =
+  | FullApplication of Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty
+  | PartialApplication of
+      Typed_ast.ty list
+      * Typed_ast.exp list
+      * Typed_ast.ty list
+      * Typed_ast.ret_ty
+
 (*
 I wish there was an easy way to separate this into two separate files for exp and stmts.
 The mutual recursion introduced by lambda expressions has forced me to combine everything
@@ -105,28 +113,36 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
   | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method_app (Proj (obj, mth)) args false tc enclosing_class with
       | Error msg -> type_error stmt_n msg
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVoid) ->
+      | Ok
+          ( Proj (tobj, _, cname, t),
+            FullApplication (arg_types, typed_args, RetVoid) ) ->
           ( tc,
             Typed_ast.(
               SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, RetVoid)),
             false )
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, ret_ty) ->
+      | Ok
+          ( Proj (tobj, _, cname, t),
+            FullApplication (arg_types, typed_args, ret_ty) ) ->
           type_warning stmt_n "Ignoring non-void function";
           ( tc,
             Typed_ast.(
               SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, ret_ty)),
             false )
+      | Ok (_, PartialApplication _) ->
+          type_error stmt_n "Partial application result cannot be discarded."
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
       let typed_callee, typ = type_exp tc f enclosing_class in
       let arg_types, typed_args, ret =
         match type_func_app args typ false tc enclosing_class with
         | Error msg -> type_error stmt_n msg
-        | Ok (arg_types, typed_args, RetVoid) ->
+        | Ok (FullApplication (arg_types, typed_args, RetVoid)) ->
             (arg_types, typed_args, Typed_ast.RetVoid)
-        | Ok (arg_types, typed_args, t) ->
+        | Ok (FullApplication (arg_types, typed_args, t)) ->
             type_warning stmt_n "Ignoring non-void function";
             (arg_types, typed_args, t)
+        | Ok (PartialApplication _) ->
+            type_error stmt_n "Partial application result cannot be discarded."
       in
       (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types, ret), false)
   | If (cond, then_branch, else_branch) ->
@@ -307,19 +323,50 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
               | None -> type_error e ("variable " ^ i ^ " is not defined"))))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method_app (Proj (obj, mth)) args true tc enclosing_class with
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVal rt) ->
+      | Ok
+          ( Proj (tobj, _, cname, t),
+            FullApplication (arg_types, typed_args, RetVal rt) ) ->
           check_expected_ty expected rt e;
           Typed_ast.
             (Call (Proj (tobj, mth, cname, t), typed_args, arg_types, rt), rt)
+      | Ok
+          ( (Proj _ as typed_callee),
+            PartialApplication
+              (bound_types, typed_args, remaining_types, original_ret) ) ->
+          let result_ty =
+            Typed_ast.(TRef (RFun (remaining_types, original_ret)))
+          in
+          check_expected_ty expected result_ty e;
+          ( PartialApply
+              ( typed_callee,
+                typed_args,
+                bound_types,
+                remaining_types,
+                original_ret ),
+            result_ty )
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
       let typed_callee, typ = type_exp tc f enclosing_class in
       match type_func_app args typ true tc enclosing_class with
       | Error msg -> type_error e msg
-      | Ok (arg_types, typed_args, RetVal rt) ->
+      | Ok (FullApplication (arg_types, typed_args, RetVal rt)) ->
           check_expected_ty expected rt e;
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
+      | Ok
+          (PartialApplication
+             (bound_types, typed_args, remaining_types, original_ret)) ->
+          let result_ty =
+            Typed_ast.(TRef (RFun (remaining_types, original_ret)))
+          in
+          check_expected_ty expected result_ty e;
+          ( Typed_ast.PartialApply
+              ( typed_callee,
+                typed_args,
+                bound_types,
+                remaining_types,
+                original_ret ),
+            result_ty )
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 enclosing_class in
@@ -587,39 +634,47 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
 
 and type_func_app (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
     (tc : Tctxt.t) (enclosing_class : id option) :
-    (Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty, string) result =
-  let typecheck_args arg_types =
-    let expected_count = List.length arg_types in
-    let actual_count = List.length args in
-    if expected_count <> actual_count then
-      Error
-        ("invalid number of arguments supplied: expected "
-        ^ Int.to_string expected_count ^ " but got " ^ Int.to_string actual_count)
+    (typed_application, string) result =
+  let rec split_prefix count acc remaining =
+    if count = 0 then (List.rev acc, remaining)
     else
-      match
-        map2_exact
-          (fun aty a ->
-            let te, _ = type_exp_as aty tc a enclosing_class in
-            te)
-          arg_types args
-      with
-      | Some typed_args -> Ok typed_args
-      | None -> Error "failed to pair function arguments"
+      match remaining with
+      | head :: tail -> split_prefix (count - 1) (head :: acc) tail
+      | [] -> (List.rev acc, [])
   in
   match ftyp with
-  | TRef (RFun (_, RetVoid)) when from_exp ->
-      Error "assigning void function return type to variable."
-  | TRef (RFun (arg_types, ret_ty)) -> (
-      match typecheck_args arg_types with
-      | Ok typed_args -> Ok (arg_types, typed_args, ret_ty)
-      | Error _ as error -> error)
+  | TRef (RFun (parameter_types, ret_ty)) -> (
+      if List.length args > List.length parameter_types then
+        Error "invalid number of arguments supplied"
+      else
+        let bound_types, remaining_types =
+          split_prefix (List.length args) [] parameter_types
+        in
+        match
+          map2_exact
+            (fun expected_ty arg ->
+              let typed_arg, _ =
+                type_exp_as expected_ty tc arg enclosing_class
+              in
+              typed_arg)
+            bound_types args
+        with
+        | Some typed_args ->
+          if remaining_types = [] then
+            match ret_ty with
+            | RetVoid when from_exp ->
+                Error "assigning void function return type to variable."
+            | _ -> Ok (FullApplication (bound_types, typed_args, ret_ty))
+          else
+            Ok
+              (PartialApplication
+                 (bound_types, typed_args, remaining_types, ret_ty))
+        | None -> Error "failed to pair function arguments")
   | _ -> Error "attempted to call a non-function type."
 
 and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
     (tc : Tctxt.t) (enclosing_class : id option) :
-    ( Typed_ast.exp * Typed_ast.ty list * Typed_ast.exp list * Typed_ast.ret_ty,
-      string )
-    result =
+    (Typed_ast.exp * typed_application, string) result =
   match proj with
   | Proj (obj, mth) -> (
       let tobj, obj_ty = type_exp tc obj enclosing_class in
@@ -633,16 +688,14 @@ and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
                 type_func_app args temp_func from_exp tc enclosing_class
               with
               | Error msg -> Error msg
-              | Ok (arg_types, typed_args, rt) ->
+              | Ok application ->
                   Ok
                     ( Typed_ast.Proj
                         ( tobj,
                           mth,
                           cid,
-                          TRef (RFun (argtypes, rt)) ),
-                      arg_types,
-                      typed_args,
-                      rt ))
+                          TRef (RFun (List.map fst argheaders, rt)) ),
+                      application ))
           | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."

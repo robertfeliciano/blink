@@ -248,6 +248,12 @@ ty:
   | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
   | LPAREN t=ty RPAREN { t }
+  | LPAREN RPAREN THIN_ARROW rty=ret_ty
+    { TRef (RFun ([], rty)) }
+  | LPAREN arg_ty=ty RPAREN THIN_ARROW rty=ret_ty
+    { TRef (RFun ([arg_ty], rty)) }
+  | LPAREN first=ty COMMA rest=separated_nonempty_list(COMMA, ty) RPAREN THIN_ARROW rty=ret_ty
+    { TRef (RFun (first :: rest, rty)) }
   // | t=ty OPT_TYPE { TOpt t }
 
 int_ty:
@@ -278,13 +284,8 @@ ref_ty:
   | TSTRING { RString }
   | cname=IDENT { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
-  | fun_ty=fun_ty { fun_ty }
   | gname=IDENT LT_TYPE params=separated_list(COMMA, ty) GT_TYPE
     { RGeneric (gname, params) }
-
-fun_ty:
-  | LBRACKET arg_tys=separated_list(COMMA, ty) RBRACKET THIN_ARROW rty=ret_ty 
-    { RFun (arg_tys, rty) }
 
 %inline bop:
   | PLUS  { Add }

@@ -52,12 +52,25 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
         args.push_back(val);
     }
 
-    llvm::Function* callee = gen.mod->getFunction(s.callee);
+    if (llvm::Function* callee = gen.mod->getFunction(s.callee))
+        return gen.builder->CreateCall(callee, args);
 
-    if (!callee)
-        llvm_unreachable("Calling unknown function.");
+    auto it = gen.varEnv.find(s.callee);
+    if (it != gen.varEnv.end()) {
+        llvm::Value* calleePtr = gen.builder->CreateLoad(
+            llvm::Type::getInt8PtrTy(*gen.ctxt), it->second, s.callee + "_load");
 
-    return gen.builder->CreateCall(callee, args);
+        std::vector<llvm::Type*> argTypes;
+        argTypes.reserve(args.size());
+        for (llvm::Value* arg : args)
+            argTypes.push_back(arg->getType());
+
+        llvm::FunctionType* fnType = llvm::FunctionType::get(
+            llvm::Type::getVoidTy(*gen.ctxt), argTypes, /*isVarArg=*/false);
+        return gen.builder->CreateCall(fnType, calleePtr, args);
+    }
+
+    llvm_unreachable("Calling unknown function.");
 }
 
 Value* StmtToLLVisitor::operator()(const If& s) {

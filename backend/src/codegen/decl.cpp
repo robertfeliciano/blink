@@ -105,15 +105,11 @@ void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
         gen.builder->CreateStore(&arg, gen.varEnv[argName]);
     }
 
-    llvm::Value* retVal;
     for (auto& stmtNode : f.body) {
-        retVal = gen.codegenStmt(*stmtNode);
+        gen.codegenStmt(*stmtNode);
     }
-    if (llFun->getReturnType()->isVoidTy()) {
-        if (!llvm::dyn_cast<llvm::ReturnInst>(retVal)) {
-            gen.builder->CreateRetVoid();
-        }
-    }
+    if (llFun->getReturnType()->isVoidTy() && gen.builder->GetInsertBlock()->getTerminator() == nullptr)
+        gen.builder->CreateRetVoid();
 
     llvm::verifyFunction(*llFun);
 }

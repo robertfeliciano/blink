@@ -143,3 +143,25 @@ inline fun add_one(value: i32) => i32 {
 
 The modifier uses LLVM's always-inliner and is honored even when compiling with
 `-O0`.
+
+Functions support prefix partial application. Supplying fewer arguments than a
+function declares produces a closure over the supplied arguments; supplying the
+full arity invokes the function normally.
+
+```blink
+fun add(left: i32, middle: i32, right: i32) => i32 {
+  return left + middle + right;
+}
+
+fun main() => i32 {
+  let add_ten: (i32, i32) -> i32 = add(10);
+  let result = add_ten(20, 12);
+  free add_ten;
+  return result;
+}
+```
+
+Zero supplied arguments are also valid (`let copy = add();`), partial calls can
+be chained (`add(10)(20)(12)`), and bound arguments are evaluated once from left
+to right. As with lambda closures, named partial applications should be freed
+when they are no longer needed.

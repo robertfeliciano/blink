@@ -74,7 +74,7 @@ let fixtures =
       source =
         "fun main() => i32 {\n\
         \  let scale = 12;\n\
-        \  let apply: [i32, i32] -> i32 = fn[scale](left, right) {\n\
+        \  let apply: (i32, i32) -> i32 = fn[scale](left, right) {\n\
         \    return left + right * scale;\n\
         \  };\n\
         \  let result = apply(3, 4);\n\
@@ -121,6 +121,153 @@ let fixtures =
          fun identity(value: i32) => i32 { return value; }\n\
          fun main() => i32 { return identity(7); }";
       expected_exit = 7;
+    };
+    {
+      name = "global-partial-application";
+      source =
+        "fun add(left: i32, middle: i32, right: i32) => i32 {\n\
+        \  return left + middle + right;\n\
+         }\n\
+         fun main() => i32 {\n\
+        \  let add_left: (i32, i32) -> i32 = add(10);\n\
+        \  let result = add_left(20, 12);\n\
+        \  free add_left;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "chained-partial-application";
+      source =
+        "fun add(left: i32, middle: i32, right: i32) => i32 {\n\
+        \  return left + middle + right;\n\
+         }\n\
+         fun main() => i32 { return add(10)(20)(12); }";
+      expected_exit = 42;
+    };
+    {
+      name = "reassigned-partial-application";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun main() => i32 {\n\
+        \  let f: (i32) -> i32 = add(1);\n\
+        \  f = add(2);\n\
+        \  let result = f(40);\n\
+        \  free f;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "lambda-partial-application";
+      source =
+        "fun main() => i32 {\n\
+        \  let offset = 7;\n\
+        \  let add: (i32, i32, i32) -> i32 = fn[offset](a, b, c) {\n\
+        \    return offset + a + b + c;\n\
+        \  };\n\
+        \  let finish: (i32) -> i32 = add(10, 20);\n\
+        \  let result = finish(5);\n\
+        \  free finish;\n\
+        \  free add;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "method-partial-application";
+      source =
+        "class Calculator {\n\
+        \  let base: i32 = 0;\n\
+        \  fun add(left: i32, right: i32) => i32 {\n\
+        \    return base + left + right;\n\
+        \  }\n\
+         }\n\
+         fun main() => i32 {\n\
+        \  let calculator = new Calculator { base = 10 };\n\
+        \  let finish: (i32) -> i32 = calculator.add(20);\n\
+        \  let result = finish(12);\n\
+        \  free finish;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "returned-function-partial-application";
+      source =
+        "fun make_adder(offset: i32) => (i32, i32) -> i32 {\n\
+        \  return fn[offset](left, right) { return offset + left + right; };\n\
+         }\n\
+         fun main() => i32 {\n\
+        \  let add: (i32, i32) -> i32 = make_adder(10);\n\
+        \  let finish: (i32) -> i32 = add(20);\n\
+        \  let result = finish(12);\n\
+        \  free finish;\n\
+        \  free add;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "zero-argument-and-void-partial-application";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun consume(left: i32, right: i32) => void {}\n\
+         fun main() => i32 {\n\
+        \  let all: (i32, i32) -> i32 = add();\n\
+        \  let consume_right: (i32) -> void = consume(1);\n\
+        \  consume_right(2);\n\
+        \  let result = all(20, 22);\n\
+        \  free consume_right;\n\
+        \  free all;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "partial-bound-arguments-evaluate-once-in-order";
+      source =
+        "class Counter {\n\
+        \  let value: i32 = 0;\n\
+        \  fun next() => i32 { value += 1; return value; }\n\
+         }\n\
+         fun digits(first: i32, second: i32, third: i32) => i32 {\n\
+        \  return first * 100 + second * 10 + third;\n\
+         }\n\
+         fun main() => i32 {\n\
+        \  let counter = new Counter { value = 0 };\n\
+        \  let finish: (i32) -> i32 = digits(counter.next(), counter.next());\n\
+        \  let result = finish(counter.next());\n\
+        \  free finish;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 123;
+    };
+    {
+      name = "prototype-partial-application";
+      source =
+        "@C fun abs(value: i32) => i32;\n\
+         fun main() => i32 {\n\
+        \  let absolute: (i32) -> i32 = abs();\n\
+        \  let result = absolute(-42);\n\
+        \  free absolute;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "function-argument-partial-application";
+      source =
+        "fun apply(f: (i32) -> i32, value: i32) => i32 { return f(value); }\n\
+         fun main() => i32 {\n\
+        \  let increment: (i32) -> i32 = fn(value) { return value + 1; };\n\
+        \  let apply_increment: (i32) -> i32 = apply(increment);\n\
+        \  let result = apply_increment(41);\n\
+        \  free apply_increment;\n\
+        \  free increment;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
     };
   ]
 

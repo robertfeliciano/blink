@@ -17,6 +17,13 @@ let gensym sfx =
   incr counter;
   "%tmp_" ^ sfx ^ Int.to_string n
 
+let partial_result_prefix = "%tmp_partial_result"
+
+let partial_result_sym () = gensym "partial_result"
+
+let is_partial_result_sym name =
+  String.starts_with ~prefix:partial_result_prefix name
+
 let desugar_annotation ((i, el) : T.annotation) =
   match (i, el) with
   (* 

@@ -218,7 +218,7 @@ let test_lambda_lifting _ =
   let source =
     "fun main() => i32 {\n\
     \  let scale = 4;\n\
-    \  let apply: [i32] -> i32 = fn[scale](value) {\n\
+    \  let apply: (i32) -> i32 = fn[scale](value) {\n\
     \    return value * scale;\n\
     \  };\n\
     \  let result = apply(3);\n\
@@ -250,6 +250,7 @@ let rec exp_contains_lambda (exp : DA.exp) =
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index
+  | DA.PartialApply _ -> true
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
 let rec stmt_contains_lambda (stmt : DA.stmt) =
@@ -272,8 +273,8 @@ let test_nested_lambda_lifting _ =
     {|
 fun main() => i32 {
     let x: i32 = 10;
-    let outer: [i32] -> i32 = fn [x](y) {
-        let inner: [i32] -> i32 = fn [x, y](z) {
+    let outer: (i32) -> i32 = fn [x](y) {
+        let inner: (i32) -> i32 = fn [x, y](z) {
             return x + y + z;
         };
         return inner(3);
@@ -310,6 +311,142 @@ fun main() => i32 {
         (Printf.sprintf "unexpected nested lambda lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_partial_application_lifting _ =
+  let source =
+    {|
+fun add(left: i32, middle: i32, right: i32) => i32 {
+    return left + middle + right;
+}
+fun main() => i32 {
+    let add_left: (i32, i32) -> i32 = add(10);
+    let result = add_left(20, 12);
+    free add_left;
+    return result;
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, []) ->
+      assert_bool "partial application should produce a lifted wrapper"
+        (List.exists
+           (fun (fn : DA.fdecl) ->
+             Core.String.is_prefix fn.fname ~prefix:"Lifted")
+           functions);
+      assert_bool "no partial-application nodes should remain"
+        (not
+           (List.exists
+              (fun (fn : DA.fdecl) -> List.exists stmt_contains_lambda fn.body)
+              functions))
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected partial-application lowering:\n%s"
+           (Printer.show_desugared_program program))
+
+let rec exp_contains_call (exp : DA.exp) =
+  match exp with
+  | DA.Call _ -> true
+  | DA.Array (args, _) -> List.exists exp_contains_call args
+  | DA.ObjInit (_, fields) ->
+      List.exists (fun (_, value) -> exp_contains_call value) fields
+  | DA.Bop (_, lhs, rhs, _) ->
+      exp_contains_call lhs || exp_contains_call rhs
+  | DA.Uop (_, value, _) | DA.Cast (value, _) | DA.Proj (value, _, _) ->
+      exp_contains_call value
+  | DA.Index (collection, index, _) ->
+      exp_contains_call collection || exp_contains_call index
+  | DA.PartialApply (_, args, _, _, _) -> List.exists exp_contains_call args
+  | DA.Lambda (_, _, _, body) -> List.exists stmt_contains_call body
+  | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
+
+and stmt_contains_call (stmt : DA.stmt) =
+  match stmt with
+  | DA.Assn (lhs, rhs, _) -> exp_contains_call lhs || exp_contains_call rhs
+  | DA.Decl (_, _, init, _) -> exp_contains_call init
+  | DA.Ret (Some value) -> exp_contains_call value
+  | DA.Ret None -> false
+  | DA.SCall _ -> true
+  | DA.Free values -> List.exists exp_contains_call values
+  | DA.If (condition, then_block, else_block) ->
+      exp_contains_call condition
+      || List.exists stmt_contains_call then_block
+      || List.exists stmt_contains_call else_block
+  | DA.While (condition, body) ->
+      exp_contains_call condition || List.exists stmt_contains_call body
+  | DA.Break | DA.Continue -> false
+
+let test_chained_partial_application_cleanup _ =
+  let source =
+    {|
+fun add(left: i32, middle: i32, right: i32) => i32 {
+    return left + middle + right;
+}
+fun main() => i32 {
+    let result = add(10)(20)(12);
+    return result;
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, []) ->
+      let main =
+        match
+          List.find_opt
+            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
+            functions
+        with
+        | Some fn -> fn
+        | None -> assert_failure "expected a lowered main function"
+      in
+      let indexed_body = List.mapi (fun index stmt -> (index, stmt)) main.body in
+      let cleaned_closure_names =
+        List.concat_map
+          (fun (free_index, stmt) ->
+            match stmt with
+            | DA.Free values ->
+                List.filter_map
+                  (function
+                    | DA.Id (closure_name, DA.TRef (DA.RClass _)) ->
+                        if
+                          List.exists
+                            (fun (decl_index, prior_stmt) ->
+                              match prior_stmt with
+                              | DA.Decl (name, _, _, _)
+                                when Core.String.equal name closure_name ->
+                                  decl_index < free_index
+                                  && List.exists
+                                       (fun (call_index, candidate) ->
+                                         decl_index < call_index
+                                         && call_index < free_index
+                                         && stmt_contains_call candidate)
+                                       indexed_body
+                              | _ -> false)
+                            indexed_body
+                          && List.exists
+                               (fun (return_index, candidate) ->
+                                 return_index > free_index
+                                 && match candidate with
+                                    | DA.Ret _ -> true
+                                    | _ -> false)
+                               indexed_body
+                        then Some closure_name
+                        else None
+                    | _ -> None)
+                  values
+            | _ -> [])
+          indexed_body
+        |> List.sort_uniq Core.String.compare
+      in
+      assert_bool
+        (Printf.sprintf
+           "expected the generated intermediate closure to be declared, \
+            consumed, and then cleaned up before return:\n%s"
+           (Printer.show_block main.body))
+        (List.length cleaned_closure_names >= 1)
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected chained partial-application lowering:\n%s"
+           (Printer.show_desugared_program program))
+
 let suite =
   let pipeline_tests =
     List.map
@@ -328,5 +465,8 @@ let suite =
          "inline propagation" >:: test_inline_propagation;
          "lambda lifting" >:: test_lambda_lifting;
          "nested lambda lifting" >:: test_nested_lambda_lifting;
+         "partial application lifting" >:: test_partial_application_lifting;
+         "chained partial application cleanup"
+         >:: test_chained_partial_application_cleanup;
          "parsed and typed programs" >::: pipeline_tests;
        ]
