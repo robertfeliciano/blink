@@ -709,6 +709,30 @@ let test_lambda_rejects_wrong_return_type _ =
     \  if apply(3) { return 1; } else { return 0; }\n\
      }"
 
+let test_direct_untyped_lambda_argument _ =
+  assert_program_type_checks
+    "fun apply(f: [i32] -> i32) => i32 { return f(41); }\n\
+     fun main() => i32 {\n\
+    \  return apply(fn(value) { return value + 1; });\n\
+     }"
+
+let test_direct_untyped_lambda_rejects_wrong_return_type _ =
+  assert_program_type_error
+    "fun apply(f: [i32] -> i32) => i32 { return f(41); }\n\
+     fun main() => i32 {\n\
+    \  return apply(fn(value) { return true; });\n\
+     }"
+
+let test_lambda_reassignment_rejects_parameter_mismatch _ =
+  assert_program_type_error
+    "fun main() => i32 {\n\
+    \  let f: [i32] -> i32 = fn(value) { return value; };\n\
+    \  f = fn(value: bool) -> i32 {\n\
+    \    if value { return 1; } else { return 0; }\n\
+    \  };\n\
+    \  return 0;\n\
+     }"
+
 let test_typed_lambda_signature_must_match_expected_type _ =
   List.iter assert_program_type_error
     [
@@ -833,6 +857,12 @@ let suite =
          "unknown object field" >:: test_object_rejects_unknown_field;
          "capturing lambda" >:: test_capturing_lambda;
          "lambda return type" >:: test_lambda_rejects_wrong_return_type;
+         "direct untyped lambda argument"
+         >:: test_direct_untyped_lambda_argument;
+         "direct untyped lambda return type"
+         >:: test_direct_untyped_lambda_rejects_wrong_return_type;
+         "lambda reassignment parameter mismatch"
+         >:: test_lambda_reassignment_rejects_parameter_mismatch;
          "typed lambda signature"
          >:: test_typed_lambda_signature_must_match_expected_type;
          "non-void lambda missing return" >:: test_nonvoid_lambda_requires_return;
