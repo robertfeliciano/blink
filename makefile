@@ -7,7 +7,7 @@ backend:
 	cmake --build backend/build --parallel
 
 frontend: 
-	cd frontend && dune build && mv ./_build/default/src/blink.exe ../blink -f
+	cd frontend && dune build ./src/blink.exe && cp ./_build/default/src/blink.exe ../blink -f
 
 test:
 	cd frontend && dune runtest

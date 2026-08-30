@@ -63,6 +63,7 @@ llvm_map_components_to_libnames(llvm_libs
 )
 
 add_library(backend STATIC ${SOURCES})
+target_compile_definitions(backend PRIVATE CAML_NAME_SPACE)
 set_target_properties(backend PROPERTIES
     OUTPUT_NAME "backend"
     ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../frontend/lib

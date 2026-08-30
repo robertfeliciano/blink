@@ -491,7 +491,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
         Value* storedVal = nullptr;
 
-        if (userInitMap.contains(fd.fieldName)) {
+        if (userInitMap.find(fd.fieldName) != userInitMap.end()) {
             storedVal = userInitMap[fd.fieldName];
         } else if (fd.init) {
             storedVal = gen.codegenExp(*fd.init);
