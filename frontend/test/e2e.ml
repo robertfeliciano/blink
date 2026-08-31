@@ -83,6 +83,45 @@ let fixtures =
          }";
       expected_exit = 51;
     };
+    {
+      name = "mixed-integer-promotion";
+      source =
+        "fun main() => i32 {\n\
+        \  let signed: i16 = 10;\n\
+        \  let unsigned: u16 = 20;\n\
+        \  return signed + unsigned;\n\
+         }";
+      expected_exit = 30;
+    };
+    {
+      name = "integer-float-promotion";
+      source =
+        "fun main() => i32 {\n\
+        \  let integer: i32 = 2;\n\
+        \  let decimal: f32 = 1.5;\n\
+        \  let result = integer + decimal;\n\
+        \  if result > 3.0 { return result as i32; } else { return 0; }\n\
+         }";
+      expected_exit = 3;
+    };
+    {
+      name = "float-loop-default-step";
+      source =
+        "fun main() => i32 {\n\
+        \  let count = 0;\n\
+        \  for value in 0.0..3.0 { count += 1; }\n\
+        \  return count;\n\
+         }";
+      expected_exit = 3;
+    };
+    {
+      name = "prototype-definition";
+      source =
+        "fun identity(value: i32) => i32;\n\
+         fun identity(value: i32) => i32 { return value; }\n\
+         fun main() => i32 { return identity(7); }";
+      expected_exit = 7;
+    };
   ]
 
 let stage_failure fixture stage error =

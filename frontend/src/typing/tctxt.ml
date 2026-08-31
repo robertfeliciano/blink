@@ -46,30 +46,21 @@ let show_tctxt tc =
 let add_local (c : t) (id : id) (bnd : ty * bool) : t =
   { c with locals = (id, bnd) :: c.locals }
 
-let lookup_local (id : id) (c : t) : ty * bool = List.assoc id c.locals
-
 let lookup_local_option id c : (ty * bool) option =
-  try Some (List.assoc id c.locals) with Not_found -> None
+  List.assoc_opt id c.locals
 
 (* globals ------------------------------------------------------------------ *)
 let add_global (c : t) (id : id) (bnd : ty * bool) : t =
   { c with globals = (id, bnd) :: c.globals }
 
-let add_proto (c : t) (id : id) (bnd : ty * bool) : t =
-  { c with protos = (id, bnd) :: c.protos }
-
-let lookup_global (id : id) (c : t) : ty * bool = List.assoc id c.globals
-let lookup_proto (id : id) (c : t) : ty * bool = List.assoc id c.protos
+let set_proto (c : t) (id : id) (bnd : ty * bool) : t =
+  { c with protos = (id, bnd) :: List.remove_assoc id c.protos }
 
 let lookup_global_option id c : (ty * bool) option =
-  try Some (List.assoc id c.globals) with Not_found -> None
+  List.assoc_opt id c.globals
 
 let lookup_proto_option id c : (ty * bool) option =
-  try Some (List.assoc id c.protos) with Not_found -> None
-
-(* general-purpose lookup: for local _or_ global *)
-let lookup id c : ty * bool =
-  match lookup_local_option id c with None -> lookup_global id c | Some x -> x
+  List.assoc_opt id c.protos
 
 let lookup_option id c : (ty * bool) option =
   match lookup_local_option id c with
@@ -82,10 +73,14 @@ let lookup_option id c : (ty * bool) option =
 let add_class c id fields funs =
   { c with classes = (id, (fields, funs)) :: c.classes }
 
-let lookup_class id c = List.assoc id c.classes
+let set_class c id fields funs =
+  {
+    c with
+    classes = (id, (fields, funs)) :: List.remove_assoc id c.classes;
+  }
 
 let lookup_class_option id c =
-  try Some (lookup_class id c) with Not_found -> None
+  List.assoc_opt id c.classes
 
 let lookup_field_option c_name f_name c =
   let rec lookup_field_aux f_name l =
