@@ -1,6 +1,5 @@
 open Ast
 module Printer = Pprint_typed_ast
-module Math = Util.Constants.Math
 
 exception TypeError of string
 
@@ -288,56 +287,47 @@ and subtype_ret_ty (tc : Tctxt.t) (t1 : Typed_ast.ret_ty)
   | RetVal t1', RetVal t2' -> subtype tc t1' t2'
   | _ -> false
 
-let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
-  let open Z in
-  if fits_int32 n then TSigned Ti32
-  else if fits_int32_unsigned n then TUnsigned Tu32
-  else if fits_int64 n then TSigned Ti64
-  else if fits_int64_unsigned n then TUnsigned Tu64
-  else
-    let min_i128 = neg (shift_left one 127) in
-    let max_i128 = sub (shift_left one 127) one in
-    if geq n min_i128 && leq n max_i128 then TSigned Ti128
-    else if geq n zero && leq n Z.(sub (shift_left one 128) one) then
-      TUnsigned Tu128
-    else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
-
 let fits_in_int_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
-  let open Z in
   match t with
-  | TSigned Ti8 -> geq n (of_int (-128)) && leq n (of_int 127)
-  | TSigned Ti16 -> geq n (of_int (-32768)) && leq n (of_int 32767)
-  | TSigned Ti32 -> fits_int32 n
-  | TSigned Ti64 -> fits_int64 n
-  | TSigned Ti128 ->
-      let min_i128 = neg (shift_left one 127) in
-      let max_i128 = sub (shift_left one 127) one in
-      geq n min_i128 && leq n max_i128
-  | TUnsigned Tu8 -> geq n zero && leq n (of_int 255)
-  | TUnsigned Tu16 -> geq n zero && leq n (of_int 65535)
-  | TUnsigned Tu32 -> fits_int32_unsigned n
-  | TUnsigned Tu64 -> fits_int64_unsigned n
-  | TUnsigned Tu128 -> geq n zero && leq n Z.(sub (shift_left one 128) one)
+  | TSigned signed_ty ->
+      let limit = Z.shift_left Z.one (sint_width signed_ty - 1) in
+      Z.geq n (Z.neg limit) && Z.lt n limit
+  | TUnsigned unsigned_ty ->
+      Z.sign n >= 0 && Z.numbits n <= uint_width unsigned_ty
 
-let fits_in_float_ty (n : float) (t : Typed_ast.float_ty) : bool =
-  match t with
-  | Tf32 ->
-      (* IEEE-754 f32 range limits *)
-      let max_f32 = 3.40282347e38 in
-      let min_f32 = -.max_f32 in
-      (not (Float.is_nan n))
-      && Float.is_finite n && n >= min_f32 && n <= max_f32
-  | Tf64 -> true
+let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
+  let candidates : Typed_ast.int_ty list =
+    [
+      TSigned Ti32;
+      TUnsigned Tu32;
+      TSigned Ti64;
+      TUnsigned Tu64;
+      TSigned Ti128;
+      TUnsigned Tu128;
+    ]
+  in
+  match List.find_opt (fits_in_int_ty n) candidates with
+  | Some int_ty -> int_ty
+  | None -> type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
 
-let int_in_float (n : Z.t) (t : Typed_ast.float_ty) : bool =
-  let open Z in
-  match t with
-  | Tf32 ->
-      (* f32 has 24 bits of precision *)
-      leq (abs n) (shift_left one 24)
-  | Tf64 ->
-      (* f64 has 53 bits of precision *)
-      leq (abs n) (shift_left one 53)
+let max_finite_f32 = Int32.float_of_bits 0x7f7fffffl
+
+let float_is_representable_in_ty (n : float) (t : Typed_ast.float_ty) : bool =
+  if not (Float.is_finite n) then false
+  else
+    match t with
+    | Tf32 -> Float.abs n <= max_finite_f32
+    | Tf64 -> true
+
+let int_is_exactly_representable_in_float_ty (n : Z.t)
+    (t : Typed_ast.float_ty) : bool =
+  let precision, max_bits =
+    match t with Tf32 -> (24, 128) | Tf64 -> (53, 1024)
+  in
+  let bits = Z.numbits n in
+  bits = 0
+  || (bits <= max_bits
+     && (bits <= precision || Z.trailing_zeros n >= bits - precision))
 
 let exact_nonnegative_int (node : 'a node) description value =
   if Z.sign value < 0 then type_error node (description ^ " cannot be negative")

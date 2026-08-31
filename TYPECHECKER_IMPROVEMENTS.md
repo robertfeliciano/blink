@@ -213,6 +213,10 @@ writable.
 
 ### Make constant folding total and type-aware
 
+> **Status:** Implemented on `cdx/typechecker-enhancements`. Invalid constant
+> arithmetic produces `TypeError`, and a folded integer expression now adopts
+> its contextual integer type when the final value fits that type.
+
 [`eval_const_exp`](frontend/src/typing/type_util.ml#L298) may expose arithmetic
 exceptions for division by zero, oversized exponent or shift conversions, and
 related invalid constant expressions. Constant-folded binary expressions also
@@ -223,6 +227,9 @@ Constant evaluation should return a result type such as
 retag the resulting literal with the resolved expected type.
 
 ### Preserve source order in `free`
+
+> **Status:** Implemented on `cdx/typechecker-enhancements`. Free expressions
+> are typed with an order-preserving `List.map` traversal.
 
 The `Free` case in
 [`frontend/src/typing/type_stmt.ml`](frontend/src/typing/type_stmt.ml#L214) uses

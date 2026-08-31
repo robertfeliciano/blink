@@ -15,6 +15,15 @@ let var_exists stmt_n i tc =
   | Some _ -> type_error stmt_n ("Variable " ^ i ^ " already exists.")
   | None -> ()
 
+let type_integer_constant ?(description = "Constant expression result") node
+    value int_ty =
+  let ty = Typed_ast.TInt int_ty in
+  if fits_in_int_ty value int_ty then (Typed_ast.Int (value, int_ty), ty)
+  else
+    type_error node
+      (description ^ " " ^ Z.to_string value ^ " does not fit in "
+     ^ Printer.show_ty ty ^ ".")
+
 let validate_assignment_operator stmt_n op lhs_ty =
   let require_number () =
     if not (is_number lhs_ty) then
@@ -201,16 +210,14 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
         type_error stmt_n "continue can only be used inside loop"
       else (tc, Typed_ast.Continue, false)
   | Free ens ->
-      let tes =
-        List.fold_left
-          (fun acc en ->
-            let te, ety = type_exp tc en enclosing_class in
-            match ety with
-            | Typed_ast.TRef _ -> te :: acc
-            (* other TRefs are on the stack or global (strings) not suited for deletion *)
-            | _ -> type_error en "Expected reference type for freeing!")
-          [] ens
+      let type_free_exp en =
+        let te, ety = type_exp tc en enclosing_class in
+        match ety with
+        | Typed_ast.TRef _ -> te
+        (* Other values live on the stack and are not suited for deletion. *)
+        | _ -> type_error en "Expected reference type for freeing!"
       in
+      let tes = List.map type_free_exp ens in
       (tc, Typed_ast.Free tes, false)
 
 and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
@@ -223,12 +230,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
   | Int i -> (
       match expected with
       | Some (TInt target_ty) ->
-          if fits_in_int_ty i target_ty then
-            (Typed_ast.Int (i, target_ty), TInt target_ty)
-          else
-            type_error e
-              ("Integer literal " ^ Z.to_string i ^ " does not fit in type "
-              ^ Printer.show_ty (TInt target_ty))
+          type_integer_constant ~description:"Integer literal" e i target_ty
       | Some t -> unexpected_ty t e "integer"
       | _ ->
           let inferred_ty = infer_integer_ty i e in
@@ -240,7 +242,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         | Some t -> unexpected_ty t e "float"
         | None -> Typed_ast.Tf64
       in
-      if fits_in_float_ty f target_ty then
+      if float_is_representable_in_ty f target_ty then
         (Float (f, target_ty), TFloat target_ty)
       else
         type_error e
@@ -357,16 +359,18 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             (te1', te2', operand_ty, operand_ty)
         | At -> type_error e "@ not yet supported."
       in
-      check_expected_ty expected res_ty e;
       match (eval_const_exp e, operand_ty) with
       | Some ev, Typed_ast.TInt int_ty ->
-          if fits_in_int_ty ev int_ty then
-            (Typed_ast.Int (ev, int_ty), Typed_ast.TInt int_ty)
-          else
-            type_error e
-              ("Constant expression result " ^ Z.to_string ev
-             ^ " does not fit in " ^ Printer.show_ty operand_ty ^ ".")
+          let resolved_int_ty =
+            match expected with Some (TInt ty) -> ty | _ -> int_ty
+          in
+          let typed_constant, constant_ty =
+            type_integer_constant e ev resolved_int_ty
+          in
+          check_expected_ty expected constant_ty e;
+          (typed_constant, constant_ty)
       | _ ->
+          check_expected_ty expected res_ty e;
           ( Typed_ast.Bop (convert_binop binop, te1', te2', res_ty),
             res_ty ))
   | Uop (unop, e1) ->
@@ -521,23 +525,27 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
 and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
     (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =
   let promote te actual =
-    if equal_ty actual expected then (te, expected)
-    else if is_number actual && is_number expected then
-      let promoted = meet_number e (actual, expected) in
-      if equal_ty promoted expected then (Typed_ast.Cast (te, expected), expected)
-      else
+    match (te, expected) with
+    | Typed_ast.Int (value, _), Typed_ast.TInt int_ty ->
+        type_integer_constant e value int_ty
+    | _ when equal_ty actual expected -> (te, expected)
+    | _ when is_number actual && is_number expected ->
+        let promoted = meet_number e (actual, expected) in
+        if equal_ty promoted expected then
+          (Typed_ast.Cast (te, expected), expected)
+        else
+          type_error e
+            ("Cannot implicitly promote " ^ Printer.show_ty actual ^ " to "
+           ^ Printer.show_ty expected ^ ".")
+    | _ ->
         type_error e
-          ("Cannot implicitly promote " ^ Printer.show_ty actual ^ " to "
-         ^ Printer.show_ty expected ^ ".")
-    else
-      type_error e
-        ("Expected " ^ Printer.show_ty expected ^ " but got "
-       ^ Printer.show_ty actual ^ ".")
+          ("Expected " ^ Printer.show_ty expected ^ " but got "
+         ^ Printer.show_ty actual ^ ".")
   in
   match (e.elt, expected) with
   | Int n, Typed_ast.TFloat float_ty ->
       let te, _actual = type_exp tc e enclosing_class in
-      if int_in_float n float_ty then
+      if int_is_exactly_representable_in_float_ty n float_ty then
         (Typed_ast.Cast (te, expected), expected)
       else
         type_error e

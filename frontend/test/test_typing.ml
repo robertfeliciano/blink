@@ -78,6 +78,78 @@ let test_integer_overflow _ =
   let expected = Typed.(TInt (TUnsigned Tu8)) in
   assert_type_error (fun () -> type_exp ~expected (Int (Z.of_int 256)))
 
+let test_integer_fit_boundaries _ =
+  let open Typed in
+  let signed_types =
+    [ (Ti8, 8); (Ti16, 16); (Ti32, 32); (Ti64, 64); (Ti128, 128) ]
+  in
+  List.iter
+    (fun (signed_ty, width) ->
+      let limit = Z.shift_left Z.one (width - 1) in
+      let min_value = Z.neg limit in
+      let max_value = Z.pred limit in
+      assert_bool "signed minimum should fit"
+        (Tu.fits_in_int_ty min_value (TSigned signed_ty));
+      assert_bool "signed maximum should fit"
+        (Tu.fits_in_int_ty max_value (TSigned signed_ty));
+      assert_bool "value below signed minimum should not fit"
+        (not (Tu.fits_in_int_ty (Z.pred min_value) (TSigned signed_ty)));
+      assert_bool "value above signed maximum should not fit"
+        (not (Tu.fits_in_int_ty (Z.succ max_value) (TSigned signed_ty))))
+    signed_types;
+  let unsigned_types =
+    [ (Tu8, 8); (Tu16, 16); (Tu32, 32); (Tu64, 64); (Tu128, 128) ]
+  in
+  List.iter
+    (fun (unsigned_ty, width) ->
+      let max_value = Z.pred (Z.shift_left Z.one width) in
+      assert_bool "zero should fit every unsigned type"
+        (Tu.fits_in_int_ty Z.zero (TUnsigned unsigned_ty));
+      assert_bool "unsigned maximum should fit"
+        (Tu.fits_in_int_ty max_value (TUnsigned unsigned_ty));
+      assert_bool "negative value should not fit an unsigned type"
+        (not (Tu.fits_in_int_ty Z.minus_one (TUnsigned unsigned_ty)));
+      assert_bool "value above unsigned maximum should not fit"
+        (not (Tu.fits_in_int_ty (Z.succ max_value) (TUnsigned unsigned_ty))))
+    unsigned_types
+
+let test_float_representability _ =
+  let open Typed in
+  assert_bool "maximum f32 should fit"
+    (Tu.float_is_representable_in_ty Tu.max_finite_f32 Tf32);
+  assert_bool "large finite f64 should not fit f32"
+    (not (Tu.float_is_representable_in_ty Float.max_float Tf32));
+  assert_bool "large finite f64 should fit f64"
+    (Tu.float_is_representable_in_ty Float.max_float Tf64);
+  List.iter
+    (fun non_finite ->
+      assert_bool "non-finite values should not fit float types"
+        (not (Tu.float_is_representable_in_ty non_finite Tf32));
+      assert_bool "non-finite values should not fit float types"
+        (not (Tu.float_is_representable_in_ty non_finite Tf64)))
+    [ Float.nan; Float.infinity; Float.neg_infinity ]
+
+let test_integer_float_exactness _ =
+  let open Typed in
+  let f32_boundary = Z.shift_left Z.one 24 in
+  assert_bool "2^24 should be exactly representable in f32"
+    (Tu.int_is_exactly_representable_in_float_ty f32_boundary Tf32);
+  assert_bool "2^24 + 1 should not be exactly representable in f32"
+    (not
+       (Tu.int_is_exactly_representable_in_float_ty
+          (Z.succ f32_boundary) Tf32));
+  assert_bool "2^24 + 2 should be exactly representable in f32"
+    (Tu.int_is_exactly_representable_in_float_ty
+       (Z.add f32_boundary (Z.of_int 2)) Tf32);
+  let f64_boundary = Z.shift_left Z.one 53 in
+  assert_bool "2^53 + 1 should not be exactly representable in f64"
+    (not
+       (Tu.int_is_exactly_representable_in_float_ty
+          (Z.succ f64_boundary) Tf64));
+  assert_bool "2^53 + 2 should be exactly representable in f64"
+    (Tu.int_is_exactly_representable_in_float_ty
+       (Z.add f64_boundary (Z.of_int 2)) Tf64)
+
 let test_unsigned_128_literal_inference _ =
   let value = Z.shift_left Z.one 127 in
   let _, actual = type_exp (Int value) in
@@ -263,6 +335,21 @@ let test_constant_arithmetic_failures_are_type_errors _ =
   assert_type_error (fun () ->
       Tu.eval_const_exp (mk_node (binary Pow (Z.of_int 2) huge)))
 
+let test_constant_folding_honors_expected_integer_type _ =
+  let expected = Typed.(TInt (TUnsigned Tu8)) in
+  let expression left right =
+    Bop (Add, mk_node (Int (Z.of_int left)), mk_node (Int (Z.of_int right)))
+  in
+  (match type_exp ~expected (expression 1 2) with
+  | Typed.Int (value, Typed.TUnsigned Typed.Tu8), actual_ty ->
+      assert_equal ~printer:Z.to_string (Z.of_int 3) value;
+      assert_ty expected actual_ty
+  | _ -> assert_failure "expected a folded u8 integer expression");
+  assert_type_error (fun () -> type_exp ~expected (expression 200 100));
+  assert_program_type_checks
+    "fun accept(value: u8) => u8 { return value; }
+     fun main() => i32 { return accept(1 + 2) as i32; }"
+
 let test_function_call_promotes_numeric_argument _ =
   let open Typed in
   let parameter_ty = TInt (TSigned Ti64) in
@@ -351,6 +438,17 @@ let test_loop_control_scope _ =
   assert_type_error (fun () ->
       Ts.type_stmt None Tc.empty Typed.RetVoid (mk_node Break) false);
   ignore (Ts.type_stmt None Tc.empty Typed.RetVoid (mk_node Break) true)
+
+let test_free_preserves_source_order _ =
+  let ref_ty = Typed.TRef (Typed.RClass "Resource") in
+  let tc =
+    Tc.empty |> fun tc -> Tc.add_local tc "first" (ref_ty, false)
+    |> fun tc -> Tc.add_local tc "second" (ref_ty, false)
+  in
+  let statement = Free [ mk_node (Id "first"); mk_node (Id "second") ] in
+  match Ts.type_stmt None tc Typed.RetVoid (mk_node statement) false with
+  | _, Typed.Free [ Typed.Id ("first", _); Typed.Id ("second", _) ], false -> ()
+  | _ -> assert_failure "expected free expressions to retain source order"
 
 let test_float_loop_default_step_preserves_type _ =
   let statement =
@@ -571,6 +669,9 @@ let suite =
          "literal types" >:: test_literal_types;
          "expected integer type" >:: test_expected_integer_type;
          "integer overflow" >:: test_integer_overflow;
+         "integer fit boundaries" >:: test_integer_fit_boundaries;
+         "float representability" >:: test_float_representability;
+         "integer float exactness" >:: test_integer_float_exactness;
          "u128 literal inference" >:: test_unsigned_128_literal_inference;
          "numeric binary expression" >:: test_numeric_binary_expression;
          "signed/unsigned integer promotion"
@@ -592,6 +693,8 @@ let suite =
          "void function arity" >:: test_void_function_call_wrong_arity;
          "constant arithmetic diagnostics"
          >:: test_constant_arithmetic_failures_are_type_errors;
+         "constant folding expected integer type"
+         >:: test_constant_folding_honors_expected_integer_type;
          "function argument promotion"
          >:: test_function_call_promotes_numeric_argument;
          "return promotion" >:: test_return_promotes_numeric_value;
@@ -603,6 +706,7 @@ let suite =
          "compound assignment operator validation"
          >:: test_compound_assignment_validates_operator;
          "loop control scope" >:: test_loop_control_scope;
+         "free source order" >:: test_free_preserves_source_order;
          "float loop default step type"
          >:: test_float_loop_default_step_preserves_type;
          "integer loop default step width"
