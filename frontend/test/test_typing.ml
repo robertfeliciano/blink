@@ -399,6 +399,77 @@ let test_const_assignment_rejected _ =
   assert_type_error (fun () ->
       Ts.type_stmt None tc Typed.RetVoid (mk_node statement) false)
 
+let test_const_field_assignment_rejected _ =
+  List.iter assert_program_type_error
+    [
+      "class Box { const value: i32 = 0; }
+       fun main() => i32 {
+         let box = new Box {};
+         box.value = 1;
+         return 0;
+       }";
+      "class Box {
+         const value: i32 = 0;
+         fun change() => void { value = 1; }
+       }
+       fun main() => i32 { return 0; }";
+      "class Box { const value: i32 = 0; }
+       fun main() => i32 {
+         let box = new Box {};
+         box.value += 1;
+         return 0;
+       }";
+      "class Box { const values: [i32; 2] = [1, 2]; }
+       fun main() => i32 {
+         let box = new Box {};
+         box.values = [3, 4];
+         return 0;
+       }";
+    ]
+
+let test_const_references_are_shallow _ =
+  List.iter assert_program_type_error
+    [
+      "class Box { let value: i32 = 0; }
+       fun main() => i32 {
+         const box: Box = new Box {};
+         box = new Box {};
+         return 0;
+       }";
+      "fun main() => i32 {
+         const values: [i32; 2] = [1, 2];
+         values = [3, 4];
+         return 0;
+       }";
+    ];
+  List.iter assert_program_type_checks
+    [
+      "class Box { let value: i32 = 0; }
+       fun main() => i32 {
+         const box: Box = new Box {};
+         box.value = 2;
+         return box.value;
+       }";
+      "fun main() => i32 {
+         const values: [i32; 2] = [1, 2];
+         values[0] = 3;
+         return values[0];
+       }";
+      "class Box { const values: [i32; 2] = [1, 2]; }
+       fun main() => i32 {
+         let box = new Box {};
+         box.values[0] = 3;
+         return box.values[0];
+       }";
+      "class Inner { let value: i32 = 0; }
+       class Outer { const inner: Inner = new Inner {}; }
+       fun main() => i32 {
+         let outer = new Outer {};
+         outer.inner.value = 2;
+         return outer.inner.value;
+       }";
+    ]
+
 let test_assignment_type_mismatch_rejected _ =
   let int_ty = Typed.(TInt (TSigned Ti32)) in
   let tc = Tc.add_local Tc.empty "value" (int_ty, false) in
@@ -700,6 +771,8 @@ let suite =
          "return promotion" >:: test_return_promotes_numeric_value;
          "method call" >:: test_method_call;
          "const assignment" >:: test_const_assignment_rejected;
+         "const field assignment" >:: test_const_field_assignment_rejected;
+         "shallow const references" >:: test_const_references_are_shallow;
          "assignment type mismatch" >:: test_assignment_type_mismatch_rejected;
          "assignment numeric promotion"
          >:: test_assignment_promotes_numeric_value;

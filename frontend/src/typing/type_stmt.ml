@@ -4,6 +4,12 @@ open Conversions
 module Printer = Pprint_typed_ast
 module Methods = Util.Constants.Methods
 
+type typed_projection = {
+  exp : Typed_ast.exp;
+  ty : Typed_ast.ty;
+  is_const : bool;
+}
+
 (*
 I wish there was an easy way to separate this into two separate files for exp and stmts.
 The mutual recursion introduced by lambda expressions has forced me to combine everything
@@ -75,17 +81,7 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
       let tc' = Tctxt.add_local tc i (given_ty, const) in
       (tc', Typed_ast.Decl (i, given_ty, te, const), false)
   | Assn (lhs, op, rhs) ->
-      (match lhs.elt with
-      | Id i -> (
-          match Tctxt.lookup_option i tc with
-          | Some (_, is_const) ->
-              if is_const then
-                type_error stmt_n
-                  "Attempting to assign to a variable marked as constant."
-          | None -> type_error stmt_n ("variable " ^ i ^ " is not defined"))
-      | Proj _ | Index _ -> ()
-      | _ -> type_error lhs "cannot assign to this expression");
-      let tlhs, lhsty = type_exp tc lhs enclosing_class in
+      let tlhs, lhsty = type_lvalue tc lhs enclosing_class in
       validate_assignment_operator stmt_n op lhsty;
       let trhs, _ = type_exp_as lhsty tc rhs enclosing_class in
       (tc, Typed_ast.Assn (tlhs, convert_aop op, trhs, lhsty), false)
@@ -219,6 +215,25 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
       in
       let tes = List.map type_free_exp ens in
       (tc, Typed_ast.Free tes, false)
+
+and type_lvalue (tc : Tctxt.t) (lhs : Ast.exp node)
+    (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =
+  match lhs.elt with
+  | Id id -> (
+      match Tctxt.lookup_option id tc with
+      | Some (_, true) ->
+          type_error lhs "Attempting to assign to a constant binding."
+  | Some _ -> type_exp tc lhs enclosing_class
+      | None -> type_error lhs ("variable " ^ id ^ " is not defined"))
+  | Proj (obj, field) ->
+      let projection = type_projection None tc lhs obj field enclosing_class in
+      if projection.is_const then
+        type_error lhs ("Attempting to assign to constant field " ^ field ^ ".")
+      else (projection.exp, projection.ty)
+  | Index _ ->
+      (* Const references are shallow: their elements remain mutable. *)
+      type_exp tc lhs enclosing_class
+  | _ -> type_error lhs "cannot assign to this expression"
 
 and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
     (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =
@@ -419,17 +434,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         type_error ec
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
          ^ Printer.show_ty e_ty ^ " to type " ^ Printer.show_ty tty ^ ".")
-  | Proj (ec, f) -> (
-      let tec, e_ty = type_exp tc ec enclosing_class in
-      match e_ty with
-      | Typed_ast.(TRef (RClass cid)) -> (
-          match Tctxt.lookup_field_option cid f tc with
-          | Some (fty, _) ->
-              check_expected_ty expected fty e;
-              (Typed_ast.Proj (tec, f, cid, fty), fty)
-          | None -> type_error ec ("Class " ^ cid ^ " has no member field " ^ f)
-          )
-      | _ -> type_error ec "Must project field of a class.")
+  | Proj (ec, f) ->
+      let projection = type_projection expected tc e ec f enclosing_class in
+      (projection.exp, projection.ty)
   | Lambda (scope, arg_ids, body) -> (
       (* TODO get better node for errors from parser *)
       let local_tc, t_scope = type_lambda_scope tc scope in
@@ -521,6 +528,25 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       let typed_inits = List.map type_field_inits inits in
       (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
+
+and type_projection (expected : Typed_ast.ty option) (tc : Tctxt.t)
+    (projection : Ast.exp node) (obj : Ast.exp node) (field : id)
+    (enclosing_class : id option) : typed_projection =
+  let typed_obj, obj_ty = type_exp tc obj enclosing_class in
+  match obj_ty with
+  | Typed_ast.TRef (RClass class_id) -> (
+      match Tctxt.lookup_field_option class_id field tc with
+      | Some (field_ty, is_const) ->
+          check_expected_ty expected field_ty projection;
+          {
+            exp = Typed_ast.Proj (typed_obj, field, class_id, field_ty);
+            ty = field_ty;
+            is_const;
+          }
+      | None ->
+          type_error projection
+            ("Class " ^ class_id ^ " has no member field " ^ field))
+  | _ -> type_error obj "Must project field of a class."
 
 and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
     (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =

@@ -203,6 +203,12 @@ for their corresponding binary operators.
 
 ### Check mutability for projected lvalues
 
+> **Status:** Implemented on `cdx/typechecker-enhancements`. Assignment targets
+> now use shared lvalue typing, explicit and implicit const fields reject direct
+> and compound assignment, and const references use shallow semantics: the
+> reference cannot be rebound, but class fields and array elements reachable
+> through it remain mutable unless the final field itself is const.
+
 Constness is checked only when the assignment LHS is an `Id`. A `Proj` or
 `Index` is accepted unconditionally at
 [`frontend/src/typing/type_stmt.ml`](frontend/src/typing/type_stmt.ml#L83), so

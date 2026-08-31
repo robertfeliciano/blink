@@ -92,9 +92,13 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
       type_error cn "Constructor cannot return void."
   | Some _ | None -> ());
   let globals' =
-    List.map
-      (fun (f : Typed_ast.field) -> (f.fieldName, (f.ftyp, false)))
-      tfields
+    match lookup_class_option cname tc with
+    | Some (fields, _) ->
+        List.map
+          (fun (field, field_ty, is_const, _) ->
+            (field, (field_ty, is_const)))
+          fields
+    | None -> type_error cn ("Class " ^ cname ^ " is undefined.")
   in
   let tc' =
     {
