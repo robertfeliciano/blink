@@ -27,11 +27,6 @@ Whenever the user supplies one or more links as references for the requested
 change, create a design panel of two or three sub-agents before writing the
 main agent's final plan.
 
-Use these settings for every panel member:
-
-- Model: `gpt-5.6-sol`
-- Reasoning effort: `medium`
-
 Use two agents for a focused feature with a small or closely related reference
 set. Use three agents when the feature, reference set, or implementation tradeoffs
 span multiple substantial concerns. Do not create more than three panel agents.
