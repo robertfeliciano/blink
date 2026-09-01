@@ -189,15 +189,35 @@ let create_class_name_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
       | None -> Tctxt.add_class tc cname [] [])
     tc cns
 
+let get_method_header (tc : Tctxt.t) (method_node : fdecl node) : method_header =
+  let ({ fname; frtyp; args; _ } : fdecl) = method_node.elt in
+  let typed_args, typed_ret =
+    validate_and_convert_signature method_node tc args frtyp
+  in
+  (fname, typed_ret, typed_args)
+
+let create_class_header_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
+  let get_field_header (field : vdecl node) =
+    let { elt = field_name, ty, init, const; loc = _ } = field in
+    match ty with
+    | Some ty ->
+        Some
+          ( field_name,
+            validate_and_convert_ty field tc ty,
+            const,
+            Option.is_some init )
+    | None -> None
+  in
+  List.fold_left
+    (fun tc cn ->
+      let cname = cn.elt.cname in
+      let fields = List.filter_map get_field_header cn.elt.fields in
+      let methods = List.map (get_method_header tc) cn.elt.methods in
+      Tctxt.set_class tc cname fields methods)
+    tc cns
+
 let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) :
     Tctxt.t * (cdecl node * Typed_ast.field list) list =
-  let get_method_header (mn : fdecl node) : method_header =
-    let ({ fname; frtyp; args; _ } : fdecl) = mn.elt in
-    let typed_args, typed_ret =
-      validate_and_convert_signature mn tc args frtyp
-    in
-    (fname, typed_ret, typed_args)
-  in
   let rec aux (tc : Tctxt.t) typed_fields = function
     | cn :: t ->
         let cname = cn.elt.cname in
@@ -217,7 +237,7 @@ let create_class_ctxt (tc : Tctxt.t) (cns : cdecl node list) :
                 Option.is_some init ))
             fields_with_types
         in
-        let method_headers = List.map get_method_header cn.elt.methods in
+        let method_headers = List.map (get_method_header tc) cn.elt.methods in
         let new_tc = Tctxt.set_class tc cname fields method_headers in
         aux new_tc ((cn, tfields) :: typed_fields) t
     | [] -> (tc, List.rev typed_fields)
@@ -242,7 +262,8 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   (* create global var ctxt *)
   let (Prog (fns, cns, pns)) = prog in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
-  let cc, classes_with_fields = create_class_ctxt class_names cns in
+  let class_headers = create_class_header_ctxt class_names cns in
+  let cc, classes_with_fields = create_class_ctxt class_headers cns in
   let pc = create_proto_ctxt cc pns in
   let fc = create_fn_ctxt pc fns in
   check_undefined_protos fc;

@@ -575,8 +575,10 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
         (Typed_ast.Cast (te, expected), expected)
       else
         type_error e
-          ("Integer literal " ^ Z.to_string n ^ " cannot be represented exactly as "
+         ("Integer literal " ^ Z.to_string n ^ " cannot be represented exactly as "
          ^ Printer.show_ty expected ^ ".")
+  | Bop _, Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
+      type_exp ~expected tc e enclosing_class
   | (Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _), _ ->
       type_exp ~expected tc e enclosing_class
   | _ ->

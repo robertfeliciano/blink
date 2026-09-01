@@ -350,6 +350,16 @@ let test_constant_folding_honors_expected_integer_type _ =
     "fun accept(value: u8) => u8 { return value; }
      fun main() => i32 { return accept(1 + 2) as i32; }"
 
+let test_wide_context_accepts_folded_integer_expression _ =
+  assert_program_type_checks
+    "fun accept(value: i64) => i64 { return value; }
+     fun folded_return() => i64 { return 2147483647 + 1; }
+     fun main() => i32 {
+       let value: i64 = 2147483647 + 1;
+       let argument = accept(2147483647 + 1);
+       return 0;
+     }"
+
 let test_function_call_promotes_numeric_argument _ =
   let open Typed in
   let parameter_ty = TInt (TSigned Ti64) in
@@ -643,6 +653,16 @@ let test_class_type_validation_supports_forward_references _ =
      class Node { let next: Node = null; }
      fun main() => i32 { return 0; }"
 
+let test_class_initializers_support_forward_layouts _ =
+  assert_program_type_checks
+    "class Holder { let value: Value = new Value { x = 1 }; }
+     class Value { let x: i32; }
+     fun main() => i32 { return 0; }";
+  assert_program_type_error
+    "class Holder { let value: Value = new Value {}; }
+     class Value { let x: i32; }
+     fun main() => i32 { return 0; }"
+
 let test_array_length_must_fit_target_int _ =
   let huge_length = Z.shift_left Z.one 100 in
   let array_ty = TRef (RArray (TInt (TSigned Ti32), huge_length)) in
@@ -766,6 +786,8 @@ let suite =
          >:: test_constant_arithmetic_failures_are_type_errors;
          "constant folding expected integer type"
          >:: test_constant_folding_honors_expected_integer_type;
+         "constant folding wide contextual integer type"
+         >:: test_wide_context_accepts_folded_integer_expression;
          "function argument promotion"
          >:: test_function_call_promotes_numeric_argument;
          "return promotion" >:: test_return_promotes_numeric_value;
@@ -802,6 +824,8 @@ let suite =
          >:: test_declared_source_types_are_validated;
          "forward class type validation"
          >:: test_class_type_validation_supports_forward_references;
+         "forward class initializer layouts"
+         >:: test_class_initializers_support_forward_layouts;
          "array length target fit" >:: test_array_length_must_fit_target_int;
          "unsupported generic diagnostic"
          >:: test_unsupported_generic_type_is_type_error;
