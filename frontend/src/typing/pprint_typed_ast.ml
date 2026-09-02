@@ -164,20 +164,6 @@ let rec show_exp ?(lvl = 0) = function
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)
 
-and show_call_args ~lvl args arg_types =
-  match (args, arg_types) with
-  | [], [] -> []
-  | arg :: args, arg_ty :: arg_types ->
-      Printf.sprintf "%s%s : %s" (indent lvl) (show_exp ~lvl arg)
-        (show_ty arg_ty)
-      :: show_call_args ~lvl args arg_types
-  | arg :: args, [] ->
-      Printf.sprintf "%s%s : <missing type>" (indent lvl) (show_exp ~lvl arg)
-      :: show_call_args ~lvl args []
-  | [], arg_ty :: arg_types ->
-      Printf.sprintf "%s<missing argument> : %s" (indent lvl) (show_ty arg_ty)
-      :: show_call_args ~lvl [] arg_types
-
 (* Declarations *)
 and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =
   Printf.sprintf "%sDecl{id=%s; ty=%s; const=%b;\n%sinit=%s}" (indent lvl) id
@@ -255,6 +241,20 @@ and show_stmt ?(lvl = 0) = function
 
 and show_block ?(lvl = 0) b =
   String.concat ";\n" (List.map (fun s -> show_stmt ~lvl s) b)
+
+and show_call_args ~lvl args arg_types =
+  match (args, arg_types) with
+  | [], [] -> []
+  | arg :: args, arg_ty :: arg_types ->
+      Printf.sprintf "%s%s : %s" (indent lvl) (show_exp ~lvl arg)
+        (show_ty arg_ty)
+      :: show_call_args ~lvl args arg_types
+  | arg :: args, [] ->
+      Printf.sprintf "%s%s : <missing type>" (indent lvl) (show_exp ~lvl arg)
+      :: show_call_args ~lvl args []
+  | [], arg_ty :: arg_types ->
+      Printf.sprintf "%s<missing argument> : %s" (indent lvl) (show_ty arg_ty)
+      :: show_call_args ~lvl [] arg_types
 
 (* Function, class, and program printers *)
 
