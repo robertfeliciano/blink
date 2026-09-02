@@ -112,6 +112,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
 
     bool bothUnsigned = lhsUnsigned && rhsUnsigned;
+    bool floatOperands = lhs->getType()->isFloatingPointTy();
 
     auto addWrapFlags = [&](Value* inst) {
         if (auto* op = llvm::dyn_cast<llvm::BinaryOperator>(inst)) {
@@ -125,21 +126,29 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
 
     switch (e.op) {
         case BinOp::Add: {
+            if (floatOperands)
+                return gen.builder->CreateFAdd(lhs, rhs, "faddtmp");
             auto* inst = gen.builder->CreateAdd(lhs, rhs, "addtmp");
             return addWrapFlags(inst);
         }
 
         case BinOp::Sub: {
+            if (floatOperands)
+                return gen.builder->CreateFSub(lhs, rhs, "fsubtmp");
             auto* inst = gen.builder->CreateSub(lhs, rhs, "subtmp");
             return addWrapFlags(inst);
         }
 
         case BinOp::Mul: {
+            if (floatOperands)
+                return gen.builder->CreateFMul(lhs, rhs, "fmultmp");
             auto* inst = gen.builder->CreateMul(lhs, rhs, "multmp");
             return addWrapFlags(inst);
         }
 
         case BinOp::Div:
+            if (floatOperands)
+                return gen.builder->CreateFDiv(lhs, rhs, "fdivtmp");
             return bothUnsigned ? gen.builder->CreateUDiv(lhs, rhs, "udivtmp")
                                 : gen.builder->CreateSDiv(lhs, rhs, "sdivtmp");
 
@@ -158,24 +167,36 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
         }
 
         case BinOp::Eqeq:
+            if (floatOperands)
+                return gen.builder->CreateFCmpOEQ(lhs, rhs, "feqtmp");
             return gen.builder->CreateICmpEQ(lhs, rhs, "eqtmp");
 
         case BinOp::Neq:
+            if (floatOperands)
+                return gen.builder->CreateFCmpUNE(lhs, rhs, "fneqtmp");
             return gen.builder->CreateICmpNE(lhs, rhs, "neqtmp");
 
         case BinOp::Lt:
+            if (floatOperands)
+                return gen.builder->CreateFCmpOLT(lhs, rhs, "flttmp");
             return bothUnsigned ? gen.builder->CreateICmpULT(lhs, rhs, "lttmp")
                                 : gen.builder->CreateICmpSLT(lhs, rhs, "lttmp");
 
         case BinOp::Lte:
+            if (floatOperands)
+                return gen.builder->CreateFCmpOLE(lhs, rhs, "fletmp");
             return bothUnsigned ? gen.builder->CreateICmpULE(lhs, rhs, "letmp")
                                 : gen.builder->CreateICmpSLE(lhs, rhs, "letmp");
 
         case BinOp::Gt:
+            if (floatOperands)
+                return gen.builder->CreateFCmpOGT(lhs, rhs, "fgttmp");
             return bothUnsigned ? gen.builder->CreateICmpUGT(lhs, rhs, "gttmp")
                                 : gen.builder->CreateICmpSGT(lhs, rhs, "gttmp");
 
         case BinOp::Gte:
+            if (floatOperands)
+                return gen.builder->CreateFCmpOGE(lhs, rhs, "fgetmp");
             return bothUnsigned ? gen.builder->CreateICmpUGE(lhs, rhs, "getmp")
                                 : gen.builder->CreateICmpSGE(lhs, rhs, "getmp");
 

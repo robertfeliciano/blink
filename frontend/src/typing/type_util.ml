@@ -1,12 +1,13 @@
 open Ast
 module Printer = Pprint_typed_ast
-module Math = Util.Constants.Math
 
 exception TypeError of string
 
 let make_error_underline c1 c2 =
-  let spaces = String.make (c1 - 1) ' ' in
-  let carets = String.make (c2 - c1) '^' in
+  let start_col = max 1 c1 in
+  let end_col = max (start_col + 1) c2 in
+  let spaces = String.make (start_col - 1) ' ' in
+  let carets = String.make (end_col - start_col) '^' in
   spaces ^ "\x1b[1;31m" ^ carets ^ "\x1b[0;0m"
 
 let get_line filename lno =
@@ -60,7 +61,7 @@ let type_error (l : 'a node) err =
   in
 
   let lines =
-    let span = l2 - l1 + 1 in
+    let span = max 1 (l2 - l1 + 1) in
     if span <= 5 then List.init span (fun i -> build (l1 + i))
     else [ build l1; build (l1 + 1); "     | ..."; build (l2 - 1); build l2 ]
   in
@@ -76,6 +77,28 @@ let type_warning (l : 'a node) err =
   let _, (s, e), _ = l.loc in
   Printf.eprintf "[%d, %d] Warning: %s" s e err
 
+let rec map2_exact f xs ys =
+  match (xs, ys) with
+  | [], [] -> Some []
+  | x :: xs, y :: ys ->
+      let mapped = f x y in
+      Option.map (fun rest -> mapped :: rest) (map2_exact f xs ys)
+  | _ -> None
+
+let rec lists_equal_exact equal xs ys =
+  match (xs, ys) with
+  | [], [] -> true
+  | x :: xs, y :: ys -> equal x y && lists_equal_exact equal xs ys
+  | _ -> false
+
+let check_body_return_completeness (node : 'a node)
+    (ret_ty : Typed_ast.ret_ty) ~(does_ret : bool) ~(body_kind : string) : unit =
+  match ret_ty with
+  | Typed_ast.RetVoid -> ()
+  | Typed_ast.RetVal _ when does_ret -> ()
+  | Typed_ast.RetVal _ ->
+      type_error node ("Missing return statement in " ^ body_kind ^ ".")
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
   | TInt _ | TFloat _ | TBool -> ()
@@ -86,6 +109,8 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   | RString -> ()
   | RArray (t, sz) ->
       if Z.lt sz (Z.of_int 0) then type_error l "negative length specified"
+      else if not (Z.fits_int sz) then
+        type_error l "array length is too large for this target"
       else typecheck_ty l tc t
   | RClass c ->
       if None = Tctxt.lookup_class_option c tc then
@@ -93,74 +118,98 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt
-  | RGeneric _ -> failwith "bleh"
+  | RGeneric _ -> type_error l "Generic types are not supported."
 
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
 
-let get_fdecl_type (fn : fdecl node) (tc : Tctxt.t) : Ast.ty =
-  let {
-    elt = { annotations = _; frtyp; fname = _; args; body = _; inline = _ };
-    loc = _;
-  } =
-    fn
+let validate_and_convert_ty (node : 'a Ast.node) (tc : Tctxt.t) (ty : Ast.ty) :
+    Typed_ast.ty =
+  typecheck_ty node tc ty;
+  Conversions.convert_ty ty
+
+let validate_and_convert_ret_ty (node : 'a Ast.node) (tc : Tctxt.t)
+    (ret_ty : Ast.ret_ty) : Typed_ast.ret_ty =
+  typecheck_ret_ty node tc ret_ty;
+  Conversions.convert_ret_ty ret_ty
+
+let validate_and_convert_signature (node : 'a Ast.node) (tc : Tctxt.t)
+    (args : (Ast.ty * id) list) (ret_ty : Ast.ret_ty) :
+    (Typed_ast.ty * id) list * Typed_ast.ret_ty =
+  let typed_args =
+    List.map (fun (ty, id) -> (validate_and_convert_ty node tc ty, id)) args
   in
-  let arg_types =
-    List.map
-      (fun (t, _) ->
-        typecheck_ty fn tc t;
-        t)
-      args
+  (typed_args, validate_and_convert_ret_ty node tc ret_ty)
+
+let validate_and_convert_function_ty node tc args ret_ty =
+  let typed_args, typed_ret_ty =
+    validate_and_convert_signature node tc args ret_ty
   in
-  typecheck_ret_ty fn tc frtyp;
-  List.iter (typecheck_ty fn tc) arg_types;
-  TRef (RFun (arg_types, frtyp))
+  Typed_ast.TRef (RFun (List.map fst typed_args, typed_ret_ty))
 
-let get_proto_type (fn : proto node) (tc : Tctxt.t) : Ast.ty =
-  let { elt = { annotations = _; frtyp; fname = _; args }; loc = _ } = fn in
-  let arg_types =
-    List.map
-      (fun (t, _) ->
-        typecheck_ty fn tc t;
-        t)
-      args
-  in
-  typecheck_ret_ty fn tc frtyp;
-  List.iter (typecheck_ty fn tc) arg_types;
-  TRef (RFun (arg_types, frtyp))
+let sint_width : Typed_ast.sint -> int = function
+  | Ti8 -> 8
+  | Ti16 -> 16
+  | Ti32 -> 32
+  | Ti64 -> 64
+  | Ti128 -> 128
 
-let signed_int_hierarchy : Typed_ast.sint list =
-  [ Ti8; Ti16; Ti32; Ti64; Ti128 ]
+let uint_width : Typed_ast.uint -> int = function
+  | Tu8 -> 8
+  | Tu16 -> 16
+  | Tu32 -> 32
+  | Tu64 -> 64
+  | Tu128 -> 128
 
-let unsigned_int_hierarchy : Typed_ast.uint list =
-  [ Tu8; Tu16; Tu32; Tu64; Tu128 ]
+let int_width : Typed_ast.int_ty -> int = function
+  | TSigned s -> sint_width s
+  | TUnsigned u -> uint_width u
 
-let float_hierarchy : Typed_ast.float_ty list = [ Tf32; Tf64 ]
+let signed_of_width = function
+  | 8 -> Some Typed_ast.Ti8
+  | 16 -> Some Ti16
+  | 32 -> Some Ti32
+  | 64 -> Some Ti64
+  | 128 -> Some Ti128
+  | _ -> None
+
+let unsigned_of_width = function
+  | 8 -> Some Typed_ast.Tu8
+  | 16 -> Some Tu16
+  | 32 -> Some Tu32
+  | 64 -> Some Tu64
+  | 128 -> Some Tu128
+  | _ -> None
+
+let next_signed_width width =
+  List.find_opt (fun candidate -> candidate > width) [ 8; 16; 32; 64; 128 ]
 
 let widest_int (ity1 : Typed_ast.int_ty) (ity2 : Typed_ast.int_ty) (n : 'a node)
     : Typed_ast.int_ty =
-  let find_index l e =
-    let rec aux i = function
-      | [] -> type_error n "Invalid int type spec"
-      | h :: t -> if h = e then i else aux (i + 1) t
-    in
-    aux 0 l
-  in
-  let max a b = if a > b then a else b in
-  let widest l t1 t2 = List.nth l (max (find_index l t1) (find_index l t2)) in
-  let widest' t1 t2 =
-    List.nth signed_int_hierarchy
-      (max
-         (find_index signed_int_hierarchy t1)
-         (find_index unsigned_int_hierarchy t2))
-  in
+  let invalid () = type_error n "Invalid integer type during promotion." in
   match (ity1, ity2) with
-  | TSigned Ti64, TUnsigned Tu64 | TUnsigned Tu64, TSigned Ti64 ->
-      type_error n "cannot implicitly combine u64 and i64"
-  | TSigned s, TUnsigned u | TUnsigned u, TSigned s -> TSigned (widest' s u)
-  | TSigned t1, TSigned t2 -> TSigned (widest signed_int_hierarchy t1 t2)
-  | TUnsigned t1, TUnsigned t2 ->
-      TUnsigned (widest unsigned_int_hierarchy t1 t2)
+  | TSigned s1, TSigned s2 -> (
+      match signed_of_width (max (sint_width s1) (sint_width s2)) with
+      | Some s -> TSigned s
+      | None -> invalid ())
+  | TUnsigned u1, TUnsigned u2 -> (
+      match unsigned_of_width (max (uint_width u1) (uint_width u2)) with
+      | Some u -> TUnsigned u
+      | None -> invalid ())
+  | TSigned s, TUnsigned u | TUnsigned u, TSigned s ->
+      let signed_width = sint_width s in
+      let unsigned_width = uint_width u in
+      let target_width =
+        if signed_width > unsigned_width then Some signed_width
+        else next_signed_width unsigned_width
+      in
+      (match Option.bind target_width signed_of_width with
+      | Some target -> TSigned target
+      | None ->
+          type_error n
+            ("Cannot safely promote mixed signed and unsigned integers with "
+           ^ string_of_int signed_width ^ "-bit and "
+           ^ string_of_int unsigned_width ^ "-bit widths."))
 
 let widest_float (fty1 : Typed_ast.float_ty) (fty2 : Typed_ast.float_ty) :
     Typed_ast.float_ty =
@@ -169,20 +218,22 @@ let widest_float (fty1 : Typed_ast.float_ty) (fty2 : Typed_ast.float_ty) :
 let meet_number (n : 'a node) : Typed_ast.ty * Typed_ast.ty -> Typed_ast.ty =
   function
   | TInt i1, TInt i2 -> TInt (widest_int i1 i2 n)
-  | (TFloat f, TInt i | TInt i, TFloat f)
-    when i <> TSigned Ti64 && i <> TUnsigned Tu64 ->
-      TFloat f
-  | TFloat _, TInt _ | TInt _, TFloat _ -> TFloat Tf64
+  | (TFloat Tf64, TInt _ | TInt _, TFloat Tf64) -> TFloat Tf64
+  | (TFloat Tf32, TInt i | TInt i, TFloat Tf32) ->
+      (* f32 can represent every integer of up to 16 bits exactly. Wider integer
+         operands promote the operation to f64 to avoid needless precision loss. *)
+      if int_width i <= 16 then TFloat Tf32 else TFloat Tf64
   | TFloat f1, TFloat f2 -> TFloat (widest_float f1 f2)
   | _ -> type_error n "unreachable state: meeting non-numbers."
 
 let is_number (t : Typed_ast.ty) : bool =
   match t with Typed_ast.TInt _ | Typed_ast.TFloat _ -> true | _ -> false
 
-let all_numbers (tl : Typed_ast.ty list) : bool = List.for_all is_number tl
-
 let is_float (t : Typed_ast.ty) : bool =
   match t with Typed_ast.TFloat _ -> true | _ -> false
+
+let is_integer (t : Typed_ast.ty) : bool =
+  match t with Typed_ast.TInt _ -> true | _ -> false
 
 let rec equal_ty (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
@@ -196,14 +247,9 @@ and equal_ref_ty (r1 : Typed_ast.ref_ty) (r2 : Typed_ast.ref_ty) : bool =
   match (r1, r2) with
   | RString, RString -> true
   | RArray (t1, sz1), RArray (t2, sz2) -> sz1 = sz2 && equal_ty t1 t2
-  | RFun (params1, RetVal rt1), RFun (params2, RetVal rt2) ->
-      List.length params1 = List.length params2
-      && List.for_all2 equal_ty params1 params2
-      && equal_ty rt1 rt2
-  | RFun (_params1, RetVoid), RFun (_params2, RetVoid) ->
-      (* parameter lists must be *equal* to be equal types *)
-      (* if you want exact function type equality incl. params: *)
-      false
+  | RFun (params1, ret1), RFun (params2, ret2) ->
+      lists_equal_exact equal_ty params1 params2
+      && equal_ret_ty ret1 ret2
   | RClass c1, RClass c2 -> String.equal c1 c2
   | _ -> false
 
@@ -230,10 +276,7 @@ and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) :
   | RString, RString -> true
   | RArray (t1', sz1), RArray (t2', sz2) -> sz1 = sz2 && subtype tc t1' t2'
   | RFun (pty1, rty1), RFun (pty2, rty2) ->
-      let contrav_params =
-        List.length pty1 = List.length pty2
-        && List.for_all2 (fun a1 a2 -> equal_ty a2 a1) pty1 pty2
-      in
+      let contrav_params = lists_equal_exact equal_ty pty2 pty1 in
       contrav_params && subtype_ret_ty tc rty1 rty2
   | _ -> false
 
@@ -244,123 +287,97 @@ and subtype_ret_ty (tc : Tctxt.t) (t1 : Typed_ast.ret_ty)
   | RetVal t1', RetVal t2' -> subtype tc t1' t2'
   | _ -> false
 
-let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
-  let open Z in
-  if fits_int32 n then TSigned Ti32
-  else if fits_int32_unsigned n then TUnsigned Tu32
-  else if fits_int64 n then TSigned Ti64
-  else if fits_int64_unsigned n then TUnsigned Tu64
-  else
-    let min_i128 = neg (shift_left one 127) in
-    let max_i128 = sub (shift_left one 127) one in
-    if geq n min_i128 && leq n max_i128 then TSigned Ti128
-    else if geq n zero && leq n Z.(sub (shift_left one 128) one) then
-      TUnsigned Tu64
-    else type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
-
 let fits_in_int_ty (n : Z.t) (t : Typed_ast.int_ty) : bool =
-  let open Z in
   match t with
-  | TSigned Ti8 -> geq n (of_int (-128)) && leq n (of_int 127)
-  | TSigned Ti16 -> geq n (of_int (-32768)) && leq n (of_int 32767)
-  | TSigned Ti32 -> fits_int32 n
-  | TSigned Ti64 -> fits_int64 n
-  | TSigned Ti128 ->
-      let min_i128 = neg (shift_left one 127) in
-      let max_i128 = sub (shift_left one 127) one in
-      geq n min_i128 && leq n max_i128
-  | TUnsigned Tu8 -> geq n zero && leq n (of_int 255)
-  | TUnsigned Tu16 -> geq n zero && leq n (of_int 65535)
-  | TUnsigned Tu32 -> fits_int32_unsigned n
-  | TUnsigned Tu64 -> fits_int64_unsigned n
-  | TUnsigned Tu128 -> geq n zero && leq n Z.(sub (shift_left one 128) one)
+  | TSigned signed_ty ->
+      let limit = Z.shift_left Z.one (sint_width signed_ty - 1) in
+      Z.geq n (Z.neg limit) && Z.lt n limit
+  | TUnsigned unsigned_ty ->
+      Z.sign n >= 0 && Z.numbits n <= uint_width unsigned_ty
 
-let fits_in_float_ty (n : float) (t : Typed_ast.float_ty) : bool =
-  match t with
-  | Tf32 ->
-      (* IEEE-754 f32 range limits *)
-      let max_f32 = 3.40282347e38 in
-      let min_f32 = -.max_f32 in
-      (not (Float.is_nan n))
-      && Float.is_finite n && n >= min_f32 && n <= max_f32
-  | Tf64 -> true
+let infer_integer_ty (n : Z.t) (e : exp node) : Typed_ast.int_ty =
+  let candidates : Typed_ast.int_ty list =
+    [
+      TSigned Ti32;
+      TUnsigned Tu32;
+      TSigned Ti64;
+      TUnsigned Tu64;
+      TSigned Ti128;
+      TUnsigned Tu128;
+    ]
+  in
+  match List.find_opt (fits_in_int_ty n) candidates with
+  | Some int_ty -> int_ty
+  | None -> type_error e ("integer literal `" ^ Z.to_string n ^ "` too large")
 
-let int_in_float (n : Z.t) (t : Typed_ast.float_ty) : bool =
-  let open Z in
-  match t with
-  | Tf32 ->
-      (* f32 has 24 bits of precision *)
-      leq (abs n) (shift_left one 24)
-  | Tf64 ->
-      (* f64 has 53 bits of precision *)
-      leq (abs n) (shift_left one 53)
+let max_finite_f32 = Int32.float_of_bits 0x7f7fffffl
+
+let float_is_representable_in_ty (n : float) (t : Typed_ast.float_ty) : bool =
+  if not (Float.is_finite n) then false
+  else
+    match t with
+    | Tf32 -> Float.abs n <= max_finite_f32
+    | Tf64 -> true
+
+let int_is_exactly_representable_in_float_ty (n : Z.t)
+    (t : Typed_ast.float_ty) : bool =
+  let precision, max_bits =
+    match t with Tf32 -> (24, 128) | Tf64 -> (53, 1024)
+  in
+  let bits = Z.numbits n in
+  bits = 0
+  || (bits <= max_bits
+     && (bits <= precision || Z.trailing_zeros n >= bits - precision))
+
+let exact_nonnegative_int (node : 'a node) description value =
+  if Z.sign value < 0 then type_error node (description ^ " cannot be negative")
+  else if not (Z.fits_int value) then
+    type_error node (description ^ " is too large for this target")
+  else Z.to_int value
 
 let rec eval_const_exp (e : exp node) : Z.t option =
   match e.elt with
   | Int i -> Some i
-  | Bop (Add, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(v1 + v2)
-      | _ -> None)
-  | Bop (Sub, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(v1 - v2)
-      | _ -> None)
-  | Bop (Mul, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(v1 * v2)
-      | _ -> None)
-  | Bop (Div, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(v1 / v2)
-      | _ -> None)
-  | Bop (Mod, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(v1 mod v2)
-      | _ -> None)
-  | Bop (Pow, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(pow v1 (to_int v2))
-      | _ -> None)
-  | Bop (Shl, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 ->
-          if Z.(lt v2 (of_int 0)) then
-            type_error e2 "Shl operator cannot be negative"
-          else Some Z.(shift_left v1 (to_int v2))
-      | _ -> None)
-  | Bop (Lshr, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 ->
-          if Z.(lt v2 (of_int 0)) then
-            type_error e2 "Lshr operator cannot be negative"
-          else Some Z.(shift_right_trunc v1 (to_int v2))
-      | _ -> None)
-  | Bop (Ashr, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 ->
-          if Z.(lt v2 (of_int 0)) then
-            type_error e2 "Ashr operator cannot be negative"
-          else Some Z.(shift_right v1 (to_int v2))
-      | _ -> None)
+  | Bop (Add, e1, e2) -> eval_const_binop e1 e2 Z.add
+  | Bop (Sub, e1, e2) -> eval_const_binop e1 e2 Z.sub
+  | Bop (Mul, e1, e2) -> eval_const_binop e1 e2 Z.mul
+  | Bop (Div, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          if Z.equal v2 Z.zero then
+            type_error e2 "Division by zero in constant expression."
+          else Z.div v1 v2)
+  | Bop (Mod, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          if Z.equal v2 Z.zero then
+            type_error e2 "Modulo by zero in constant expression."
+          else Z.rem v1 v2)
+  | Bop (Pow, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          Z.pow v1 (exact_nonnegative_int e2 "Exponent" v2))
+  | Bop (Shl, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          Z.shift_left v1 (exact_nonnegative_int e2 "Shift amount" v2))
+  | Bop (Lshr, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          Z.shift_right_trunc v1
+            (exact_nonnegative_int e2 "Shift amount" v2))
+  | Bop (Ashr, e1, e2) ->
+      eval_const_binop e1 e2 (fun v1 v2 ->
+          Z.shift_right v1 (exact_nonnegative_int e2 "Shift amount" v2))
   | Uop (Neg, e1) -> (
       match eval_const_exp e1 with
       | Some v1 -> Some Z.(mul v1 (of_int (-1)))
       | _ -> None)
-  | Bop (BAnd, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(logand v1 v2)
-      | _ -> None)
-  | Bop (BXor, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(logxor v1 v2)
-      | _ -> None)
-  | Bop (BOr, e1, e2) -> (
-      match (eval_const_exp e1, eval_const_exp e2) with
-      | Some v1, Some v2 -> Some Z.(logor v1 v2)
-      | _ -> None)
+  | Bop (BAnd, e1, e2) -> eval_const_binop e1 e2 Z.logand
+  | Bop (BXor, e1, e2) -> eval_const_binop e1 e2 Z.logxor
+  | Bop (BOr, e1, e2) -> eval_const_binop e1 e2 Z.logor
   | Uop (BNeg, e1) -> (
       match eval_const_exp e1 with Some v1 -> Some Z.(lognot v1) | _ -> None)
+  | _ -> None
+
+and eval_const_binop e1 e2 operator =
+  match (eval_const_exp e1, eval_const_exp e2) with
+  | Some v1, Some v2 -> Some (operator v1 v2)
   | _ -> None
 
 let unexpected_ty expected e =

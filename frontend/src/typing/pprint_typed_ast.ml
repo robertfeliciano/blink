@@ -101,14 +101,7 @@ let rec show_exp ?(lvl = 0) = function
   | Id (id, t) -> Printf.sprintf "Id(%s, %s)" id (show_ty t)
   | Call (fn, args, arg_types, ty) ->
       let args_s =
-        String.concat ";\n"
-          (List.map2
-             (fun a t ->
-               Printf.sprintf "%s%s : %s"
-                 (indent (lvl + 2))
-                 (show_exp ~lvl:(lvl + 2) a)
-                 (show_ty t))
-             args arg_types)
+        String.concat ";\n" (show_call_args ~lvl:(lvl + 2) args arg_types)
       in
       Printf.sprintf "Call(\n%sfn=%s;\n%sargs=[\n%s\n%s];\n%sret_ty=%s)"
         (indent (lvl + 1))
@@ -198,14 +191,7 @@ and show_stmt ?(lvl = 0) = function
       Printf.sprintf "%sRet(%s)" (indent lvl) e_s
   | SCall (fn, args, arg_types, t) ->
       let args_s =
-        String.concat ";\n"
-          (List.map2
-             (fun a t ->
-               Printf.sprintf "%s%s : %s"
-                 (indent (lvl + 2))
-                 (show_exp ~lvl:(lvl + 2) a)
-                 (show_ty t))
-             args arg_types)
+        String.concat ";\n" (show_call_args ~lvl:(lvl + 2) args arg_types)
       in
       Printf.sprintf "%sSCall(%s, [\n%s\n%s])->%s" (indent lvl)
         (show_exp ~lvl:(lvl + 1) fn)
@@ -255,6 +241,20 @@ and show_stmt ?(lvl = 0) = function
 
 and show_block ?(lvl = 0) b =
   String.concat ";\n" (List.map (fun s -> show_stmt ~lvl s) b)
+
+and show_call_args ~lvl args arg_types =
+  match (args, arg_types) with
+  | [], [] -> []
+  | arg :: args, arg_ty :: arg_types ->
+      Printf.sprintf "%s%s : %s" (indent lvl) (show_exp ~lvl arg)
+        (show_ty arg_ty)
+      :: show_call_args ~lvl args arg_types
+  | arg :: args, [] ->
+      Printf.sprintf "%s%s : <missing type>" (indent lvl) (show_exp ~lvl arg)
+      :: show_call_args ~lvl args []
+  | [], arg_ty :: arg_types ->
+      Printf.sprintf "%s<missing argument> : %s" (indent lvl) (show_ty arg_ty)
+      :: show_call_args ~lvl [] arg_types
 
 (* Function, class, and program printers *)
 
