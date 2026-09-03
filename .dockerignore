@@ -1,8 +1,12 @@
 .git
 .vscode
+.github
+.agents
+
 backend/build
 frontend/_build
 frontend/lib
+
 blink
 new_output.ll
 new_output.o
