@@ -288,6 +288,7 @@ Keep diagnostics attached to the most specific available source range.
 Use existing AST conversion helpers instead of duplicating type mappings.
 Keep OCaml and C++ representations synchronized at the FFI boundary.
 Avoid committing generated compiler output or build directories.
+Prefer full, deep fixes rather than band-aid fixes to specific problems.
 
 Follow KISS and DRY principles throughout the project.
 Before adding logic, search for an existing implementation that can be reused.
