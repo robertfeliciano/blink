@@ -18,6 +18,7 @@ RUN apt-get update \
         libgmp-dev \
         libxml2-dev \
         libz-dev \
+        libzstd-dev \
         m4 \
         ninja-build \
         opam \
