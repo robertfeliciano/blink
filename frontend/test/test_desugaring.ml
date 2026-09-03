@@ -447,6 +447,104 @@ fun main() => i32 {
         (Printf.sprintf "unexpected chained partial-application lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_anonymous_void_partial_application_cleanup _ =
+  let source =
+    {|
+fun consume(left: i32, right: i32) => void {}
+fun main() => i32 {
+    consume(1)(2);
+    return 42;
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, []) ->
+      let main =
+        match
+          List.find_opt
+            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
+            functions
+        with
+        | Some fn -> fn
+        | None -> assert_failure "expected a lowered main function"
+      in
+      let indexed_body = List.mapi (fun index stmt -> (index, stmt)) main.body in
+      let has_ordered_cleanup =
+        List.exists
+          (fun (free_index, stmt) ->
+            match stmt with
+            | DA.Free
+                [
+                  DA.Id (cleanup_env, _);
+                  DA.Id (closure_name, DA.TRef (DA.RClass _));
+                ] ->
+                List.exists
+                  (fun (call_index, call_stmt) ->
+                    match call_stmt with
+                    | DA.SCall
+                        (callee, [ DA.Id (call_env, _); DA.Int ("2", _) ]) ->
+                        call_index < free_index
+                        && List.exists
+                             (fun (decl_index, candidate) ->
+                               decl_index < call_index
+                               && match candidate with
+                                  | DA.Decl
+                                      ( name,
+                                        _,
+                                        DA.Proj
+                                          ( DA.Id (source, _),
+                                            "lambdaptr",
+                                            _ ),
+                                        true ) ->
+                                      Core.String.equal name callee
+                                      && Core.String.equal source closure_name
+                                  | _ -> false)
+                             indexed_body
+                        && List.exists
+                             (fun (decl_index, candidate) ->
+                               decl_index < call_index
+                               && match candidate with
+                                  | DA.Decl
+                                      ( name,
+                                        _,
+                                        DA.Proj
+                                          (DA.Id (source, _), "envptr", _),
+                                        true ) ->
+                                      Core.String.equal name call_env
+                                      && Core.String.equal source closure_name
+                                  | _ -> false)
+                             indexed_body
+                        && List.exists
+                             (fun (decl_index, candidate) ->
+                               call_index < decl_index
+                               && decl_index < free_index
+                               && match candidate with
+                                  | DA.Decl
+                                      ( name,
+                                        _,
+                                        DA.Proj
+                                          (DA.Id (source, _), "envptr", _),
+                                        true ) ->
+                                      Core.String.equal name cleanup_env
+                                      && Core.String.equal source closure_name
+                                  | _ -> false)
+                             indexed_body
+                    | _ -> false)
+                  indexed_body
+            | _ -> false)
+          indexed_body
+      in
+      assert_bool
+        (Printf.sprintf
+           "expected the generated void partial closure to be called before \
+            its environment and closure are freed:\n%s"
+           (Printer.show_block main.body))
+        has_ordered_cleanup
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected void partial-application lowering:\n%s"
+           (Printer.show_desugared_program program))
+
 let test_function_reassignment_projects_current_closure _ =
   let source =
     {|
@@ -539,6 +637,8 @@ let suite =
          "partial application lifting" >:: test_partial_application_lifting;
          "chained partial application cleanup"
          >:: test_chained_partial_application_cleanup;
+         "anonymous void partial application cleanup"
+         >:: test_anonymous_void_partial_application_cleanup;
          "function reassignment projects current closure"
          >:: test_function_reassignment_projects_current_closure;
          "parsed and typed programs" >::: pipeline_tests;

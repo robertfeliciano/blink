@@ -269,6 +269,18 @@ let fixtures =
       expected_exit = 42;
     };
     {
+      name = "anonymous-void-partial-application";
+      source =
+        "class Box { let value: i32 = 0; }\n\
+         fun consume(box: Box, value: i32) => void { box.value = value; }\n\
+         fun main() => i32 {\n\
+        \  let box = new Box { value = 0 };\n\
+        \  consume(box)(42);\n\
+        \  return box.value;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
       name = "partial-bound-arguments-evaluate-once-in-order";
       source =
         "class Counter {\n\

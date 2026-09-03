@@ -22,6 +22,15 @@ let base_op = function
   | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
+let is_generated_partial_callee source_callee desugared_callee =
+  match (source_callee, desugared_callee) with
+  | Typed.PartialApply _, _ -> true
+  | _, D.Id (name, _) -> is_partial_result_sym name
+  | _ -> false
+
+let generated_partial_cleanup release_callee fname fn_ty =
+  if release_callee then [ D.Free [ D.Id (fname, fn_ty) ] ] else []
+
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
   | Assn (lhs, op, rhs, t) when op <> Eq ->
@@ -144,13 +153,17 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
+      let release_callee = is_generated_partial_callee fn fn' in
       match fn' with
-      | D.Id (fname, _t) -> sf @ sa @ [ SCall (fname, args') ]
+      | D.Id (fname, fn_ty) ->
+          sf @ sa @ [ D.SCall (fname, args') ]
+          @ generated_partial_cleanup release_callee fname fn_ty
       | _ ->
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVoid)) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          sf @ [ tmp_decl ] @ sa @ [ SCall (fn_store, args') ])
+          sf @ [ tmp_decl ] @ sa @ [ D.SCall (fn_store, args') ]
+          @ generated_partial_cleanup release_callee fn_store fn_ty)
   | Decl v ->
       let estmts, v' = desugar_vdecl v in
       estmts @ [ Decl v' ]
@@ -240,12 +253,7 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
       let sa, args' = List.map desugar_exp args |> flatten in
-      let release_callee =
-        match (fn, fn') with
-        | Typed.PartialApply _, _ -> true
-        | _, D.Id (name, _) -> is_partial_result_sym name
-        | _ -> false
-      in
+      let release_callee = is_generated_partial_callee fn fn' in
       let consume_generated_partial setup fname fn_ty =
         (* A source-anonymous partial application has no binding through which
            the user could release its closure. Materialize the call result
@@ -257,7 +265,8 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
           D.Decl
             (result_store, ty', D.Call (fname, args', ty'), true)
         in
-        ( setup @ sa @ [ result_decl; D.Free [ D.Id (fname, fn_ty) ] ],
+        ( setup @ sa @ [ result_decl ]
+          @ generated_partial_cleanup true fname fn_ty,
           D.Id (result_store, ty') )
       in
       match fn' with
