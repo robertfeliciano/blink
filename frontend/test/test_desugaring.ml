@@ -447,6 +447,77 @@ fun main() => i32 {
         (Printf.sprintf "unexpected chained partial-application lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_function_reassignment_projects_current_closure _ =
+  let source =
+    {|
+fun add(left: i32, right: i32) => i32 {
+    return left + right;
+}
+fun main() => i32 {
+    let f: (i32) -> i32 = add(1);
+    if true { f = add(2); }
+    let result = f(40);
+    free f;
+    return result;
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, []) ->
+      let main =
+        match
+          List.find_opt
+            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
+            functions
+        with
+        | Some fn -> fn
+        | None -> assert_failure "expected a lowered main function"
+      in
+      let rec check_after_branch = function
+        | DA.If _
+          :: DA.Decl
+               ( call_fptr,
+                 _,
+                 DA.Proj (DA.Id ("f", _), "lambdaptr", _),
+                 true )
+          :: DA.Decl
+               ( call_env,
+                 _,
+                 DA.Proj (DA.Id ("f", _), "envptr", _),
+                 true )
+          :: DA.Decl
+               ( "result",
+                 _,
+                 DA.Call
+                   ( callee,
+                     DA.Id (call_env_arg, _) :: [ DA.Int ("40", _) ],
+                     _ ),
+                 false )
+          :: DA.Decl
+               ( free_env,
+                 _,
+                 DA.Proj (DA.Id ("f", _), "envptr", _),
+                 true )
+          :: DA.Free [ DA.Id (free_env_arg, _); DA.Id ("f", _) ]
+          :: _
+          when Core.String.equal callee call_fptr
+               && Core.String.equal call_env_arg call_env
+               && Core.String.equal free_env_arg free_env ->
+            ()
+        | _ :: rest -> check_after_branch rest
+        | [] ->
+            assert_failure
+              (Printf.sprintf
+                 "call and free should project from the current closure after \
+                  the branch:\n%s"
+                 (Printer.show_block main.body))
+      in
+      check_after_branch main.body
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected function reassignment lowering:\n%s"
+           (Printer.show_desugared_program program))
+
 let suite =
   let pipeline_tests =
     List.map
@@ -468,5 +539,7 @@ let suite =
          "partial application lifting" >:: test_partial_application_lifting;
          "chained partial application cleanup"
          >:: test_chained_partial_application_cleanup;
+         "function reassignment projects current closure"
+         >:: test_function_reassignment_projects_current_closure;
          "parsed and typed programs" >::: pipeline_tests;
        ]

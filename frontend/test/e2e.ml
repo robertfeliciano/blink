@@ -159,6 +159,50 @@ let fixtures =
       expected_exit = 42;
     };
     {
+      name = "function-reassignment-through-if";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun main() => i32 {\n\
+        \  let f: (i32) -> i32 = add(1);\n\
+        \  if true { f = add(2); }\n\
+        \  let result = f(40);\n\
+        \  free f;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "function-reassignment-through-loop";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun main() => i32 {\n\
+        \  let f: (i32) -> i32 = add(1);\n\
+        \  let count = 0;\n\
+        \  while count < 1 {\n\
+        \    f = add(2);\n\
+        \    count += 1;\n\
+        \  }\n\
+        \  let result = f(40);\n\
+        \  free f;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "function-reassignment-through-either-branch";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun select(use_two: bool) => i32 {\n\
+        \  let f: (i32) -> i32 = add(0);\n\
+        \  if use_two { f = add(2); } else { f = add(3); }\n\
+        \  let result = f(40);\n\
+        \  free f;\n\
+        \  return result;\n\
+         }\n\
+         fun main() => i32 { return select(true) + select(false); }";
+      expected_exit = 85;
+    };
+    {
       name = "lambda-partial-application";
       source =
         "fun main() => i32 {\n\
