@@ -83,6 +83,20 @@ To build the frontend, you can simply run `dune build` in `frontend/`.
 
 ### Tests
 
+Every push and pull request runs the complete test suite in GitHub Actions.
+The workflow builds the repository's development container and caches its
+BuildKit layers in GitHub's cache service. LLVM 16, OCaml 4.14.2, and OPAM
+dependencies are therefore rebuilt only when the Dockerfile or
+`frontend/blink.opam` changes.
+
+The CI image uses the same environment as local Docker development, so the
+commands exercised in CI are simply:
+
+```sh
+make
+make test
+```
+
 Run all frontend unit tests and compiler end-to-end tests from the repository
 root:
 

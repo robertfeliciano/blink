@@ -7,8 +7,8 @@ ARG OCAML_VERSION=4.14.2
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Native build tools and the system libraries required by OCaml packages and LLVM.
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends \
+RUN apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
         build-essential \
         ca-certificates \
         cmake \
@@ -18,18 +18,20 @@ RUN apt-get update \
         libgmp-dev \
         libxml2-dev \
         libz-dev \
+        libzstd-dev \
         m4 \
         ninja-build \
         opam \
         pkg-config \
         python3-dev \
     && curl --fail --silent --show-error --location \
+        --retry 5 --retry-all-errors --retry-delay 2 \
         https://apt.llvm.org/llvm-snapshot.gpg.key \
         | gpg --dearmor --output /usr/share/keyrings/llvm-archive-keyring.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/llvm-archive-keyring.gpg] https://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-16 main" \
         > /etc/apt/sources.list.d/llvm.list \
-    && apt-get update \
-    && apt-get install --yes --no-install-recommends \
+    && apt-get -o Acquire::Retries=5 update \
+    && apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
         clang-16 \
         lld-16 \
         llvm-16 \
