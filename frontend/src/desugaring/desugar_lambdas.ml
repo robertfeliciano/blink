@@ -34,7 +34,37 @@ type lifted_lambda = {
   environment : id;
 }
 
-type lambda_converter = { fptr_var : id; env_var : id }
+type lambda_converter = {
+  closure_var : id;
+  closure_ty : ty;
+  function_pointer_ty : ty;
+}
+
+(** Project a field from the current closure value. The closure, rather than
+    projections cached at its declaration, is the source of truth so
+    assignments remain visible across control-flow joins. *)
+let project_lambda_field converter suffix field_name field_ty =
+  let projection = gensym (converter.closure_var ^ suffix) in
+  ( Decl
+      ( projection,
+        field_ty,
+        Proj
+          ( Id (converter.closure_var, converter.closure_ty),
+            field_name,
+            field_ty ),
+        true ),
+    projection )
+
+let project_lambda_converter converter =
+  let function_pointer_decl, function_pointer =
+    project_lambda_field converter "_fptr" "lambdaptr"
+      converter.function_pointer_ty
+  in
+  let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+  let environment_decl, environment =
+    project_lambda_field converter "_env" "envptr" i8_ptr
+  in
+  ([ function_pointer_decl; environment_decl ], function_pointer, environment)
 
 let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
   if List.exists (fun c -> c.cname = cd.cname) cs then cs else cd :: cs
@@ -116,7 +146,6 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   in
   (* set the fields of the lambda struct *)
   let lambda_ptr_ty = create_ptr_to lty in
-  let new_lambda_fn = vname ^ ".fun" in
   let set_lambda_struct_fields =
     [
       ("envptr", Id (vname_env, i8_ptr));
@@ -131,11 +160,6 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
           lstruct_ty,
           ObjInit (lstruct_cdecl.cname, set_lambda_struct_fields),
           false );
-      Decl
-        ( new_lambda_fn,
-          lambda_ptr_ty,
-          Proj (Id (vname, lstruct_ty), "lambdaptr", lambda_ptr_ty),
-          true );
     ]
   in
   {
@@ -143,7 +167,7 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
     function_decl = lifted_fn;
     setup;
     value = (vname, lstruct_ty);
-    function_pointer = new_lambda_fn;
+    function_pointer = lifted_lambda_fname;
     environment = vname_env;
   }
 
@@ -153,6 +177,158 @@ and lift_lambdas_from_list (lctxt : (id * lambda_converter) list)
     lift_lambdas_from_exps cs_acc lctxt vname_opt e
   in
   ((ncs, nfs @ fs_acc, stmts_acc @ ns), ne)
+
+and lift_partial_application cs lctxt vname_opt callee bound_args bound_types
+    remaining_types rty =
+  match callee with
+  | PartialValue
+      (PartialApply
+        ( inner_callee,
+          inner_bound_args,
+          inner_bound_types,
+          _inner_remaining_types,
+          _inner_rty )) ->
+      (* Chained partial applications capture the same original callee. Fold
+         their bound prefixes together so lowering allocates one closure and
+         one environment rather than an unreachable chain of wrappers. *)
+      lift_partial_application cs lctxt vname_opt inner_callee
+        (inner_bound_args @ bound_args)
+        (inner_bound_types @ bound_types)
+        remaining_types rty
+  | _ ->
+      lift_single_partial_application cs lctxt vname_opt callee bound_args
+        bound_types remaining_types rty
+
+and lift_single_partial_application cs lctxt vname_opt callee bound_args
+    bound_types remaining_types rty =
+  let full_arg_types = bound_types @ remaining_types in
+  let original_fun_ty = TRef (RFun (full_arg_types, rty)) in
+  let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+  let fptr_ty = create_ptr_to original_fun_ty in
+  let prepare_indirect fptr_name env_name cs fs stmts =
+    ( cs,
+      fs,
+      stmts,
+      [ (fptr_name, fptr_ty); (env_name, i8_ptr) ],
+      fptr_name,
+      [ Id (env_name, i8_ptr) ] )
+  in
+  let callee_cs, callee_fs, callee_stmts, callee_scope, call_name, call_prefix =
+    match callee with
+    | PartialNamed name -> (
+        match List.assoc_opt name lctxt with
+        | Some converter ->
+            let projection_stmts, function_pointer, environment =
+              project_lambda_converter converter
+            in
+            prepare_indirect function_pointer environment cs [] projection_stmts
+        | None -> (cs, [], [], [], name, []))
+    | PartialMethod (receiver, method_name, class_name) ->
+        let receiver_cs, receiver_fs, receiver_stmts, _, _, receiver', _ =
+          lift_lambdas_from_exps cs lctxt None receiver
+        in
+        let receiver_ty = TRef (RClass class_name) in
+        let receiver_name = gensym "partial_receiver" in
+        let receiver_decl =
+          Decl (receiver_name, receiver_ty, receiver', true)
+        in
+        let mangled_name =
+          mangle_name ~enclosing_class:class_name method_name
+            (receiver_ty :: full_arg_types)
+            rty
+        in
+        ( receiver_cs,
+          receiver_fs,
+          receiver_stmts @ [ receiver_decl ],
+          [ (receiver_name, receiver_ty) ],
+          mangled_name,
+          [ Id (receiver_name, receiver_ty) ] )
+    | PartialValue value -> (
+        let value_cs, value_fs, value_stmts, _, fptr_opt, value', env_opt =
+          lift_lambdas_from_exps cs lctxt None value
+        in
+        match (fptr_opt, env_opt) with
+        | Some fptr_name, Some env_name ->
+            prepare_indirect fptr_name env_name value_cs value_fs value_stmts
+        | _ ->
+            let closure_ty, closure_decl_opt =
+              transform_ty original_fun_ty value_cs
+            in
+            let value_cs =
+              match closure_decl_opt with
+              | Some declaration -> add_cdecl declaration value_cs
+              | None -> value_cs
+            in
+            let closure_name = gensym "partial_callee" in
+            let fptr_name = gensym "partial_fptr" in
+            let env_name = gensym "partial_env" in
+            let extraction_stmts =
+              [
+                Decl (closure_name, closure_ty, value', true);
+                Decl
+                  ( fptr_name,
+                    fptr_ty,
+                    Proj (Id (closure_name, closure_ty), "lambdaptr", fptr_ty),
+                    true );
+                Decl
+                  ( env_name,
+                    i8_ptr,
+                    Proj (Id (closure_name, closure_ty), "envptr", i8_ptr),
+                    true );
+              ]
+            in
+            prepare_indirect fptr_name env_name value_cs value_fs
+              (value_stmts @ extraction_stmts))
+  in
+  let (arg_cs, arg_fs, arg_stmts), bound_args' =
+    List.fold_left_map
+      (lift_lambdas_from_list lctxt None)
+      (callee_cs, [], []) bound_args
+  in
+  let bound_cs, bound_decls, bound_scope, bound_ids =
+    List.fold_left2
+      (fun (cs_acc, decls, scope, ids) bound_ty bound_value ->
+        let capture_ty, capture_decl_opt = transform_ty bound_ty cs_acc in
+        let cs_acc =
+          match capture_decl_opt with
+          | Some declaration -> add_cdecl declaration cs_acc
+          | None -> cs_acc
+        in
+        let name = gensym "partial_bound" in
+        ( cs_acc,
+          decls @ [ Decl (name, capture_ty, bound_value, true) ],
+          scope @ [ (name, capture_ty) ],
+          ids @ [ Id (name, capture_ty) ] ))
+      (arg_cs, [], [], []) bound_types bound_args'
+  in
+  let remaining_args =
+    List.map (fun ty -> (gensym "partial_arg", ty)) remaining_types
+  in
+  let remaining_ids =
+    List.map (fun (name, ty) -> Id (name, ty)) remaining_args
+  in
+  let call_args = call_prefix @ bound_ids @ remaining_ids in
+  let wrapper_body =
+    match rty with
+    | RetVoid -> [ SCall (call_name, call_args) ]
+    | RetVal result_ty ->
+        [ Ret (Some (Call (call_name, call_args, result_ty))) ]
+  in
+  let result =
+    lift_lambda bound_cs vname_opt
+      (callee_scope @ bound_scope, remaining_args, rty, wrapper_body)
+  in
+  let outer_cs = add_cdecls result.structs bound_cs in
+  let final_cs, lifted_functions =
+    lift_lambda_from_fdecl outer_cs result.function_decl
+  in
+  ( final_cs,
+    callee_fs @ arg_fs @ lifted_functions,
+    callee_stmts @ arg_stmts @ bound_decls @ result.setup,
+    Some result.value,
+    Some result.function_pointer,
+    Id (fst result.value, snd result.value),
+    Some result.environment )
 
 and lift_lambdas_from_exps (cs : cdecl list)
     (lctxt : (id * lambda_converter) list) (vname_opt : id option) = function
@@ -173,6 +349,9 @@ and lift_lambdas_from_exps (cs : cdecl list)
         Some res.function_pointer,
         Id (fst res.value, snd res.value),
         Some res.environment )
+  | PartialApply (callee, bound_args, bound_types, remaining_types, rty) ->
+      lift_partial_application cs lctxt vname_opt callee bound_args bound_types
+        remaining_types rty
   | Call (callee, es, ty) -> (
       let (ncs, nfs, nstmts), es' =
         List.fold_left_map
@@ -183,16 +362,19 @@ and lift_lambdas_from_exps (cs : cdecl list)
       | Some cnv ->
           (* local lambda in lctxt *)
           let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+          let projection_stmts, function_pointer, environment =
+            project_lambda_converter cnv
+          in
           let transformed_call =
-            Call (cnv.fptr_var, Id (cnv.env_var, i8_ptr) :: es', ty)
+            Call (function_pointer, Id (environment, i8_ptr) :: es', ty)
           in
           ( ncs,
             nfs,
-            nstmts,
+            nstmts @ projection_stmts,
             None,
-            Some cnv.fptr_var,
+            Some function_pointer,
             transformed_call,
-            Some cnv.env_var )
+            Some environment )
       | None -> (
           let base_call = Call (callee, es', ty) in
           match ty with
@@ -230,13 +412,13 @@ and lift_lambdas_from_exps (cs : cdecl list)
           | _ -> (ncs, nfs, nstmts, None, None, base_call, None)))
   | Id (i, ty) as e -> (
       match List.assoc_opt i lctxt with
-      | Some cnv ->
+      | Some _ ->
           (* known lambda variable/parameter with converters in lctxt *)
           let ty', ncs_opt = transform_ty ty cs in
           let cs' =
             match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
           in
-          (cs', [], [], None, Some cnv.fptr_var, Id (i, ty'), Some cnv.env_var)
+          (cs', [], [], None, None, Id (i, ty'), None)
       | None -> (
           match ty with
           | TRef (RFun (arg_tys, rty)) ->
@@ -381,7 +563,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
   | Decl (vname, (TRef (RFun (args, rty)) as ty), e, const) ->
       (*  lift lambda from initialization exp *)
-      let ncs, nfs, ns, _l, fptr_opt, ne, env_opt =
+      let ncs, nfs, ns, _l, _fptr_opt, ne, _env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
       in
       (* update ty of decl if necessary *)
@@ -393,28 +575,21 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
             (* Box a global function when it initializes a local lambda value. *)
             ns @ [ Decl (vname, ty', ne, const) ]
       in
-      let fptr, env, extra_stmts =
-        match (fptr_opt, env_opt) with
-        | Some f, Some e -> (f, e, [])
-        | _ ->
-            let f_name = gensym (vname ^ "_fptr") in
-            let e_name = gensym (vname ^ "_env") in
-            let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-            let l_ptr_ty = create_ptr_to (TRef (RFun (args, rty))) in
-            ( f_name,
-              e_name,
-              [
-                Decl (f_name, l_ptr_ty, Proj (ne, "lambdaptr", l_ptr_ty), true);
-                Decl (e_name, i8_ptr, Proj (ne, "envptr", i8_ptr), true);
-              ] )
-      in
       let dcs = add_cdecls ncs cs in
       (* if this variable is a lambda, add it to our context for Call sites *)
-      let nlctxt = (vname, { fptr_var = fptr; env_var = env }) :: lctxt in
+      let nlctxt =
+        ( vname,
+          {
+            closure_var = vname;
+            closure_ty = ty';
+            function_pointer_ty = create_ptr_to (TRef (RFun (args, rty)));
+          } )
+        :: lctxt
+      in
       let cs' =
         match dnc_opt with Some dnc -> add_cdecl dnc dcs | None -> cs
       in
-      (cs', nfs @ fs, nlctxt, ns_with_decl @ extra_stmts)
+      (cs', nfs @ fs, nlctxt, ns_with_decl)
   | Decl (vname, ty, e, const) ->
       let cs', nfs, ns, _l, _fptr_opt, ne, _env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
@@ -432,7 +607,20 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let (ecs, efs, ess), es' =
         List.fold_left_map (lift_lambdas_from_list lctxt None) (cs, [], []) es
       in
-      (ecs, efs @ fs, lctxt, ess @ [ SCall (i, es') ])
+      let call_name, call_args, projection_stmts =
+        match List.assoc_opt i lctxt with
+        | Some converter ->
+            let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+            let projection_stmts, function_pointer, environment =
+              project_lambda_converter converter
+            in
+            (function_pointer, Id (environment, i8_ptr) :: es', projection_stmts)
+        | None -> (i, es', [])
+      in
+      ( ecs,
+        efs @ fs,
+        lctxt,
+        ess @ projection_stmts @ [ SCall (call_name, call_args) ] )
   | If (e, tb, eb) ->
       let ecs, efs, ess, _l, _fptr_opt, e', _env =
         lift_lambdas_from_exps cs lctxt None e
@@ -454,6 +642,19 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
           (fun (cs_acc, fs_acc, stmts_acc, exps_acc) e ->
             let ncs, nfs, ns, _l_opt, _f_ptr_opt, e', env_opt =
               lift_lambdas_from_exps cs_acc lctxt None e
+            in
+            let ns, env_opt =
+              match e with
+              | Id (name, _) -> (
+                  match List.assoc_opt name lctxt with
+                  | Some converter ->
+                      let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+                      let environment_decl, environment =
+                        project_lambda_field converter "_env" "envptr" i8_ptr
+                      in
+                      (ns @ [ environment_decl ], Some environment)
+                  | None -> (ns, env_opt))
+              | _ -> (ns, env_opt)
             in
             let final_es =
               match env_opt with
@@ -477,7 +678,6 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let cs' = add_cdecls rcs (add_cdecls lcs cs) in
       let cs' = match tc_opt with Some tc -> add_cdecl tc cs' | None -> cs' in
 
-      (* TODO: update the lambda context when reassigning a lambda value. *)
       (cs', lfs @ rfs @ fs, lctxt, lss @ rss @ [ Assn (l', r', ty') ])
   | (Break | Continue) as s -> (cs, fs, lctxt, [ s ])
 
@@ -496,9 +696,9 @@ and lift_lambda_from_block cs lctxt block =
 and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     cdecl list * fdecl list =
   (* process arguments *)
-  let lctxt_initial, args_transformed, unpack_stmts, cs_args =
+  let lctxt_initial, args_transformed, cs_args =
     List.fold_right
-      (fun (t, i) (lctxt_acc, args_acc, stmts_acc, cs_acc) ->
+      (fun (t, i) (lctxt_acc, args_acc, cs_acc) ->
         match t with
         | TRef (RFun (arg_tys, rty)) ->
             (* convert lambda type to struct *)
@@ -509,29 +709,18 @@ and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
               | None -> cs_acc
             in
 
-            (* create local variables to hold the unpacked fptr and env *)
-            let fptr_name = gensym (i ^ "_fptr") in
-            let env_name = gensym (i ^ "_env") in
-            let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
             let lambda_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
-
-            let p_fptr =
-              Decl
-                ( fptr_name,
-                  lambda_ptr_ty,
-                  Proj (Id (i, t'), "lambdaptr", lambda_ptr_ty),
-                  true )
-            in
-            let p_env =
-              Decl (env_name, i8_ptr, Proj (Id (i, t'), "envptr", i8_ptr), true)
-            in
-
-            ( (i, { fptr_var = fptr_name; env_var = env_name }) :: lctxt_acc,
+            ( ( i,
+                {
+                  closure_var = i;
+                  closure_ty = t';
+                  function_pointer_ty = lambda_ptr_ty;
+                } )
+              :: lctxt_acc,
               (t', i) :: args_acc,
-              p_fptr :: p_env :: stmts_acc,
               cs' )
-        | _ -> (lctxt_acc, (t, i) :: args_acc, stmts_acc, cs_acc))
-      f.args ([], [], [], cs)
+        | _ -> (lctxt_acc, (t, i) :: args_acc, cs_acc))
+      f.args ([], [], cs)
   in
 
   (* return type transformation *)
@@ -540,10 +729,8 @@ and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
     match cd_ret_opt with Some cd -> add_cdecl cd cs_args | None -> cs_args
   in
 
-  (* lift lambdas from body, prefixing the body with our unpack statements *)
-  let body_with_unpacks = unpack_stmts @ f.body in
   let final_cs, lifted_fs, transformed_body =
-    lift_lambda_from_block cs_ret lctxt_initial body_with_unpacks
+    lift_lambda_from_block cs_ret lctxt_initial f.body
   in
 
   let new_fdecl =

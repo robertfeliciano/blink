@@ -141,6 +141,23 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "ObjInit(%s, [\n%s\n%s])" cn fs (indent lvl)
+  | PartialApply (callee, args, bound_tys, remaining_tys, ret_ty) ->
+      let callee_s =
+        match callee with
+        | PartialNamed id -> id
+        | PartialMethod (receiver, method_name, class_name) ->
+            Printf.sprintf "%s.%s::%s" (show_exp receiver) class_name
+              method_name
+        | PartialValue value -> show_exp value
+      in
+      let args_s =
+        String.concat ", " (List.map (show_exp ~lvl:(lvl + 1)) args)
+      in
+      let bound_s = String.concat ", " (List.map show_ty bound_tys) in
+      let remaining_s = String.concat ", " (List.map show_ty remaining_tys) in
+      Printf.sprintf
+        "PartialApply(callee=%s; args=[%s]; bound=[%s]; remaining=[%s]; ret=%s)"
+        callee_s args_s bound_s remaining_s (show_ret_ty ret_ty)
 
 (* Declarations *)
 and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =

@@ -40,11 +40,17 @@ let valid_programs =
     ( "capturing lambda",
       "fun main() => i32 {\n\
       \  let scale = 4;\n\
-      \  let apply: [i32] -> i32 = fn[scale](value) {\n\
+      \  let apply: (i32) -> i32 = fn[scale](value) {\n\
       \    return value * scale;\n\
       \  };\n\
       \  return apply(3);\n\
        }" );
+    ( "parenthesized function type",
+      "fun takesLambda(f: (i32, i32) -> i32, x: u8) => i32 {\n\
+      \  return f(10, 10) + (x as i32);\n\
+       }" );
+    ( "zero-argument function type",
+      "fun invoke(f: () -> i32) => i32 { return f(); }" );
   ]
 
 let invalid_programs =
@@ -53,6 +59,8 @@ let invalid_programs =
     ("missing semicolon", "fun main() => i32 { return 1 }");
     ("unclosed block", "fun main() => i32 { return 1;");
     ("invalid declaration", "fun main() => i32 { let = 1; return 0; }");
+    ( "bracketed function type",
+      "fun apply(f: [i32] -> i32) => i32 { return f(1); }" );
   ]
 
 let test_valid_program source _ = ignore (parse_exn source)

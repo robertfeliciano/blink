@@ -163,6 +163,16 @@ let rec show_exp ?(lvl = 0) = function
         scope_s args_s (show_ret_ty ret_ty)
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)
+  | PartialApply (callee, args, bound_tys, remaining_tys, ret_ty) ->
+      let args_s =
+        String.concat ", " (List.map (show_exp ~lvl:(lvl + 1)) args)
+      in
+      let bound_s = String.concat ", " (List.map show_ty bound_tys) in
+      let remaining_s = String.concat ", " (List.map show_ty remaining_tys) in
+      Printf.sprintf
+        "PartialApply(callee=%s; args=[%s]; bound=[%s]; remaining=[%s]; ret=%s)"
+        (show_exp ~lvl:(lvl + 1) callee)
+        args_s bound_s remaining_s (show_ret_ty ret_ty)
 
 (* Declarations *)
 and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =

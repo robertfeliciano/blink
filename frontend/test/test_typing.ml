@@ -301,12 +301,10 @@ let test_function_call _ =
   let _, ty = type_exp ~tc call in
   assert_ty TBool ty
 
-let test_function_call_wrong_arity _ =
+let test_function_call_overapplication _ =
   let open Typed in
   let fn_ty = TRef (RFun ([ TInt (TSigned Ti32) ], RetVal TBool)) in
   let tc = Tc.add_global Tc.empty "positive" (fn_ty, false) in
-  assert_type_error (fun () ->
-      type_exp ~tc (Ast.Call (mk_node (Ast.Id "positive"), [])));
   assert_type_error (fun () ->
       type_exp ~tc
         (Ast.Call
@@ -383,6 +381,50 @@ let test_return_promotes_numeric_value _ =
     "fun widen(value: i16) => i64 { return value; }\n\
      fun main() => i32 { return widen(1) as i32; }"
 
+let test_function_partial_application _ =
+  let open Typed in
+  let int_ty = TInt (TSigned Ti32) in
+  let fn_ty = TRef (RFun ([ int_ty; int_ty ], RetVal TBool)) in
+  let tc = Tc.add_global Tc.empty "less_than" (fn_ty, false) in
+  let typed, ty =
+    type_exp ~tc
+      (Ast.Call
+         (mk_node (Ast.Id "less_than"), [ mk_node (Ast.Int (Z.of_int 10)) ]))
+  in
+  assert_ty (TRef (RFun ([ int_ty ], RetVal TBool))) ty;
+  match typed with
+  | PartialApply (_, [ Int _ ], [ bound_ty ], [ remaining_ty ], RetVal TBool) ->
+      assert_ty int_ty bound_ty;
+      assert_ty int_ty remaining_ty
+  | _ -> assert_failure "expected a typed partial application"
+
+let test_zero_argument_partial_application _ =
+  let open Typed in
+  let int_ty = TInt (TSigned Ti32) in
+  let fn_ty = TRef (RFun ([ int_ty ], RetVal TBool)) in
+  let tc = Tc.add_global Tc.empty "positive" (fn_ty, false) in
+  let typed, ty = type_exp ~tc (Ast.Call (mk_node (Ast.Id "positive"), [])) in
+  assert_ty fn_ty ty;
+  match typed with
+  | PartialApply (_, [], [], [ remaining_ty ], RetVal TBool) ->
+      assert_ty int_ty remaining_ty
+  | _ -> assert_failure "expected a zero-argument partial application"
+
+let test_discarded_partial_application _ =
+  assert_program_type_error
+    "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+     fun main() => i32 { add(1); return 0; }"
+
+let test_void_partial_application _ =
+  assert_program_type_checks
+    "fun consume(left: i32, right: i32) => void {}\n\
+     fun main() => i32 {\n\
+    \  let finish: (i32) -> void = consume(1);\n\
+    \  finish(2);\n\
+    \  free finish;\n\
+    \  return 0;\n\
+     }"
+
 let test_method_call _ =
   let open Typed in
   let header =
@@ -399,6 +441,24 @@ let test_method_call _ =
   in
   let _, ty = type_exp ~tc call in
   assert_ty (TInt (TSigned Ti32)) ty
+
+let test_method_partial_application _ =
+  let open Typed in
+  let int_ty = TInt (TSigned Ti32) in
+  let header =
+    ("add", RetVal int_ty, [ (int_ty, "left"); (int_ty, "right") ])
+  in
+  let tc =
+    Tc.add_class Tc.empty "Box" [] [ header ] |> fun tc ->
+    Tc.add_global tc "box" (TRef (RClass "Box"), false)
+  in
+  let call =
+    Ast.Call
+      ( mk_node (Ast.Proj (mk_node (Ast.Id "box"), "add")),
+        [ mk_node (Ast.Int (Z.of_int 20)) ] )
+  in
+  let _, ty = type_exp ~tc call in
+  assert_ty (TRef (RFun ([ int_ty ], RetVal int_ty))) ty
 
 let test_const_assignment_rejected _ =
   let int_ty = Typed.(TInt (TSigned Ti32)) in
@@ -694,7 +754,7 @@ let test_capturing_lambda _ =
   assert_program_type_checks
     "fun main() => i32 {\n\
     \  let scale = 4;\n\
-    \  let apply: [i32] -> i32 = fn[scale](value) {\n\
+    \  let apply: (i32) -> i32 = fn[scale](value) {\n\
     \    return value * scale;\n\
     \  };\n\
     \  let result = apply(3);\n\
@@ -705,20 +765,44 @@ let test_capturing_lambda _ =
 let test_lambda_rejects_wrong_return_type _ =
   assert_program_type_error
     "fun main() => i32 {\n\
-    \  let apply: [i32] -> bool = fn[](value) { return value; };\n\
+    \  let apply: (i32) -> bool = fn[](value) { return value; };\n\
     \  if apply(3) { return 1; } else { return 0; }\n\
+     }"
+
+let test_direct_untyped_lambda_argument _ =
+  assert_program_type_checks
+    "fun apply(f: (i32, i32) -> i32) => i32 { return f(40, 2); }\n\
+     fun main() => i32 {\n\
+    \  return apply(fn(left, right) { return left + right; });\n\
+     }"
+
+let test_direct_untyped_lambda_rejects_wrong_return_type _ =
+  assert_program_type_error
+    "fun apply(f: (i32) -> i32) => i32 { return f(41); }\n\
+     fun main() => i32 {\n\
+    \  return apply(fn(value) { return true; });\n\
+     }"
+
+let test_lambda_reassignment_rejects_parameter_mismatch _ =
+  assert_program_type_error
+    "fun main() => i32 {\n\
+    \  let f: (i32) -> i32 = fn(value) { return value; };\n\
+    \  f = fn(value: bool) -> i32 {\n\
+    \    if value { return 1; } else { return 0; }\n\
+    \  };\n\
+    \  return 0;\n\
      }"
 
 let test_typed_lambda_signature_must_match_expected_type _ =
   List.iter assert_program_type_error
     [
       "fun main() => i32 {
-       \  let apply: [i32] -> i32 =
+       \  let apply: (i32) -> i32 =
        \    fn[](value: bool) -> i32 { return 0; };
        \  return 0;
        }";
       "fun main() => i32 {
-       \  let apply: [i32] -> i32 =
+       \  let apply: (i32) -> i32 =
        \    fn[](left: i32, right: i32) -> i32 { return left; };
        \  return 0;
        }";
@@ -727,7 +811,7 @@ let test_typed_lambda_signature_must_match_expected_type _ =
 let test_nonvoid_lambda_requires_return _ =
   assert_program_type_error
     "fun main() => i32 {
-    \  let apply: [i32] -> i32 = fn[](value) { let copy = value; };
+    \  let apply: (i32) -> i32 = fn[](value) { let copy = value; };
     \  return 0;
      }";
   assert_program_type_error
@@ -739,7 +823,7 @@ let test_nonvoid_lambda_requires_return _ =
 let test_nonvoid_lambda_accepts_complete_returns _ =
   assert_program_type_checks
     "fun main() => i32 {
-    \  let apply: [i32] -> i32 = fn[](value) {
+    \  let apply: (i32) -> i32 = fn[](value) {
     \    if value > 0 { return value; } else { return 0; }
     \  };
     \  return apply(1);
@@ -748,7 +832,7 @@ let test_nonvoid_lambda_accepts_complete_returns _ =
 let test_void_lambda_does_not_require_return _ =
   assert_program_type_checks
     "fun main() => i32 {
-    \  let consume: [i32] -> void = fn[](value) { let copy = value; };
+    \  let consume: (i32) -> void = fn[](value) { let copy = value; };
     \  consume(1);
     \  free consume;
     \  return 0;
@@ -780,7 +864,7 @@ let suite =
          "mixed array elements" >:: test_array_rejects_mixed_elements;
          "index requires integer" >:: test_index_requires_integer;
          "function call" >:: test_function_call;
-         "function arity" >:: test_function_call_wrong_arity;
+         "function overapplication" >:: test_function_call_overapplication;
          "void function arity" >:: test_void_function_call_wrong_arity;
          "constant arithmetic diagnostics"
          >:: test_constant_arithmetic_failures_are_type_errors;
@@ -791,7 +875,13 @@ let suite =
          "function argument promotion"
          >:: test_function_call_promotes_numeric_argument;
          "return promotion" >:: test_return_promotes_numeric_value;
+         "function partial application" >:: test_function_partial_application;
+         "zero-argument partial application"
+         >:: test_zero_argument_partial_application;
+         "void partial application" >:: test_void_partial_application;
          "method call" >:: test_method_call;
+         "method partial application" >:: test_method_partial_application;
+         "discarded partial application" >:: test_discarded_partial_application;
          "const assignment" >:: test_const_assignment_rejected;
          "const field assignment" >:: test_const_field_assignment_rejected;
          "shallow const references" >:: test_const_references_are_shallow;
@@ -833,6 +923,12 @@ let suite =
          "unknown object field" >:: test_object_rejects_unknown_field;
          "capturing lambda" >:: test_capturing_lambda;
          "lambda return type" >:: test_lambda_rejects_wrong_return_type;
+         "direct untyped lambda argument"
+         >:: test_direct_untyped_lambda_argument;
+         "direct untyped lambda return type"
+         >:: test_direct_untyped_lambda_rejects_wrong_return_type;
+         "lambda reassignment parameter mismatch"
+         >:: test_lambda_reassignment_rejects_parameter_mismatch;
          "typed lambda signature"
          >:: test_typed_lambda_signature_must_match_expected_type;
          "non-void lambda missing return" >:: test_nonvoid_lambda_requires_return;
