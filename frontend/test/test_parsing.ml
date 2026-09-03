@@ -117,6 +117,59 @@ let test_operator_precedence _ =
         (Printf.sprintf "unexpected AST for precedence test:\n%s"
            (show_prog program))
 
+let returned_expression source =
+  match parse_exn source with
+  | Prog ([ function_ ], [], []) -> (
+      match function_.elt.body with
+      | [ { elt = Ret (Some expression); _ } ] -> expression.elt
+      | _ -> assert_failure "expected a single return statement")
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected numeric literal program:\n%s"
+           (show_prog program))
+
+let test_numeric_separators _ =
+  let integer =
+    returned_expression "fun main() => i32 { return 1_000_000; }"
+  in
+  let two_digit_leading_group =
+    returned_expression "fun main() => i32 { return 12_345; }"
+  in
+  let decimal =
+    returned_expression "fun main() => f64 { return 1_000.25; }"
+  in
+  let scientific =
+    returned_expression "fun main() => f64 { return 1_000e-3; }"
+  in
+  (match integer with
+  | Int value -> assert_equal (Z.of_int 1_000_000) value
+  | _ -> assert_failure "expected a separated integer literal");
+  (match two_digit_leading_group with
+  | Int value -> assert_equal (Z.of_int 12_345) value
+  | _ -> assert_failure "expected a two-digit leading group");
+  (match decimal with
+  | Float value -> assert_equal 1000.25 value
+  | _ -> assert_failure "expected a separated decimal literal");
+  match scientific with
+  | Float value -> assert_equal 1. value
+  | _ -> assert_failure "expected a separated scientific literal"
+
+let test_invalid_numeric_separators _ =
+  [
+    "_100";
+    "100_";
+    "1__000";
+    "12_3_45";
+    "1_00";
+    "1234_567";
+    "1_0000";
+    "1_000.25_0";
+    "1e1_000";
+  ]
+  |> List.iter (fun literal ->
+         assert_parse_error
+           (Printf.sprintf "fun main() => i32 { return %s; }" literal))
+
 let test_error_has_source_position _ =
   match parse "fun main() => i32 {\n  let = 1;\n}" with
   | Ok _ -> assert_failure "expected a parse error"
@@ -144,5 +197,7 @@ let suite =
          "top-level declarations" >:: test_top_level_declarations;
          "inline modifier" >:: test_inline_modifier;
          "operator precedence" >:: test_operator_precedence;
+         "numeric separators" >:: test_numeric_separators;
+         "invalid numeric separators" >:: test_invalid_numeric_separators;
          "errors include positions" >:: test_error_has_source_position;
        ]

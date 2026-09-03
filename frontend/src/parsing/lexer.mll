@@ -3,7 +3,11 @@ open Parser
 
 exception SyntaxError of string
 
+let normalize_number (input: string) : string =
+  input |> String.split_on_char '_' |> String.concat ""
+
 let float_from_sci (input: string) : float = 
+  let input = normalize_number input in
   let reg = Str.regexp "[eE]" in
   let parts = Str.split reg input in 
   match parts with 
@@ -16,9 +20,12 @@ let digit = ['0'-'9']
 let alpha = ['a'-'z' 'A'-'Z']
 
 (* Regexes for tokens *)
-let int = digit+
-let decimal = digit+ '.' digit+
-let scientific = digit+ ('E'|'e') '-'? digit+
+let leading_digit_group = digit digit? digit?
+let separated_digits = leading_digit_group ('_' digit digit digit)+
+let number_digits = digit+ | separated_digits
+let int = number_digits
+let decimal = number_digits '.' digit+
+let scientific = number_digits ('E'|'e') '-'? digit+
 let id = alpha (alpha | digit | '_' | '\'')*
 let generic_type_param = ['A'-'Z']
 
@@ -132,8 +139,8 @@ rule read = parse
   | ">" { GT_TYPE }
   (* | "?" { OPT_TYPE } *)
   | id { IDENT (Lexing.lexeme lexbuf) }
-  | int { INT (Z.of_string (Lexing.lexeme lexbuf)) }
-  | decimal { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }
+  | int { INT (Z.of_string (normalize_number (Lexing.lexeme lexbuf))) }
+  | decimal { FLOAT (float_of_string (normalize_number (Lexing.lexeme lexbuf))) }
   | scientific { FLOAT (float_from_sci (Lexing.lexeme lexbuf)) }
   | '"' { read_string (Buffer.create 17) lexbuf }
   | eof { EOF }

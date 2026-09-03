@@ -10,6 +10,11 @@ let fixtures =
       expected_exit = 17;
     };
     {
+      name = "numeric-separators";
+      source = "fun main() => i32 { return 1_000_000 / 10_000; }";
+      expected_exit = 100;
+    };
+    {
       name = "function-call";
       source =
         "fun twice(value: i32) => i32 { return value * 2; }\n\
