@@ -68,6 +68,8 @@ Actively look for:
 - incorrect control flow, state transitions, evaluation order, or edge cases;
 - mismatched assumptions across frontend, FFI, backend, build, and test code;
 - missing callers, variants, cleanup, validation, diagnostics, or coverage;
+- any implementation change without a corresponding test-file change,
+  regardless of the implementation's size or scope;
 - behavior that works only at one optimization level or for one syntactic path;
 - malformed or unstable LLVM IR and differences between compile-time and native
   runtime behavior;
@@ -79,6 +81,12 @@ If something smells wrong, report it. Distinguish a demonstrated defect from a
 plausible risk or an unresolved suspicion, and explain what evidence would settle
 the latter. Do not suppress a concern merely because a minimal reproduction has
 not yet been proven.
+
+Blink requires tests to change for every implementation change. Treat a missing
+test change as a finding even when existing tests pass or already exercise the
+behavior. Examples, documentation edits, and validation runs do not satisfy
+this requirement. Check that added or updated tests meaningfully exercise the
+changed behavior rather than merely recording unrelated churn.
 
 ## Check for reuse and divergence
 
