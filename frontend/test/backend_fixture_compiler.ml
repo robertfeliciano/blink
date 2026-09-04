@@ -74,12 +74,24 @@ let object_field () =
   in
   DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [])
 
+let conditional () =
+  let expression =
+    DA.Conditional
+      ( DA.Bool true,
+        ([ DA.Decl ("chosen", i32, int 42, true) ], DA.Id ("chosen", i32)),
+        ([ DA.Decl ("ignored", i32, int 99, true) ], DA.Id ("ignored", i32)),
+        i32 )
+  in
+  DA.Prog
+    (optimization_level, [ function_ "main" [ DA.Ret (Some expression) ] ], [], [])
+
 let fixtures =
   [
     ("arithmetic", arithmetic);
     ("function-call", function_call);
     ("array-index", array_index);
     ("object-field", object_field);
+    ("conditional", conditional);
   ]
 
 let () =

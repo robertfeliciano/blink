@@ -246,6 +246,13 @@ let rec exp_contains_lambda (exp : DA.exp) =
       List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
   | DA.Bop (_, lhs, rhs, _) ->
       exp_contains_lambda lhs || exp_contains_lambda rhs
+  | DA.Conditional
+      (condition, (then_block, then_exp), (else_block, else_exp), _) ->
+      exp_contains_lambda condition
+      || List.exists stmt_contains_lambda then_block
+      || exp_contains_lambda then_exp
+      || List.exists stmt_contains_lambda else_block
+      || exp_contains_lambda else_exp
   | DA.Uop (_, exp, _) | DA.Cast (exp, _) | DA.Proj (exp, _, _) ->
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
@@ -253,7 +260,7 @@ let rec exp_contains_lambda (exp : DA.exp) =
   | DA.PartialApply _ -> true
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
-let rec stmt_contains_lambda (stmt : DA.stmt) =
+and stmt_contains_lambda (stmt : DA.stmt) =
   match stmt with
   | DA.Assn (lhs, rhs, _) -> exp_contains_lambda lhs || exp_contains_lambda rhs
   | DA.Decl (_, _, init, _) -> exp_contains_lambda init
@@ -350,6 +357,13 @@ let rec exp_contains_call (exp : DA.exp) =
       List.exists (fun (_, value) -> exp_contains_call value) fields
   | DA.Bop (_, lhs, rhs, _) ->
       exp_contains_call lhs || exp_contains_call rhs
+  | DA.Conditional
+      (condition, (then_block, then_exp), (else_block, else_exp), _) ->
+      exp_contains_call condition
+      || List.exists stmt_contains_call then_block
+      || exp_contains_call then_exp
+      || List.exists stmt_contains_call else_block
+      || exp_contains_call else_exp
   | DA.Uop (_, value, _) | DA.Cast (value, _) | DA.Proj (value, _, _) ->
       exp_contains_call value
   | DA.Index (collection, index, _) ->
@@ -616,6 +630,55 @@ fun main() => i32 {
         (Printf.sprintf "unexpected function reassignment lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_conditional_preserves_branch_local_preludes _ =
+  let source =
+    {|
+fun add(left: i32, right: i32) => i32 { return left + right; }
+fun main() => i32 {
+    let selected: (i32) -> i32 = true ? add(2) : add(3);
+    let result = selected(40);
+    free selected;
+    return result;
+}
+|}
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, []) ->
+      let main =
+        match
+          List.find_opt
+            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
+            functions
+        with
+        | Some fn -> fn
+        | None -> assert_failure "expected a lowered main function"
+      in
+      let conditional =
+        List.find_map
+          (function
+            | DA.Decl (_, _, (DA.Conditional _ as conditional), _) ->
+                Some conditional
+            | _ -> None)
+          main.body
+      in
+      (match conditional with
+      | Some
+          (DA.Conditional
+            (_, (then_prelude, _), (else_prelude, _), _)) ->
+          assert_bool "true branch setup should remain branch-local"
+            (then_prelude <> []);
+          assert_bool "false branch setup should remain branch-local"
+            (else_prelude <> [])
+      | _ ->
+          assert_failure
+            (Printf.sprintf
+               "expected a conditional with separate branch preludes:\n%s"
+               (Printer.show_block main.body)))
+  | program ->
+      assert_failure
+        (Printf.sprintf "unexpected conditional lowering:\n%s"
+           (Printer.show_desugared_program program))
+
 let suite =
   let pipeline_tests =
     List.map
@@ -641,5 +704,7 @@ let suite =
          >:: test_anonymous_void_partial_application_cleanup;
          "function reassignment projects current closure"
          >:: test_function_reassignment_projects_current_closure;
+         "conditional preserves branch-local preludes"
+         >:: test_conditional_preserves_branch_local_preludes;
          "parsed and typed programs" >::: pipeline_tests;
        ]

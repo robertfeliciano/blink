@@ -144,6 +144,23 @@ inline fun add_one(value: i32) => i32 {
 The modifier uses LLVM's always-inliner and is honored even when compiling with
 `-O0`.
 
+Conditional expressions use `condition ? when_true : when_false`. The
+condition must be `bool`, and only the selected branch is evaluated. They are
+right-associative and bind less tightly than binary operators, so nested
+expressions can be written without extra parentheses:
+
+```blink
+fun main() => i32 {
+  let score = 87;
+  let result = score >= 90 ? 1 : score >= 80 ? 2 : 3;
+  return result;
+}
+```
+
+Both branches must have compatible types. Blink applies its normal numeric
+promotion rules, and an assignment or explicit declaration type can provide
+the expected type for literals and other context-sensitive expressions.
+
 Functions support prefix partial application. Supplying fewer arguments than a
 function declares produces a closure over the supplied arguments; supplying the
 full arity invokes the function normally.

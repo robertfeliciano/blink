@@ -451,6 +451,47 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             type_error e ("bad operand type, received " ^ Printer.show_ty t)
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
+  | Conditional (cond, when_true, when_false) ->
+      let typed_cond, _ =
+        type_exp_as Typed_ast.TBool tc cond enclosing_class
+      in
+      let typed_true, typed_false, result_ty =
+        match expected with
+        | Some target_ty ->
+            let typed_true, _ =
+              type_exp_as target_ty tc when_true enclosing_class
+            in
+            let typed_false, _ =
+              type_exp_as target_ty tc when_false enclosing_class
+            in
+            (typed_true, typed_false, target_ty)
+        | None ->
+            let typed_true, true_ty =
+              type_exp tc when_true enclosing_class
+            in
+            let typed_false, false_ty =
+              type_exp tc when_false enclosing_class
+            in
+            if is_number true_ty && is_number false_ty then
+              let result_ty = meet_number e (true_ty, false_ty) in
+              let promote typed_exp actual_ty =
+                if equal_ty actual_ty result_ty then typed_exp
+                else Typed_ast.Cast (typed_exp, result_ty)
+              in
+              ( promote typed_true true_ty,
+                promote typed_false false_ty,
+                result_ty )
+            else if equal_ty true_ty false_ty then
+              (typed_true, typed_false, true_ty)
+            else
+              type_error e
+                ("Conditional branches have incompatible types "
+                ^ Printer.show_ty true_ty ^ " and "
+                ^ Printer.show_ty false_ty ^ ".")
+      in
+      ( Typed_ast.Conditional
+          (typed_cond, typed_true, typed_false, result_ty),
+        result_ty )
   | Index (e_iter, e_idx) ->
       let t_iter, iter_ty = type_exp tc e_iter enclosing_class in
       let ty_of_array =
@@ -626,7 +667,8 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
          ^ Printer.show_ty expected ^ ".")
   | Bop _, Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
       type_exp ~expected tc e enclosing_class
-  | (Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _), _ ->
+  | (Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _ | Conditional _),
+    _ ->
       type_exp ~expected tc e enclosing_class
   | _ ->
       let te, actual = type_exp tc e enclosing_class in

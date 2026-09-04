@@ -125,8 +125,52 @@ let returned_expression source =
       | _ -> assert_failure "expected a single return statement")
   | program ->
       assert_failure
-        (Printf.sprintf "unexpected numeric literal program:\n%s"
-           (show_prog program))
+        (Printf.sprintf "unexpected expression program:\n%s" (show_prog program))
+
+let test_conditional_expression_shape _ =
+  match returned_expression "fun main() => i32 { return true ? 1 : 2; }" with
+  | Conditional
+      ( { elt = Bool true; _ },
+        { elt = Int when_true; _ },
+        { elt = Int when_false; _ } ) ->
+      assert_equal (Z.of_int 1) when_true;
+      assert_equal (Z.of_int 2) when_false
+  | _ -> assert_failure "expected a conditional expression"
+
+let test_conditional_precedence _ =
+  match
+    returned_expression
+      "fun main() => i32 { return 1 < 2 ? 3 + 4 : 5 * 6; }"
+  with
+  | Conditional
+      ( { elt = Bop (Lt, _, _); _ },
+        { elt = Bop (Add, _, _); _ },
+        { elt = Bop (Mul, _, _); _ } ) ->
+      ()
+  | _ ->
+      assert_failure
+        "binary operators should bind more tightly than the conditional operator"
+
+let test_conditional_right_associativity _ =
+  match
+    returned_expression
+      "fun main() => i32 { return true ? 1 : false ? 2 : 3; }"
+  with
+  | Conditional
+      ( { elt = Bool true; _ },
+        { elt = Int one; _ },
+        {
+          elt =
+            Conditional
+              ( { elt = Bool false; _ },
+                { elt = Int two; _ },
+                { elt = Int three; _ } );
+          _;
+        } ) ->
+      assert_equal (Z.of_int 1) one;
+      assert_equal (Z.of_int 2) two;
+      assert_equal (Z.of_int 3) three
+  | _ -> assert_failure "conditional expressions should associate to the right"
 
 let test_numeric_separators _ =
   let integer =
@@ -197,6 +241,10 @@ let suite =
          "top-level declarations" >:: test_top_level_declarations;
          "inline modifier" >:: test_inline_modifier;
          "operator precedence" >:: test_operator_precedence;
+         "conditional expression shape" >:: test_conditional_expression_shape;
+         "conditional precedence" >:: test_conditional_precedence;
+         "conditional right associativity"
+         >:: test_conditional_right_associativity;
          "numeric separators" >:: test_numeric_separators;
          "invalid numeric separators" >:: test_invalid_numeric_separators;
          "errors include positions" >:: test_error_has_source_position;

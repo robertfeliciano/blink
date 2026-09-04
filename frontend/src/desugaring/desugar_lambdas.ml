@@ -511,6 +511,46 @@ and lift_lambdas_from_exps (cs : cdecl list)
       let fs' = fs1 @ fs2 in
       let ss = ss1 @ ss2 in
       (cs', fs', ss, None, None, Bop (b, e1', e2', ty), None)
+  | Conditional (cond, (true_block, when_true), (false_block, when_false), ty) ->
+      let cond_cs, cond_fs, cond_stmts, _, _, cond', _ =
+        lift_lambdas_from_exps cs lctxt None cond
+      in
+      let lift_branch branch_cs block value =
+        let block_cs, block_fs, branch_lctxt, block' =
+          List.fold_left
+            (fun (curr_cs, curr_fs, curr_lctxt, block_acc) stmt ->
+              let next_cs, next_fs, next_lctxt, new_stmts =
+                lift_lambdas_from_stmt curr_cs curr_fs curr_lctxt stmt
+              in
+              (next_cs, next_fs, next_lctxt, block_acc @ new_stmts))
+            (branch_cs, [], lctxt, []) block
+        in
+        let value_cs, value_fs, value_stmts, _, _, value', _ =
+          lift_lambdas_from_exps block_cs branch_lctxt None value
+        in
+        ( value_cs,
+          block_fs @ value_fs,
+          (block' @ value_stmts, value') )
+      in
+      let true_cs, true_fs, true_branch =
+        lift_branch cond_cs true_block when_true
+      in
+      let false_cs, false_fs, false_branch =
+        lift_branch true_cs false_block when_false
+      in
+      let result_ty, result_cdecl = transform_ty ty false_cs in
+      let final_cs =
+        match result_cdecl with
+        | Some declaration -> add_cdecl declaration false_cs
+        | None -> false_cs
+      in
+      ( final_cs,
+        cond_fs @ true_fs @ false_fs,
+        cond_stmts,
+        None,
+        None,
+        Conditional (cond', true_branch, false_branch, result_ty),
+        None )
   | Uop (u, e, ty) ->
       (* uop is never between lambdas, no need to transform_ty *)
       let ncs, nfs, ss, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in

@@ -8,6 +8,7 @@ let fixtures =
     { name = "function-call"; expected_exit = 42 };
     { name = "array-index"; expected_exit = 15 };
     { name = "object-field"; expected_exit = 44 };
+    { name = "conditional"; expected_exit = 42 };
   ]
 
 let test_fixture fixture test_context =

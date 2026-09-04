@@ -129,7 +129,7 @@ rule read = parse
   | "free"   { FREE }
   (* | "impls" { IMPLS } *)
   (* | "global" { GLOBAL } *)
-  (* | "?" { QMARK } *)
+  | "?" { QMARK }
   | "as" { AS }
   | "fn" { FN }
   (* | "lambda" { LAMBDA } *)

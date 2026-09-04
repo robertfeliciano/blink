@@ -158,6 +158,15 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf
         "PartialApply(callee=%s; args=[%s]; bound=[%s]; remaining=[%s]; ret=%s)"
         callee_s args_s bound_s remaining_s (show_ret_ty ret_ty)
+  | Conditional (cond, (true_block, when_true), (false_block, when_false), ty) ->
+      Printf.sprintf
+        "Conditional(%s, ([%s], %s), ([%s], %s), %s)"
+        (show_exp ~lvl:(lvl + 1) cond)
+        (show_block ~lvl:(lvl + 1) true_block)
+        (show_exp ~lvl:(lvl + 1) when_true)
+        (show_block ~lvl:(lvl + 1) false_block)
+        (show_exp ~lvl:(lvl + 1) when_false)
+        (show_ty ty)
 
 (* Declarations *)
 and show_vdecl ?(lvl = 0) (id, ty, e, is_const) =

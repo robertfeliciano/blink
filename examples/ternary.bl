@@ -1,0 +1,6 @@
+fun main() => i32 {
+    let temperature = 72;
+    let is_warm = temperature > 70;
+    let adjustment = is_warm ? 3 : -3;
+    return temperature + adjustment;
+}

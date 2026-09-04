@@ -349,5 +349,15 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             List.map convert_ty bound_tys,
             List.map convert_ty remaining_tys,
             convert_ret_ty ret_ty ) )
+  | Conditional (cond, when_true, when_false, ty) ->
+      let cond_stmts, cond' = desugar_exp cond in
+      let true_stmts, when_true' = desugar_exp ~rhs_assn when_true in
+      let false_stmts, when_false' = desugar_exp ~rhs_assn when_false in
+      ( cond_stmts,
+        D.Conditional
+          ( cond',
+            (true_stmts, when_true'),
+            (false_stmts, when_false'),
+            convert_ty ty ) )
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

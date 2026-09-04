@@ -96,6 +96,7 @@ type exp =
       * ret_ty
       * block (* scope, args+types, ret type, body *)
   | Null
+  | Conditional of exp node * exp node * exp node
 
 and vdecl = id * ty option * exp node option * bool
 
@@ -293,6 +294,14 @@ let rec show_exp ?(lvl = 0) = function
         (indent lvl) scope_s params_s
         (show_ret_ty ~lvl:(lvl + 1) ret_ty)
         body_s (indent lvl)
+  | Conditional (cond, when_true, when_false) ->
+      Printf.sprintf "%sConditional(\n%s%s,\n%s%s,\n%s%s)" (indent lvl)
+        (indent (lvl + 1))
+        (show_node show_exp cond)
+        (indent (lvl + 1))
+        (show_node show_exp when_true)
+        (indent (lvl + 1))
+        (show_node show_exp when_false)
 
 (* Variable declarations *)
 

@@ -110,12 +110,13 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token FREE       /* free */
 %token IMPLS     /* impls */
 // %token GLOBAL    /* global */
-// %token QMARK     /* ? */
+%token QMARK     /* ? */
 %token AS        /* as */
 %token FN        /* fn */
 // %token LAMBDA    /* lambda */
 
 // %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
+%right QMARK COLON
 %left OR
 %left AND
 %left XOR
@@ -138,7 +139,6 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %left RANGE RANGE_INCL
 // %right THIN_ARROW
 // %nonassoc LOW
-// %nonassoc QMARK
 // %nonassoc NOT
 
 %start program
@@ -345,6 +345,8 @@ ref_ty:
    ----------------------- *)
 
 exp:
+  | cond=exp QMARK when_true=exp COLON when_false=exp
+      { loc $startpos $endpos @@ Conditional (cond, when_true, when_false) }
   | e1=exp b=bop e2=exp
       { loc $startpos $endpos @@ Bop (b, e1, e2) }
   | u=unary
