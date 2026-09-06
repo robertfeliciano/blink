@@ -29,7 +29,37 @@ let is_generated_partial_callee source_callee desugared_callee =
   | _ -> false
 
 let generated_partial_cleanup release_callee fname fn_ty =
-  if release_callee then [ D.Free [ D.Id (fname, fn_ty) ] ] else []
+  let cleanup = [ D.Free [ D.Id (fname, fn_ty) ] ] in
+  match release_callee with
+  | None -> []
+  | Some (D.Bool true) -> cleanup
+  | Some predicate -> [ D.If (predicate, cleanup, []) ]
+
+(* Track ownership only when consuming a callee. Named bindings retain their
+   ownership; a conditional records the ownership of the selected branch. *)
+let partial_callee_ownership source lowered =
+  let owned = gensym "partial_owned" in
+  let rec annotate source lowered =
+    match (source, lowered) with
+    | Typed.Conditional (_, left, right, _),
+      D.Conditional (cond, (ls, le), (rs, re), ty) ->
+        let ls', le' = annotate left le in
+        let rs', re' = annotate right re in
+        ([], D.Conditional (cond, (ls @ ls', le'), (rs @ rs', re'), ty))
+    | _ ->
+        let flag = D.Bool (is_generated_partial_callee source lowered) in
+        ([ D.Assn (D.Id (owned, D.TBool), flag, D.TBool) ], lowered)
+  in
+  match source with
+  | Typed.Conditional _ ->
+      let setup, lowered = annotate source lowered in
+      ( D.Decl (owned, D.TBool, D.Bool false, false) :: setup,
+        lowered,
+        Some (D.Id (owned, D.TBool)) )
+  | _ ->
+      ([], lowered,
+       if is_generated_partial_callee source lowered then Some (D.Bool true)
+       else None)
 
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
@@ -152,8 +182,9 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
+      let ownership_setup, fn', release_callee = partial_callee_ownership fn fn' in
+      let sf = sf @ ownership_setup in
       let sa, args' = List.map desugar_exp args |> flatten in
-      let release_callee = is_generated_partial_callee fn fn' in
       match fn' with
       | D.Id (fname, fn_ty) ->
           sf @ sa @ [ D.SCall (fname, args') ]
@@ -252,8 +283,9 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
+      let ownership_setup, fn', release_callee = partial_callee_ownership fn fn' in
+      let sf = sf @ ownership_setup in
       let sa, args' = List.map desugar_exp args |> flatten in
-      let release_callee = is_generated_partial_callee fn fn' in
       let consume_generated_partial setup fname fn_ty =
         (* A source-anonymous partial application has no binding through which
            the user could release its closure. Materialize the call result
@@ -266,11 +298,11 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             (result_store, ty', D.Call (fname, args', ty'), true)
         in
         ( setup @ sa @ [ result_decl ]
-          @ generated_partial_cleanup true fname fn_ty,
+          @ generated_partial_cleanup release_callee fname fn_ty,
           D.Id (result_store, ty') )
       in
       match fn' with
-      | D.Id (fname, fn_ty) when release_callee ->
+      | D.Id (fname, fn_ty) when Option.is_some release_callee ->
           consume_generated_partial sf fname fn_ty
       | D.Id (fname, _t) -> (sf @ sa, D.Call (fname, args', ty'))
       | _ ->
@@ -298,7 +330,7 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
           let fn_store = gensym "Fn" in
           let fn_ty = D.TRef (RFun (tys', RetVal ty')) in
           let tmp_decl = D.Decl (fn_store, fn_ty, fn', false) in
-          if release_callee then
+          if Option.is_some release_callee then
             consume_generated_partial (sf @ [ tmp_decl ]) fn_store fn_ty
           else (sf @ [ tmp_decl ] @ sa, D.Call (fn_store, args', ty')))
   | Lambda (scope, args, ret_ty, body) ->

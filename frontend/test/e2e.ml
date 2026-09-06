@@ -82,6 +82,22 @@ let fixtures =
       expected_exit = 42;
     };
     {
+      name = "conditional-anonymous-partial-cleanup";
+      source =
+        "fun add(a: i32, b: i32) => i32 { return a + b; }\n\
+         fun main() => i32 {\n\
+        \  let saved = add(2);\n\
+        \  let total = 0;\n\
+        \  for i in 0..20 {\n\
+        \    total += (i < 10 ? add(1) : (i < 15 ? saved : add(3)))(0);\n\
+        \  }\n\
+        \  let result = total + saved(5);\n\
+        \  free saved;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
       name = "for-loop";
       source =
         "fun main() => i32 {\n\

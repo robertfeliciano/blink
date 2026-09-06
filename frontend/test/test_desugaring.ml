@@ -679,6 +679,25 @@ fun main() => i32 {
         (Printf.sprintf "unexpected conditional lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_conditional_anonymous_cleanup _ =
+  let source =
+    "fun add(a: i32, b: i32) => i32 { return a + b; }\n\
+     fun main() => i32 { return (true ? add(1) : add(2))(40); }"
+  in
+  match parse_and_type_exn source |> desugar_exn with
+  | DA.Prog (_, functions, _, _) ->
+      let main = List.find (fun (f : DA.fdecl) -> f.fname = "main") functions in
+      let rec check seen_call = function
+        | [] -> assert_failure "missing guarded closure cleanup after call"
+        | DA.If (_, cleanup, []) :: _
+          when seen_call
+               && List.exists
+                    (function DA.Free values -> List.length values = 2 | _ -> false)
+                    cleanup -> ()
+        | stmt :: rest -> check (seen_call || stmt_contains_call stmt) rest
+      in
+      check false main.body
+
 let suite =
   let pipeline_tests =
     List.map
@@ -706,5 +725,6 @@ let suite =
          >:: test_function_reassignment_projects_current_closure;
          "conditional preserves branch-local preludes"
          >:: test_conditional_preserves_branch_local_preludes;
+         "conditional anonymous cleanup" >:: test_conditional_anonymous_cleanup;
          "parsed and typed programs" >::: pipeline_tests;
        ]
