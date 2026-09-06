@@ -1,0 +1,6 @@
+// Planned syntax: this fixture is NOT supported by the current compiler.
+import helper;
+
+fun main() => i32 {
+  return helper.answer();
+}

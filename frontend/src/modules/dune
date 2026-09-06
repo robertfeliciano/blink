@@ -1,0 +1,3 @@
+(library
+ (name module_system)
+ (libraries ast util))

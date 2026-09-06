@@ -86,6 +86,12 @@ They are ignored and should not be committed.
 
 ### Parsing
 
+The inactive module scaffold lives in `frontend/src/modules/` as the standalone
+`module_system` library. Its entry points return explicit pending errors and it
+is not linked into Compiler. See `docs/modules.md` for numbered implementation
+steps and `docs/module-fixtures/` for future, currently unsupported syntax.
+Update this note when module loading becomes part of the active pipeline.
+
 - `frontend/src/parsing/lexer.mll` defines keywords, literals, and tokens.
 - `frontend/src/parsing/parser.mly` defines syntax and precedence.
 - `frontend/src/parsing/parse.ml` wraps lexer and parser error handling.
