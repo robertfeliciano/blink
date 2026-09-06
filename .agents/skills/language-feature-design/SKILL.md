@@ -21,58 +21,23 @@ During this workflow:
 An initial request to design or add a feature is not approval to implement the
 resulting plan.
 
-## Linked-reference design panel
+## Linked-reference research
 
-Whenever the user supplies one or more links as references for the requested
-change, create a design panel of two or three sub-agents before writing the
-main agent's final plan.
+When the user supplies links, read the relevant content directly before
+designing the feature. Distinguish source facts from Blink-specific
+implementation inferences, and disclose any reference that cannot be accessed.
+Do not invent content from an unreadable link.
 
-Use two agents for a focused feature with a small or closely related reference
-set. Use three agents when the feature, reference set, or implementation tradeoffs
-span multiple substantial concerns. Do not create more than three panel agents.
+Do not automatically create a multi-agent planning panel because references or
+multiple compiler concerns are involved. The main agent owns the research,
+repository analysis, design decisions, and final plan. Delegate planning only
+when the user explicitly requests delegation or parallel agent work.
 
-Give every panel member:
+## Design synthesis
 
-- the user's requested behavior;
-- the relevant link or links;
-- enough Blink repository context to evaluate integration;
-- an instruction to read the relevant linked content directly;
-- an instruction to distinguish source facts from implementation inferences;
-- an instruction to propose a concrete Blink design and implementation plan;
-- an instruction not to edit files; and
-- the identities of the other panel members once all have been created.
-
-Assign complementary perspectives rather than asking for duplicate summaries.
-Choose from these perspectives according to the feature:
-
-1. Reference semantics and language-facing syntax.
-2. Blink frontend, AST, typing, and desugaring integration.
-3. Bridge, LLVM backend, compatibility, diagnostics, and test strategy.
-
-Require the panel members to discuss the proposal with each other. After all
-members are created, send them the panel roster and ask them to exchange their
-findings, challenge incompatible assumptions, and converge on a recommendation.
-They may retain explicitly documented disagreements when a real tradeoff remains.
-
-Each panel member must return to the main agent:
-
-- the reference behavior relevant to Blink;
-- proposed syntax and semantics;
-- recommended implementation approach;
-- rejected alternatives and their tradeoffs;
-- edge cases, compatibility risks, and open questions; and
-- its final decision and proposed plan after panel discussion.
-
-Wait for all panel members. If one fails to access a reference, have the other
-members cover it when possible and disclose the gap. Do not invent content from
-an unreadable link.
-
-## Main-agent synthesis
-
-The main agent owns the final decision and plan. Review the panel's conclusions
-against the current repository instead of forwarding any one response verbatim.
-Resolve disagreements using the user's goal, existing Blink conventions, KISS,
-DRY, implementation risk, and testability.
+Review reference findings against the current repository. Resolve design
+tradeoffs using the user's goal, existing Blink conventions, KISS, DRY,
+implementation risk, and testability.
 
 The final design should cover all applicable areas:
 
@@ -85,7 +50,8 @@ The final design should cover all applicable areas:
 7. OCaml/C++ bridge contract changes.
 8. C++ data structure and LLVM codegen changes.
 9. Diagnostics and source-range expectations.
-10. Unit, backend, and end-to-end test coverage.
+10. Mandatory test-file changes covering every implementation change,
+    regardless of scope.
 11. Example program or documentation changes.
 12. Compatibility, migration, and optimization considerations.
 
@@ -93,6 +59,12 @@ Reuse existing compiler mechanisms when they already express the required
 behavior. If logic would otherwise be repeated across phases or files, identify
 the shared helper or module that should own it. Avoid abstractions that add
 complexity without actual reuse.
+
+Classify the implementation scope precisely. It is end-to-end only if the plan
+requires modifications to both the frontend and backend. Frontend-only and
+backend-only changes must use a narrower implementation workflow. In every
+case, each implementation change must be paired with a test change; existing
+tests, examples, documentation, or running the test suite are not substitutes.
 
 For each planned change, identify the likely files or components, intended
 behavior, dependencies on other steps, and validation. Clearly label unresolved
@@ -104,10 +76,12 @@ Present one coherent final plan to the user. Briefly include:
 
 - the recommended design;
 - important conclusions drawn from linked references;
-- meaningful alternatives or panel disagreements;
+- meaningful alternatives and tradeoffs;
 - the ordered implementation plan; and
 - any questions whose answers would materially change the design.
 
 Then stop and wait for explicit user input. Do not create implementation
 sub-agents or modify files until the user approves the final plan. After
-approval, use the repository's end-to-end change workflow for implementation.
+approval, use the repository's end-to-end change workflow only when both
+frontend and backend modifications are required; otherwise use a narrower
+workflow. Always include the planned test changes during implementation.

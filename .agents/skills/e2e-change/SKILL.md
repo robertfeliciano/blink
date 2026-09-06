@@ -1,12 +1,18 @@
 ---
 name: e2e-change
-description: Plan and implement end-to-end Blink compiler changes that span the frontend, backend, and tests or examples. Use when a requested language or compiler change must be carried through the complete pipeline.
+description: Plan and implement Blink compiler changes that require modifications to both the frontend and backend, with mandatory test changes. Do not use for frontend-only or backend-only changes.
 ---
 
 # End-to-End Change
 
-Use this workflow for changes that cross Blink's frontend/backend boundary or
-otherwise require coordinated frontend, backend, and test coverage.
+An end-to-end change is a change that requires implementation modifications in
+both Blink's frontend and backend. Use this workflow only when both sides must
+change. A frontend-only or backend-only implementation is not end-to-end, even
+if it needs broad validation.
+
+Every implementation change must also modify tests, regardless of its size or
+which compiler phase it affects. Existing coverage, examples, documentation,
+and validation runs do not substitute for a test change.
 
 ## Approval gate
 
@@ -17,7 +23,8 @@ Before editing files or delegating implementation:
 3. The plan must separately identify:
    - frontend changes;
    - backend changes; and
-   - test library and example changes.
+   - mandatory test changes; and
+   - example changes, when useful.
 4. Present the plan to the user or responsible human.
 5. Explicitly ask for approval to execute it.
 6. Wait for explicit approval before making changes or creating implementation
@@ -42,13 +49,16 @@ each workstream below:
    - Include the approved plan and precise file ownership in the assignment.
 
 3. **Test library and example changes**
-   - Own unit, backend, and end-to-end tests as applicable.
+   - Always modify tests to cover the implementation change.
+   - Own the appropriate unit, backend, and end-to-end test changes.
    - Own test helpers, fixture libraries, and example Blink programs.
    - Include expected behavior and validation requirements in the assignment.
 
-Create all three sub-agents even when one workstream is expected to require
-only verification or a no-op conclusion. Ask that agent to inspect its area,
-make any required changes, and report why no change was needed if applicable.
+Because this workflow applies only when both frontend and backend modifications
+are required, the frontend and backend workstreams must each contain an
+implementation change. The test workstream must contain a test change. If any
+of those would be a verification-only or no-op workstream, this is not an
+end-to-end change and must be routed to a narrower workflow instead.
 
 The three assignments should be mutually exclusive wherever practical because
 all agents share the same worktree. Tell each agent about the other workstreams
@@ -66,7 +76,9 @@ interfaces. When they finish:
 3. Resolve integration issues without silently expanding the approved scope.
 4. Run focused checks for each workstream.
 5. Run the complete relevant end-to-end test suite.
-6. Report the implemented behavior, validation results, and any remaining
+6. Confirm that the final diff contains test changes exercising every
+   implementation change.
+7. Report the implemented behavior, validation results, and any remaining
    limitations to the user.
 
 If execution reveals that the approved plan needs a material scope change,
