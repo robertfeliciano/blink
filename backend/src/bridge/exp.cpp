@@ -110,6 +110,15 @@ u128 string_to_u128(const std::string& str) {
     return result;
 }
 
+static std::vector<std::shared_ptr<Stmt>> convert_conditional_block(value v) {
+    std::vector<std::shared_ptr<Stmt>> out;
+    while (v != Val_emptylist) {
+        out.push_back(std::make_shared<Stmt>(convert_stmt(Field(v, 0))));
+        v = Field(v, 1);
+    }
+    return out;
+}
+
 Exp convert_exp(value v) {
     Exp result;
 
@@ -275,6 +284,28 @@ Exp convert_exp(value v) {
         case Constants::EXP_Null: { // Null of ref_ty
             Ty null_ty = convert_ty(Field(v, 0));
             result.val = ENull{.ty = std::move(null_ty)};
+            break;
+        }
+        case Constants::EXP_PartialApply: {
+            throw std::runtime_error("partial applications cannot get to backend!");
+        }
+        case Constants::EXP_Conditional: { // Conditional of exp * (block * exp) * (block * exp) * ty
+            auto  condition   = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            value then_branch = Field(v, 1);
+            value else_branch = Field(v, 2);
+
+            auto then_prelude = convert_conditional_block(Field(then_branch, 0));
+            auto then_value   = std::make_unique<Exp>(convert_exp(Field(then_branch, 1)));
+            auto else_prelude = convert_conditional_block(Field(else_branch, 0));
+            auto else_value   = std::make_unique<Exp>(convert_exp(Field(else_branch, 1)));
+            Ty   ty           = convert_ty(Field(v, 3));
+
+            result.val = EConditional{std::move(condition),
+                                      std::move(then_prelude),
+                                      std::move(then_value),
+                                      std::move(else_prelude),
+                                      std::move(else_value),
+                                      std::move(ty)};
             break;
         }
         default: {

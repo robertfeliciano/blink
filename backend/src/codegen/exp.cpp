@@ -528,10 +528,70 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     return objPtr;
 }
 
+static llvm::Type* codegenExpResultType(Generator& gen, const Ty& ty) {
+    llvm::Type* result_type = gen.codegenType(ty);
+    if (result_type->isAggregateType())
+        return llvm::PointerType::getUnqual(*gen.ctxt);
+    return result_type;
+}
+
 Value* ExpToLLVisitor::operator()(const ENull& e) {
-    llvm::Type* llty = gen.codegenType(e.ty);
+    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+    auto*       pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
+    if (!pointer_type)
+        throw std::runtime_error("Null expression must have a reference type");
 
-    llvm::PointerType* ptrTy = llvm::PointerType::get(llty, 0);
+    return llvm::ConstantPointerNull::get(pointer_type);
+}
 
-    return llvm::ConstantPointerNull::get(ptrTy);
+Value* ExpToLLVisitor::operator()(const EConditional& e) {
+    Value* condition = gen.codegenExp(*e.condition);
+    if (!condition)
+        throw std::runtime_error("Conditional expression condition produced null value");
+    if (!condition->getType()->isIntegerTy(1))
+        throw std::runtime_error("Conditional expression condition must lower to i1");
+
+    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* then_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_then", parent);
+    llvm::BasicBlock* else_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_else", parent);
+    llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_merge", parent);
+
+    gen.builder->CreateCondBr(condition, then_block, else_block);
+
+    gen.builder->SetInsertPoint(then_block);
+    for (const auto& stmt : e.then_prelude)
+        gen.codegenStmt(*stmt);
+    if (gen.builder->GetInsertBlock()->getTerminator())
+        throw std::runtime_error("Conditional expression then prelude terminated its branch");
+    Value* then_value = gen.codegenExp(*e.then_value);
+    if (!then_value)
+        throw std::runtime_error("Conditional expression then branch produced null value");
+    llvm::BasicBlock* then_end = gen.builder->GetInsertBlock();
+    if (then_end->getTerminator())
+        throw std::runtime_error("Conditional expression then branch terminated before producing a value");
+    gen.builder->CreateBr(merge_block);
+
+    gen.builder->SetInsertPoint(else_block);
+    for (const auto& stmt : e.else_prelude)
+        gen.codegenStmt(*stmt);
+    if (gen.builder->GetInsertBlock()->getTerminator())
+        throw std::runtime_error("Conditional expression else prelude terminated its branch");
+    Value* else_value = gen.codegenExp(*e.else_value);
+    if (!else_value)
+        throw std::runtime_error("Conditional expression else branch produced null value");
+    llvm::BasicBlock* else_end = gen.builder->GetInsertBlock();
+    if (else_end->getTerminator())
+        throw std::runtime_error("Conditional expression else branch terminated before producing a value");
+    gen.builder->CreateBr(merge_block);
+
+    gen.builder->SetInsertPoint(merge_block);
+    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+
+    if (then_value->getType() != result_type || else_value->getType() != result_type)
+        throw std::runtime_error("Conditional expression branch value does not match its declared type");
+
+    llvm::PHINode* result = gen.builder->CreatePHI(result_type, 2, "conditional_value");
+    result->addIncoming(then_value, then_end);
+    result->addIncoming(else_value, else_end);
+    return result;
 }

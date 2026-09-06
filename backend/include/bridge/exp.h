@@ -118,8 +118,30 @@ struct ENull {
     Ty ty;
 };
 
-using ExpVariant =
-    std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj, EObjInit, ENull>;
+struct EConditional {
+    std::unique_ptr<Exp>               condition;
+    std::vector<std::shared_ptr<Stmt>> then_prelude;
+    std::unique_ptr<Exp>               then_value;
+    std::vector<std::shared_ptr<Stmt>> else_prelude;
+    std::unique_ptr<Exp>               else_value;
+    Ty                                 ty;
+};
+
+using ExpVariant = std::variant<EBool,
+                                EInt,
+                                EFloat,
+                                EStr,
+                                EId,
+                                ECall,
+                                EBop,
+                                EUop,
+                                EIndex,
+                                EArray,
+                                ECast,
+                                EProj,
+                                EObjInit,
+                                ENull,
+                                EConditional>;
 
 struct Exp {
     ExpVariant val;

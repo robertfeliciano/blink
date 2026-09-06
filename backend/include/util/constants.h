@@ -27,8 +27,10 @@ namespace Constants {
         EXP_Cast    = 10,
         EXP_Proj    = 11,
         EXP_ObjInit = 12,
-        EXP_Lambda  = 13,
-        EXP_Null    = 14
+        EXP_Lambda       = 13,
+        EXP_Null         = 14,
+        EXP_PartialApply = 15,
+        EXP_Conditional  = 16
     };
 
     enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1, UNOP_BNeg = 2 };

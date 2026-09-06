@@ -249,6 +249,17 @@ struct ExpToStringVisitor {
         return res;
     }
     std::string operator()(const ENull& e) const { return "null " + tyToString(e.ty); }
+    std::string operator()(const EConditional& e) const {
+        auto branchToString = [](const std::vector<std::shared_ptr<Stmt>>& prelude, const Exp& value) {
+            std::string res;
+            for (const auto& stmt : prelude)
+                res += stmtToString(*stmt) + " ";
+            return res + expToString(value);
+        };
+
+        return "(" + expToString(*e.condition) + " ? " + branchToString(e.then_prelude, *e.then_value) + " : " +
+               branchToString(e.else_prelude, *e.else_value) + ")";
+    }
 };
 
 std::string expToString(const Exp& exp) {

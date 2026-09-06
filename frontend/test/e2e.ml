@@ -32,6 +32,72 @@ let fixtures =
       expected_exit = 23;
     };
     {
+      name = "conditional-assignment";
+      source =
+        "fun main() => i32 {\n\
+        \  let value = 0;\n\
+        \  value = true ? 40 : 1;\n\
+        \  return value + 2;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "nested-conditional";
+      source =
+        "fun main() => i32 {\n\
+        \  let outer = false;\n\
+        \  let inner = true;\n\
+        \  return outer ? 1 : inner ? 42 : 2;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "conditional-numeric-promotion";
+      source =
+        "fun main() => i32 {\n\
+        \  let narrow: i16 = 10;\n\
+        \  let wide: u16 = 42;\n\
+        \  return false ? narrow : wide;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "conditional-lazy-branch";
+      source =
+        "@C fun exit(status: i32) => void;\n\
+         fun fail() => i32 { exit(99); return 0; }\n\
+         fun main() => i32 { return true ? 42 : fail(); }";
+      expected_exit = 42;
+    };
+    {
+      name = "conditional-partial-application";
+      source =
+        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
+         fun main() => i32 {\n\
+        \  let selected: (i32) -> i32 = true ? add(2) : add(3);\n\
+        \  let result = selected(40);\n\
+        \  free selected;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
+      name = "conditional-anonymous-partial-cleanup";
+      source =
+        "fun add(a: i32, b: i32) => i32 { return a + b; }\n\
+         fun main() => i32 {\n\
+        \  let saved = add(2);\n\
+        \  let total = 0;\n\
+        \  for i in 0..20 {\n\
+        \    total += (i < 10 ? add(1) : (i < 15 ? saved : add(3)))(0);\n\
+        \  }\n\
+        \  let result = total + saved(5);\n\
+        \  free saved;\n\
+        \  return result;\n\
+         }";
+      expected_exit = 42;
+    };
+    {
       name = "for-loop";
       source =
         "fun main() => i32 {\n\

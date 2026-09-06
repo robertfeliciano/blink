@@ -247,6 +247,47 @@ let test_binary_type_mismatch _ =
   in
   assert_type_error (fun () -> type_exp expression)
 
+let test_conditional_expected_type _ =
+  assert_program_type_checks
+    "fun main() => i32 {
+    \  let value: u8 = 0;
+    \  value = true ? 255 : 0;
+    \  return value as i32;
+     }"
+
+let test_conditional_numeric_promotion _ =
+  let open Typed in
+  let narrow_ty = TInt (TSigned Ti16) in
+  let wide_ty = TInt (TUnsigned Tu16) in
+  let promoted_ty = TInt (TSigned Ti32) in
+  let tc =
+    Tc.empty |> fun tc -> Tc.add_local tc "narrow" (narrow_ty, false)
+    |> fun tc -> Tc.add_local tc "wide" (wide_ty, false)
+  in
+  let expression =
+    Ast.Conditional
+      ( mk_node (Ast.Bool true),
+        mk_node (Ast.Id "narrow"),
+        mk_node (Ast.Id "wide") )
+  in
+  match type_exp ~tc expression with
+  | Conditional
+      (_, Cast (_, true_ty), Cast (_, false_ty), result_ty),
+    actual_ty ->
+      assert_ty promoted_ty true_ty;
+      assert_ty promoted_ty false_ty;
+      assert_ty promoted_ty result_ty;
+      assert_ty promoted_ty actual_ty
+  | _ -> assert_failure "expected both conditional branches to be promoted"
+
+let test_conditional_rejects_non_bool_condition _ =
+  assert_program_type_error
+    "fun main() => i32 { return 1 ? 2 : 3; }"
+
+let test_conditional_rejects_incompatible_branches _ =
+  assert_program_type_error
+    "fun main() => i32 { let value = true ? 1 : false; return 0; }"
+
 let test_comparison_returns_bool _ =
   let int_ty = Typed.(TInt (TSigned Ti32)) in
   let tc =
@@ -856,6 +897,12 @@ let suite =
          "integer/float promotion" >:: test_integer_float_promotion;
          "numeric comparison promotion" >:: test_numeric_comparison_promotion;
          "binary type mismatch" >:: test_binary_type_mismatch;
+         "conditional expected type" >:: test_conditional_expected_type;
+         "conditional numeric promotion" >:: test_conditional_numeric_promotion;
+         "conditional rejects non-bool condition"
+         >:: test_conditional_rejects_non_bool_condition;
+         "conditional rejects incompatible branches"
+         >:: test_conditional_rejects_incompatible_branches;
          "comparison returns bool" >:: test_comparison_returns_bool;
          "boolean operator rejects numbers"
          >:: test_boolean_operator_rejects_numbers;
