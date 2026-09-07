@@ -1,3 +1,5 @@
+(** One authoritative encoding for module-owned declaration identities.
+    Do not call this for main or an external C linker symbol. *)
 open Module_model
 
 (* TODO(modules-06): Encode component lengths under a compiler-reserved prefix.

@@ -1,3 +1,6 @@
+(** File parsing and canonical path lookup. Graph traversal remains a stub.
+    Relative roots use the caller's working directory; absolute roots make
+    lookup independent of it. Symlinks escaping their root are rejected. *)
 open Module_model
 
 let filesystem_error loc action f =

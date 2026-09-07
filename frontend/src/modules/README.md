@@ -5,6 +5,10 @@ The `module_system` library builds independently of the native backend. It is
 deliberately not a dependency of `Compiler` yet. `parse_source` and `resolve_path`
 are implemented; graph traversal and name resolution still return pending errors.
 
+Module interfaces are inferred from the `.ml` files, matching the main frontend
+libraries. There are no separate `.mli` files; helper definitions are therefore
+visible to other OCaml modules as well.
+
 - `module_model.ml`: provisional contracts and diagnostics.
 - `module_loader.ml`: parsing, path lookup, dependency graph.
 - `module_symbols.ml`: one encoding rule for internal declaration names.

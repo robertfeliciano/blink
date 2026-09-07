@@ -1,3 +1,5 @@
+(** Resolve each module in its own scope before combining declarations.
+    Returning Ast.program is intentional: modules disappear before lowering. *)
 open Module_model
 
 (* TODO(modules-07): Build per-module public-export/private-local tables plus
