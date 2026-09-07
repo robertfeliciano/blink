@@ -1,3 +1,4 @@
 (library
- (name module_system)
+ (name modules)
+ (public_name blink.modules)
  (libraries ast util parsing unix))
