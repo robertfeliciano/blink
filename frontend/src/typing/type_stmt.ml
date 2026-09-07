@@ -572,7 +572,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class t_scope
       | None ->
           create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class t_scope)
-  | ObjInit ({ elt = cname; loc = cloc }, inits) ->
+  | ObjInit (class_name, inits) ->
+      let cname = resolved_class_name class_name in
+      let cloc = class_name.loc in
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
         | Some c -> c

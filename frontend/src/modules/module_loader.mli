@@ -1,4 +1,7 @@
-(** Module discovery and parsing. Every stub returns an explicit Error. *)
+(** File parsing and canonical path lookup. Graph traversal remains a stub.
+    Roots are interpreted relative to the caller's working directory if relative.
+    Pass absolute roots for lookup independent of the working directory.
+    Lookup rejects symlinks escaping their designated root. *)
 
 val parse_source :
   id:Module_model.module_id ->

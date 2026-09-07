@@ -99,6 +99,11 @@ let check_body_return_completeness (node : 'a node)
   | Typed_ast.RetVal _ ->
       type_error node ("Missing return statement in " ^ body_kind ^ ".")
 
+let resolved_class_name name =
+  match Ast.unqualified_id name with
+  | Some id -> id
+  | None -> type_error name "Qualified class names must be resolved before typing."
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
   | TInt _ | TFloat _ | TBool -> ()
@@ -113,8 +118,8 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
         type_error l "array length is too large for this target"
       else typecheck_ty l tc t
   | RClass c ->
-      if None = Tctxt.lookup_class_option c tc then
-        type_error l "class undefined"
+      if None = Tctxt.lookup_class_option (resolved_class_name c) tc then
+        type_error c "class undefined"
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt

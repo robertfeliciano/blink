@@ -11,6 +11,21 @@ let show_node show_elt { elt; loc } =
 let no_loc x = { elt = x; loc = Range.norange }
 
 type id = string
+type qualified_name = { qualifiers : id node list; name : id node }
+
+let unqualified_name name =
+  { elt = { qualifiers = []; name }; loc = name.loc }
+
+let name_components name = name.elt.qualifiers @ [ name.elt.name ]
+
+let show_qualified_name name =
+  String.concat "." (List.map (fun part -> part.elt) (name_components name))
+
+let unqualified_id name =
+  match name.elt.qualifiers with
+  | [] -> Some name.elt.name.elt
+  | _ -> None
+
 type sint = Ti8 | Ti16 | Ti32 | Ti64 | Ti128 [@@deriving show]
 type uint = Tu8 | Tu16 | Tu32 | Tu64 | Tu128 [@@deriving show]
 type float_ty = Tf32 | Tf64 [@@deriving show]
@@ -22,7 +37,7 @@ type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
 and ref_ty =
   | RString
   | RArray of ty * Z.t
-  | RClass of id
+  | RClass of qualified_name node
   | RFun of ty list * ret_ty
   | RGeneric of string * ty list
 
@@ -88,7 +103,7 @@ type exp =
   | Index of exp node * exp node
   | Array of exp node list
   | Cast of exp node * ty
-  | ObjInit of id node * (id node * exp node) list
+  | ObjInit of qualified_name node * (id node * exp node) list
   | Lambda of exp node list * id list * block (* scope, args, body *)
   | TypedLambda of
       exp node list
@@ -149,7 +164,30 @@ type proto = {
   args : (ty * id) list;
 }
 
-type program = Prog of fdecl node list * cdecl node list * proto node list
+type import = { path : qualified_name node; alias : id node option }
+
+type top_level_decl =
+  | Function of fdecl node
+  | Class of cdecl node
+  | Prototype of proto node
+
+type top_level = {
+  declaration : top_level_decl;
+  export_loc : Range.t option;
+}
+
+type program = Prog of import node list * top_level node list
+
+(* Preserve source order in the AST; consumers that collect headers by kind
+   share this partition rather than duplicating the classification rule. *)
+let partition_declarations (Prog (_, declarations)) =
+  List.fold_right
+    (fun { elt = { declaration; _ }; _ } (functions, classes, prototypes) ->
+      match declaration with
+      | Function fn -> (fn :: functions, classes, prototypes)
+      | Class cn -> (functions, cn :: classes, prototypes)
+      | Prototype pn -> (functions, classes, pn :: prototypes))
+    declarations ([], [], [])
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
@@ -184,7 +222,7 @@ let rec show_ref_ty ?(lvl = 0) = function
       Printf.sprintf "RArray(%s, %s)"
         (show_ty ~lvl:(lvl + 1) t)
         (Z.to_string sz)
-  | RClass cn -> Printf.sprintf "RClass(%s)" cn
+  | RClass cn -> Printf.sprintf "RClass(%s)" (show_qualified_name cn)
   | RFun (args, ret) ->
       let args_s =
         String.concat "; " (List.map (fun a -> show_ty ~lvl:(lvl + 1) a) args)
@@ -264,7 +302,7 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
-        (show_node (fun x -> x) cn)
+        (show_qualified_name cn)
         fields_s (indent lvl)
   | Lambda (scope, params, body) ->
       let scope_s =
@@ -463,8 +501,21 @@ let show_cdecl ?(lvl = 0)
 
 let show_decl ?(lvl = 0) d = show_fdecl ~lvl d.elt
 
-let show_prog (Prog (fns, cns, pns)) =
-  let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
-  let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
-  let fns_s = String.concat "\n" (List.map (show_decl ~lvl:1) fns) in
-  Printf.sprintf "Program{\n%s\n%s\n%s\n}" cns_s pn_s fns_s
+let show_import { elt = { path; alias }; _ } =
+  let path = show_qualified_name path in
+  let alias = match alias with None -> "" | Some name -> " as " ^ name.elt in
+  "import " ^ path ^ alias ^ ";"
+
+let show_top_level { elt = { declaration; export_loc }; _ } =
+  let prefix = match export_loc with None -> "" | Some _ -> "export " in
+  let declaration =
+    match declaration with
+    | Function fn -> show_decl ~lvl:1 fn
+    | Class cn -> show_cdecl ~lvl:1 cn
+    | Prototype pn -> show_proto ~lvl:1 pn
+  in
+  prefix ^ declaration
+
+let show_prog (Prog (imports, declarations)) =
+  let items = List.map show_import imports @ List.map show_top_level declarations in
+  Printf.sprintf "Program{\n%s\n}" (String.concat "\n" items)

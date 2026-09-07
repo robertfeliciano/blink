@@ -38,7 +38,10 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   match r with
   | Ast.RString -> Typed_ast.RString
   | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int sz)
-  | Ast.RClass cn -> Typed_ast.RClass cn
+  | Ast.RClass cn ->
+      (match Ast.unqualified_id cn with
+      | Some id -> Typed_ast.RClass id
+      | None -> invalid_arg "Qualified class name reached conversion before resolution")
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
   | Ast.RGeneric _ ->

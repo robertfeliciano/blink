@@ -1,10 +1,18 @@
 # Implementing modules in Blink
 
-This branch contains a **skeleton**, not working import support. The new
-`frontend/src/modules/` library is independently buildable but is not called by
-the compiler. All unfinished entry points return descriptive `Error` values.
+This branch implements module syntax and individual-file lookup/parsing.
+Recursive import compilation is not enabled: the `frontend/src/modules/` library
+is independently buildable but its loader is not called by the compiler.
+Unfinished graph/resolver entry points return descriptive `Error` values.
 The `.bl` files in `docs/module-fixtures/` describe the first acceptance case;
 they are not registered as runnable examples or tests yet.
+
+Current checkpoint: sections 01–04 are complete. Qualified names retain each
+component's range plus the whole name's range. Imports, exported functions and
+classes, qualified class types, and qualified object initializers parse. File
+lookup canonicalizes paths, isolates stdlib lookup, and rejects symlink escapes.
+Typing still rejects unresolved imports and qualified class names; section 05
+graph construction and section 07 name resolution must precede their compilation.
 
 Work through `TODO(modules-01)` through `TODO(modules-12)` in order. The matching
 markers in the scaffold point back here. Add tests as each behavior is built;
@@ -14,7 +22,7 @@ step 11 completes the integration coverage rather than postponing all testing.
 
 **Owner:** `module_model.ml`. **Depends on:** nothing.
 
-Recommended first-version rules:
+Agreed first-version rules (enforcement is implemented in later steps):
 
 - One file is one module. Module identity comes from the path relative to a
   configured root; there is no `module` declaration in source.
@@ -61,7 +69,7 @@ export fun calculate(value: i32) => i32 {
 }
 
 export class Result {
-  value: i32;
+  let value: i32;
 }
 ```
 
@@ -72,6 +80,18 @@ Member-level visibility is a later feature. Global variables are outside this
 module feature because Blink does not currently implement them.
 
 ## 02 — Add source AST representations
+
+Implemented, including qualified type and object-initializer names.
+`Ast.program` is now `Prog of import node list * top_level node list`.
+`top_level.export_loc` is `None` for private declarations or `Some range` for
+explicit exports, preserving the keyword location without a redundant boolean.
+`Ast.partition_declarations` supplies the existing typechecker's header groups.
+`Module_model.source` carries imports only through its `program`, avoiding two
+copies that could diverge. Direct typing of unresolved imports reports an error.
+
+Run the focused AST/typing checks from `frontend/` with
+`dune exec test/module_ast_tests.exe`. These tests also construct import/export
+metadata directly to exercise representation and typing boundaries independently.
 
 **Files:** `frontend/src/ast/ast.ml`, AST printers, `module_model.ml`.
 
@@ -90,11 +110,13 @@ every constructor/pattern in the frontend and tests. Leave the currently unused
 uses, distinguishing Ast, Typed_ast, and Desugared_ast. Import/export metadata
 should disappear before the backend boundary.
 
-Represent qualified type names explicitly. Today a class type is `RClass of
-id`, so `geometry.Circle` cannot be parsed as a type. Object initialization
-also names a class explicitly and needs the same qualified-name representation.
-Use one located qualified-name type wherever appropriate. Do not encode dots
-inside arbitrary strings and teach unrelated passes to split them.
+Qualified type names use `qualified_name = { qualifiers : id node list;
+name : id node }`, wrapped in a source node. `RClass`, `ObjInit`, and import paths
+all reuse it. A required final name makes empty paths unrepresentable.
+`unqualified_name`, `name_components`, and `unqualified_id` provide shared
+construction/access operations; `show_qualified_name` joins components for
+display only. The future resolver supplies internal unqualified identities
+before typed AST conversion; typed/desugared class representations are unchanged.
 
 **Done when:** existing AST construction tests compile, source printers show
 imports, export modifiers, and qualified types, and source ranges identify both
@@ -102,12 +124,16 @@ the declaration and its `export` keyword.
 
 ## 03 — Parse imports and individual source files
 
+Implemented. `Module_loader.parse_source` reads a regular, readable file with
+exception-safe channel cleanup and retains its filename in every source range.
+`Parsing.Parse.parse_prog_diagnostic` exposes a structured range/message result;
+the existing `parse_prog` API still returns `Core.Error.t` for existing callers.
+
 **Files:** `lexer.mll`, `parser.mly`, `parse.ml`, `module_loader.ml`, its Dune file,
 and `frontend/test/test_parsing.ml`. **Depends on:** 02.
 
-Enable `IMPORT` and add an `EXPORT` token in the lexer and parser. `export` is
-not currently recognized by `lexer.mll`. `AS` already exists for casts; reuse
-that token. Parse `import path.parts;` and `import path.parts as alias;` at
+`IMPORT` and `EXPORT` are enabled in the lexer and parser. `AS` is shared with
+casts. Parse `import path.parts;` and `import path.parts as alias;` at
 top level. The MVP should require imports before other declarations. Reject
 empty paths, trailing dots, non-identifiers, missing semicolons, and imports
 inside functions. Check that existing casts still parse unchanged.
@@ -119,7 +145,7 @@ annotations and modifiers:
 export fun answer() => i32 { return 42; }
 export inline fun square(value: f64) => f64 { return value * value; }
 export @C fun puts(text: string) => i32;
-export class Box { value: i32; }
+export class Box { let value: i32; }
 ```
 
 Reject `export import`, `export` without a declaration, duplicate `export`, and
@@ -132,6 +158,10 @@ calls and object initializers as applicable to the existing grammar. Expression
 access may initially parse as `Proj`; the resolver will distinguish module
 qualification from instance projection. Do not let modules become values.
 
+Dots extend the qualified type in a cast. Write `(value as geo.Circle).radius`
+to project a field after casting. Explicit grammar precedence implements this
+rule without unresolved shift/reduce conflicts.
+
 Fill `parse_source` using `Parsing.Parse.parse_prog` and add `parsing` to the
 new library's dependencies. Set `lex_curr_p.pos_fname` to the opened filename,
 and close the channel on success and exception. Improve parse errors to include
@@ -143,6 +173,19 @@ invalid forms fail at useful locations; and parsing an imported file retains
 that file's identity.
 
 ## 04 — Implement deterministic module lookup
+
+Implemented by `Module_loader.resolve_path`. It returns the canonical absolute
+filename, or an import-located error containing the attempted path. In-root
+symlinks are accepted; escaping symlinks, directories, missing/unreadable files,
+invalid path components, and missing stdlib configuration are rejected. Absolute
+configured roots make lookup independent of the caller's working directory.
+Relative roots are supported relative to that directory at call time; the
+future compilation entry point should freeze roots once before graph traversal.
+Two logical names resolving to one file produce the same canonical filename;
+detecting that graph-level identity ambiguity remains part of section 05.
+
+Run `dune exec test/module_loader_tests.exe` from `frontend/` for syntax,
+qualified-name, file parsing, and temporary-filesystem lookup tests.
 
 **Owner:** `module_loader.resolve_path`. **Depends on:** 01–03.
 

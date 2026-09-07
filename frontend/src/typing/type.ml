@@ -260,7 +260,11 @@ let check_undefined_protos tc =
 let type_program ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
-  let (Prog (fns, cns, pns)) = prog in
+  let (Prog (imports, _)) = prog in
+  (match imports with
+  | import :: _ -> type_error import "Imports must be resolved before typing."
+  | [] -> ());
+  let fns, cns, pns = Ast.partition_declarations prog in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
   let class_headers = create_class_header_ctxt class_names cns in
   let cc, classes_with_fields = create_class_ctxt class_headers cns in

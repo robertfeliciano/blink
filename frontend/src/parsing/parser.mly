@@ -104,7 +104,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token TRUE      /* true */
 %token FALSE     /* false */
 // %token WHERE     /* where */
-// %token IMPORT    /* import */
+%token IMPORT EXPORT
 // %token ENABLE    /* enable */
 %token CLASS     /* class */
 %token FREE       /* free */
@@ -116,6 +116,9 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token LAMBDA    /* lambda */
 
 // %right EQUAL PLUEQ MINEQ TIMEQ DIVEQ ATEQ POWEQ
+/* Dots extend a qualified cast type; project from a cast with parentheses. */
+%nonassoc QUALIFIED_NAME_END
+%nonassoc DOT
 %right QMARK COLON
 %left OR
 %left AND
@@ -157,25 +160,36 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
    Top-level
    ----------------------- *)
 
+tdecl_body:
+  | f=fdecl { { elt = { declaration = Function f; export_loc = None }; loc = f.loc } }
+  | c=cdecl { { elt = { declaration = Class c; export_loc = None }; loc = c.loc } }
+  | p=pdecl { { elt = { declaration = Prototype p; export_loc = None }; loc = p.loc } }
+
 tdecl:
-  | f=fdecl { `Fun f }
-  | c=cdecl { `Class c }
-  | p=pdecl { `Proto p }
+  | d=tdecl_body { d }
+  | EXPORT d=tdecl_body
+      { loc $startpos $endpos
+          { d.elt with export_loc = Some (Range.mk_lex_range $startpos $endpos($1)) } }
+
+qualified_name:
+  | name=IDENT %prec QUALIFIED_NAME_END
+      { unqualified_name (loc $startpos $endpos name) }
+  | head=IDENT DOT rest=qualified_name
+      { loc $startpos $endpos
+          { qualifiers = (loc $startpos(head) $endpos(head) head) :: rest.elt.qualifiers;
+            name = rest.elt.name } }
+
+import_decl:
+  | IMPORT path=qualified_name SEMI
+      { loc $startpos $endpos { path; alias = None } }
+  | IMPORT path=qualified_name AS alias=IDENT SEMI
+      { loc $startpos $endpos
+          { path; alias = Some (loc $startpos(alias) $endpos(alias) alias) } }
 
 program:
-  | decls=list(tdecl) EOF
+  | imports=list(import_decl) decls=list(tdecl) EOF
       {
-        let fdecls, cdecls, pdecls =
-          List.fold_right
-            (fun d (fs, cs, ps) ->
-              match d with
-              | `Fun f   -> (f :: fs, cs, ps)
-              | `Class c -> (fs, c :: cs, ps)
-              | `Proto p -> (fs, cs, p :: ps))
-            decls
-            ([], [], [])
-        in
-        Prog (fdecls, cdecls, pdecls)
+        Prog (imports, decls)
       }
 
 (* -----------------------
@@ -200,17 +214,17 @@ fdecl_list:
 
 fdecl:
   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $startpos $endpos { annotations; frtyp; fname; args; body; inline = false }) }
+      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args; body; inline = false }) }
   | annotations=list(annotation) INLINE FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $startpos $endpos { annotations; frtyp; fname; args; body; inline = true }) }
+      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args; body; inline = true }) }
 
 pdecl:
   | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
-      { (loc $startpos $endpos { annotations; frtyp; fname; args }) }
+      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args }) }
 
 cdecl:
   | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
-      { (loc $startpos $endpos { annotations; cname; impls; fields; methods }) }
+      { (loc $symbolstartpos $endpos { annotations; cname; impls; fields; methods }) }
 
 impls_spec:
   | IMPLS ids=id_ne_list { ids }
@@ -282,7 +296,7 @@ ret_ty_spec:
 
 ref_ty:
   | TSTRING { RString }
-  | cname=IDENT { RClass cname }
+  | cname=qualified_name { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
   | gname=IDENT LT_TYPE params=separated_list(COMMA, ty) GT_TYPE
     { RGeneric (gname, params) }
@@ -370,10 +384,9 @@ primary:
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array elems }
   | LPAREN e=exp RPAREN             { e }
-  | NEW cid=IDENT LBRACE fields=separated_list(COMMA, field_init) RBRACE 
+  | NEW cid=qualified_name LBRACE fields=separated_list(COMMA, field_init) RBRACE
       { 
-        let id_node = { elt = cid; loc = Range.mk_lex_range $startpos(cid) $endpos(cid) } in
-        loc $startpos $endpos @@ ObjInit (id_node, fields)
+        loc $startpos $endpos @@ ObjInit (cid, fields)
       }
 
 field_init:

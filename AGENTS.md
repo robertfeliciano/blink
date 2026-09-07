@@ -86,10 +86,12 @@ They are ignored and should not be committed.
 
 ### Parsing
 
-The inactive module scaffold lives in `frontend/src/modules/` as the standalone
-`module_system` library. Its entry points return explicit pending errors and it
-is not linked into Compiler. See `docs/modules.md` for numbered implementation
-steps and `docs/module-fixtures/` for future, currently unsupported syntax.
+The module scaffold lives in `frontend/src/modules/` as the standalone
+`module_system` library. Individual-file parsing and canonical path lookup work;
+graph loading and name resolution return pending errors. It is not linked into
+Compiler. Import/export and qualified-class syntax parse, but unresolved imports
+and class names are rejected by typing. See `docs/modules.md` for numbered steps
+and `docs/module-fixtures/` for future multi-file compilation fixtures.
 Update this note when module loading becomes part of the active pipeline.
 
 - `frontend/src/parsing/lexer.mll` defines keywords, literals, and tokens.

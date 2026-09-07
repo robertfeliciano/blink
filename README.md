@@ -3,7 +3,8 @@ and you'll miss it...
 
 ## Module implementation scaffold
 
-Imports are not implemented yet. The [module implementation guide](docs/modules.md)
+Import/export syntax and individual-file lookup are implemented; recursive
+import compilation is not enabled yet. The [module implementation guide](docs/modules.md)
 provides twelve ordered TODOs, component contracts, validation criteria, and the
 first planned multi-file fixture. The independently buildable scaffold lives in
 `frontend/src/modules/` and is not wired into the compiler pipeline.

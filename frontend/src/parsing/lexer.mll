@@ -109,6 +109,8 @@ rule read = parse
   | "bool" { TBOOL }
   | "null" { NULL }
   | "inline" { INLINE }
+  | "import" { IMPORT }
+  | "export" { EXPORT }
   | "fun" { FUN }
   | "if" { IF }
   | "in" { IN }
@@ -123,7 +125,6 @@ rule read = parse
   | "true" { TRUE }
   | "false" { FALSE }
   (* | "where" { WHERE }
-  | "import" { IMPORT }
   | "enable" { ENABLE } *)
   | "class" { CLASS }
   | "free"   { FREE }

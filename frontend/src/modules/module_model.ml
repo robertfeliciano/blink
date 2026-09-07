@@ -1,24 +1,16 @@
 (** Draft contracts for the module implementation. Not wired into Compiler. *)
 
-(* TODO(modules-01): Confirm the MVP rules in docs/modules.md before filling in
-   the stubs. These types describe compiler bookkeeping, not runtime values. *)
+(* Section 01's contract is settled in docs/modules.md. These types describe
+   compiler bookkeeping, not runtime values. Enforcement belongs to later steps. *)
 type module_id = string list
 
 type config = { project_root : string; stdlib_root : string option }
 
-(* TODO(modules-02): Move import syntax and top-level function/class export
-   metadata into Ast when extending Ast.program. Replace this draft record with
-   an alias to that authoritative AST type. Global variables are out of scope. *)
-type import = {
-  path : module_id;
-  alias : string option;
-  loc : Util.Range.t;
-}
+type import = Ast.import Ast.node
 
 type source = {
   id : module_id;
   filename : string;
-  imports : import list;
   program : Ast.program;
 }
 
