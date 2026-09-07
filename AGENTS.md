@@ -87,7 +87,7 @@ They are ignored and should not be committed.
 ### Parsing
 
 The module scaffold lives in `frontend/src/modules/` as the standalone
-`module_system` library. Individual-file parsing and canonical path lookup work;
+`blink.modules` library. Individual-file parsing and canonical path lookup work;
 graph loading and name resolution return pending errors. It is not linked into
 Compiler. Import/export and qualified-class syntax parse, but unresolved imports
 and class names are rejected by typing. See `docs/modules.md` for numbered steps

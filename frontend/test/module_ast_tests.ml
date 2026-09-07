@@ -63,7 +63,7 @@ let test_located_import _ =
   let std = located 1 7 10 "std" in
   let io = located 1 11 13 "io" in
   let alias = located 1 17 24 "console" in
-  let import : Module_system.Module_model.import =
+  let import : Modules.Module_model.import =
     located 1 0 25 { path = located 1 7 13 { qualifiers = [ std ]; name = io }; alias = Some alias }
   in
   assert_equal [ std; io ] (name_components import.elt.path);

@@ -206,6 +206,23 @@ explicitly rooted import, and all failure cases have deterministic diagnostics.
 
 ## 05 — Load the dependency graph
 
+Entry setup is implemented; DFS is deliberately left for you. `prepare_entry`
+canonicalizes and validates the configured roots and entry file, requires a
+readable `.bl` file inside the project root, derives its module id from that
+canonical relative path, and parses it once. For `src/app/main.bl` with root
+`src`, the id is `["app"; "main"]`. Entry symlinks use the target's identity.
+Invalid identifier components and the reserved project `std` root are rejected.
+Relative roots and entry filenames are interpreted against the current working
+directory at the start of preparation; supplied stdlib roots must be directories.
+
+`load` calls this helper and extracts the entry's imports. At the numbered DFS
+TODO, you have `config` (canonical roots), `entry` (parsed source and identity),
+and `imports` (located declarations in source order). Nothing resolves or parses
+dependencies yet, and no visiting/visited tables are created. `load` propagates
+setup errors or returns an explicit DFS-not-implemented diagnostic after valid
+setup, rather than returning an incomplete graph. Tests use `prepare_entry`
+directly to inspect successful setup. Implement the traversal at this boundary.
+
 **Owner:** `module_loader.load`. **Depends on:** 03–04.
 
 Use a fresh table for each compilation, keyed by canonical file identity.
@@ -414,7 +431,7 @@ starting implementation so later edits are easy to distinguish.
 From this worktree's `frontend/`, build just the new library:
 
 ```sh
-dune build src/modules/module_system.cma
+dune build src/modules/modules.cma
 dune fmt
 ```
 

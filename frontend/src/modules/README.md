@@ -1,9 +1,13 @@
 # Module scaffold
 
 Start with [the ordered implementation guide](../../../../docs/modules.md).
-The `module_system` library builds independently of the native backend. It is
+The `blink.modules` library builds independently of the native backend. It is
 deliberately not a dependency of `Compiler` yet. `parse_source` and `resolve_path`
 are implemented; graph traversal and name resolution still return pending errors.
+
+`prepare_entry` prepares canonical roots and the parsed entry module. `load`
+extracts its imports, then stops at the DFS TODO for manual implementation.
+It does not load dependencies or return a partial graph.
 
 Module interfaces are inferred from the `.ml` files, matching the main frontend
 libraries. There are no separate `.mli` files; helper definitions are therefore

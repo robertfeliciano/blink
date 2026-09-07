@@ -2,7 +2,7 @@
  (name module_loader_tests)
  (modules module_loader_tests)
  (libraries
-  module_system
+  blink.modules
   blink.ast
   blink.parsing
   blink.typing
@@ -13,7 +13,7 @@
 (test
  (name module_ast_tests)
  (modules module_ast_tests)
- (libraries module_system blink.ast blink.parsing blink.typing ounit2 core))
+ (libraries blink.modules blink.ast blink.parsing blink.typing ounit2 core))
 
 (library
  (name test_support)

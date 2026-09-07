@@ -1,7 +1,7 @@
 open OUnit2
 open Ast
-module Loader = Module_system.Module_loader
-module Model = Module_system.Module_model
+module Loader = Modules.Module_loader
+module Model = Modules.Module_model
 
 let parse source =
   let lexbuf = Lexing.from_string source in
@@ -188,7 +188,72 @@ let test_qualified_uses _ =
       | _ -> assert_failure "parenthesized cast projection")
   | _ -> assert_failure "function"
 
+let test_prepare_entry context =
+  let project, stdlib, config = roots context in
+  Unix.mkdir (Filename.concat project "app") 0o700;
+  let filename = Filename.concat project "app/main.bl" in
+  (* The dependency is intentionally absent: preparation must not traverse it. *)
+  write filename "import absent as dependency; fun main() => i32 { return 0; }";
+  let prepared, entry = success (Loader.prepare_entry config ~entry_filename:filename) in
+  assert_equal (Unix.realpath project) prepared.project_root;
+  assert_equal (Some (Unix.realpath stdlib)) prepared.stdlib_root;
+  assert_equal (Unix.realpath filename) entry.filename;
+  assert_equal [ "app"; "main" ] entry.id;
+  (match entry.program with
+  | Prog ([ imp ], [ _ ]) -> assert_equal "absent" (show_qualified_name imp.elt.path)
+  | _ -> assert_failure "entry imports must be retained");
+  ignore (failure "implement TODO(modules-05) DFS" (Loader.load config ~entry_filename:filename));
+  write filename "fun broken(";
+  ignore (failure "Parser Error" (Loader.load config ~entry_filename:filename));
+  write filename "fun fixed() {}";
+  let _, updated = success (Loader.prepare_entry config ~entry_filename:filename) in
+  assert_bool "preparation must reread entry on each call" (entry.program <> updated.program)
+
+let test_prepare_relative_and_symlink context =
+  let project, _, _ = roots context in
+  let filename = Filename.concat project "main.bl" in
+  write filename "";
+  Unix.symlink filename (Filename.concat project "alias.bl");
+  let cwd = Sys.getcwd () in
+  Fun.protect ~finally:(fun () -> Sys.chdir cwd) (fun () ->
+    Sys.chdir project;
+    let config = Model.{ project_root = "."; stdlib_root = None } in
+    let prepared, entry = success (Loader.prepare_entry config ~entry_filename:"alias.bl") in
+    assert_equal (Unix.realpath project) prepared.project_root;
+    assert_equal None prepared.stdlib_root;
+    assert_equal [ "main" ] entry.id;
+    assert_equal (Unix.realpath filename) entry.filename)
+
+let test_prepare_errors context =
+  let project, outside, config = roots context in
+  let filename = Filename.concat project "main.bl" in
+  write filename "";
+  let other = Filename.concat outside "other.bl" in
+  write other "";
+  ignore (failure "outside the project root" (Loader.prepare_entry config ~entry_filename:other));
+  Unix.symlink other (Filename.concat project "escape.bl");
+  ignore (failure "outside the project root"
+    (Loader.prepare_entry config ~entry_filename:(Filename.concat project "escape.bl")));
+  List.iter (fun (name, expected) ->
+    let path = Filename.concat project name in
+    write path "";
+    ignore (failure expected (Loader.prepare_entry config ~entry_filename:path)))
+    [ "main.txt", ".bl extension"; "bad-name.bl", "module identifiers" ];
+  Unix.mkdir (Filename.concat project "std") 0o700;
+  let reserved = Filename.concat project "std/main.bl" in
+  write reserved "";
+  ignore (failure "reserved" (Loader.prepare_entry config ~entry_filename:reserved));
+  ignore (failure "not a directory"
+    (Loader.prepare_entry { config with project_root = filename } ~entry_filename:filename));
+  ignore (failure "not a directory"
+    (Loader.prepare_entry { config with stdlib_root = Some filename } ~entry_filename:filename));
+  ignore (failure "missing.bl"
+    (Loader.prepare_entry config ~entry_filename:(Filename.concat project "missing.bl")))
+
 let () = run_test_tt_main ("Module loading" >::: [
+  "prepare entry" >:: test_prepare_entry;
+  "prepare relative and symlink" >:: test_prepare_relative_and_symlink;
+  "prepare errors" >:: test_prepare_errors;
   "lookup" >:: test_lookup;
   "stdlib isolation" >:: test_std_isolation;
   "symlinks" >:: test_symlinks;
