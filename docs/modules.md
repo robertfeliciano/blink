@@ -22,8 +22,13 @@ Recommended first-version rules:
   `import app.geometry as shapes;` introduces `shapes` instead.
 - Use qualified access (`shapes.area(...)`) and qualified class types
   (`shapes.Circle`). An import does not copy names into the local namespace.
-- All top-level declarations are exported initially. Imports themselves are
-  not re-exported. Access is through direct imports only.
+- A top-level function, function prototype, or class is visible to importers
+  only when its declaration starts with `export`.
+  Unmarked declarations remain usable throughout their defining module.
+- `export` applies only to top-level declarations. It cannot mark imports,
+  methods, fields, parameters, local declarations, or statements.
+- Imports themselves are not re-exported. Access is through direct imports
+  only, even when the imported module exported the referenced declaration.
 - Reject duplicate aliases, even if they refer to the same module. Reject
   declarations or local bindings that reuse an import alias, with a useful
   diagnostic. This is a deliberate MVP restriction that removes ambiguity
@@ -32,7 +37,8 @@ Recommended first-version rules:
   under the configured standard-library directory, never to a project file.
 - Reject import cycles. Accept shared dependencies and load each only once.
 - Only the entry module may declare `main`; an imported `main` is an error.
-  Do not otherwise change Blink's entry-point signature rules in this feature.
+  `main` does not need `export`. Do not otherwise change Blink's entry-point
+  signature rules in this feature.
 - No runtime module initialization, wildcard imports, re-exports, package
   downloads, separate compilation, or persistent compiler cache in this MVP.
 
@@ -45,17 +51,44 @@ maps to `<root>/app/geometry.bl`. Define the standard-library root to contain
 **Done when:** these rules are understood well enough to write positive and
 negative tests without choosing a different interpretation in each phase.
 
+Representative declarations are:
+
+```blink
+fun private_helper(value: i32) => i32 { return value + 1; }
+
+export fun calculate(value: i32) => i32 {
+  return private_helper(value);
+}
+
+export class Result {
+  value: i32;
+}
+```
+
+An importer may use `module.calculate` and `module.Result`; it must receive a
+private-member diagnostic for `module.private_helper`. An exported class
+exposes its existing Blink-visible constructor, methods, and fields.
+Member-level visibility is a later feature. Global variables are outside this
+module feature because Blink does not currently implement them.
+
 ## 02 — Add source AST representations
 
 **Files:** `frontend/src/ast/ast.ml`, AST printers, `module_model.ml`.
 
 Introduce an import record in `Ast`, with located path components and an
-optional located alias; wrap the declaration in a source node as needed. The
-scaffold's simpler import record is provisional: replace it with an alias to
-the AST definition so parsing and loading do not maintain competing schemas.
-Extend `Ast.program` to carry imports and update every constructor/pattern in
-the frontend and tests. Search all `Prog` uses, distinguishing Ast, Typed_ast,
-and Desugared_ast; changing source AST does not require changing the latter two.
+optional located alias. Represent top-level declarations with a wrapper that
+records the located declaration and whether `export` was present. This keeps
+visibility on a module-owned declaration rather than adding an `exported` field
+to `fdecl`, which is also reused for class methods. Include functions,
+prototypes, and classes in the top-level variant.
+The scaffold's simpler import record is provisional: replace it with an alias
+to the AST definition so parsing and loading do not maintain competing schemas.
+
+Extend `Ast.program` to carry imports and top-level declarations, then update
+every constructor/pattern in the frontend and tests. Leave the currently unused
+`gdecl` type untouched; globals are outside this feature. Search all `Prog`
+uses, distinguishing Ast, Typed_ast, and Desugared_ast. Import/export metadata
+should disappear before the backend boundary.
 
 Represent qualified type names explicitly. Today a class type is `RClass of
 id`, so `geometry.Circle` cannot be parsed as a type. Object initialization
@@ -64,18 +97,35 @@ Use one located qualified-name type wherever appropriate. Do not encode dots
 inside arbitrary strings and teach unrelated passes to split them.
 
 **Done when:** existing AST construction tests compile, source printers show
-imports and qualified types, and source ranges identify the relevant tokens.
+imports, export modifiers, and qualified types, and source ranges identify both
+the declaration and its `export` keyword.
 
 ## 03 — Parse imports and individual source files
 
 **Files:** `lexer.mll`, `parser.mly`, `parse.ml`, `module_loader.ml`, its Dune file,
 and `frontend/test/test_parsing.ml`. **Depends on:** 02.
 
-Enable `IMPORT` in the lexer and parser. `AS` already exists for casts; reuse
+Enable `IMPORT` and add an `EXPORT` token in the lexer and parser. `export` is
+not currently recognized by `lexer.mll`. `AS` already exists for casts; reuse
 that token. Parse `import path.parts;` and `import path.parts as alias;` at
 top level. The MVP should require imports before other declarations. Reject
 empty paths, trailing dots, non-identifiers, missing semicolons, and imports
 inside functions. Check that existing casts still parse unchanged.
+
+Parse `export` as an optional prefix on the whole top-level declaration, before
+annotations and modifiers:
+
+```blink
+export fun answer() => i32 { return 42; }
+export inline fun square(value: f64) => f64 { return value * value; }
+export @C fun puts(text: string) => i32;
+export class Box { value: i32; }
+```
+
+Reject `export import`, `export` without a declaration, duplicate `export`, and
+exported methods, fields, or local functions. `export let` and `export const`
+are invalid because globals are outside this feature. Do not treat `export` as
+an annotation: visibility is a language rule needed before annotation lowering.
 
 Parse qualified class names in annotations, return types, arrays, constructor
 calls and object initializers as applicable to the existing grammar. Expression
@@ -88,8 +138,9 @@ and close the channel on success and exception. Improve parse errors to include
 the filename; the existing wrapper often reports only line and column.
 Translate filesystem and parser failures into the shared diagnostic form.
 
-**Done when:** imports and qualified types parse, invalid forms fail at useful
-locations, and parsing an imported file retains that file's identity.
+**Done when:** imports, exported declarations, and qualified types parse;
+invalid forms fail at useful locations; and parsing an imported file retains
+that file's identity.
 
 ## 04 — Implement deterministic module lookup
 
@@ -148,15 +199,18 @@ typed type equality for signature comparison after nominal names resolve.
 This step does not require `@extern("symbol")`: a Blink wrapper in `std.io`
 can call an existing `@C fun blink_rt_v1_io_println(...)` prototype.
 
-**Done when:** identically named functions in different modules are distinct,
-one module's identity is stable across importers, and C names remain exact.
+**Done when:** identically named functions and classes in different modules are
+distinct, one module's identity is stable across importers, and C names remain
+exact.
 
 ## 07 — Resolve names with lexical scope
 
 **Owner:** `module_resolver.resolve`. **Depends on:** 05–06.
 
-Build an export table for each module and an alias table for each importing
-file. Resolve bodies using only that module's declarations and direct imports.
+Build an export table containing only declarations marked `export` and an alias
+table for each importing file. Keep a separate complete local-declaration table
+so private items remain usable inside their module. Resolve bodies using only
+that module's declarations and direct imports.
 Only after resolution combine declarations into an ordinary source program.
 Flattening first would accidentally allow access to unimported declarations.
 
@@ -171,6 +225,8 @@ no-shadowing MVP rule from step 01.
 Resolve `alias.member` against exports when its base is an alias; otherwise
 leave it as ordinary object projection for typing. Validate member existence
 and kind: a class used as a function/value is not automatically a valid call.
+When a requested member exists but is not exported, report that it is private;
+do not misleadingly report an unknown member.
 Resolve qualified class names consistently in signatures, casts, object
 initialization and constructor references. Imports are compile-time names and
 cannot be passed as arguments or assigned to variables.
@@ -180,8 +236,9 @@ resolved representation or accompanying lookup metadata. Avoid copying the
 entire AST hierarchy without a concrete need. The scaffold's `Ast.program`
 return type is a starting point, not a requirement to lose diagnostic names.
 
-**Done when:** alias/member errors are located correctly, local variables are
-not renamed accidentally, and transitive imports do not leak names.
+**Done when:** alias/member/private-item errors are located correctly, local
+variables are not renamed accidentally, and unexported declarations and
+transitive imports do not leak names.
 
 ## 08 — Integrate resolved names with typing
 
@@ -198,19 +255,19 @@ Use original display names and ranges in diagnostics; users should not have to
 decode compiler mangling. An imported file's error must cite its own source.
 Existing single-file programs must still type-check without imports.
 
-**Done when:** cross-module calls/classes work, incompatible nominal types fail,
-and partial application and local shadowing retain existing semantics.
+**Done when:** cross-module calls and classes work, incompatible nominal types
+fail, and partial application and local shadowing retain existing semantics.
 
 ## 09 — Audit lowering, the bridge and LLVM symbols
 
 **Files:** `desugaring/desugar*.ml`, backend bridge declarations and
 `backend/src/codegen/{decl,exp,stmt,generator}.cpp`. **Depends on:** 08.
 
-The intended boundary is a combined, resolved program: imports disappear before
-desugaring. Existing function/class string identities should be sufficient at
-the bridge. Inspect every declaration and use site, including method mangling,
-constructors, lifted closures, globals and external calls. Qualify classes
-before applying the existing method-name encoder; do not invent a second
+The intended boundary is a combined, resolved program: imports and export flags
+disappear before desugaring. Existing function/class string identities should
+be sufficient at the bridge. Inspect every declaration and use site, including
+method mangling, constructors, lifted closures, and external calls. Qualify
+classes before applying the existing method-name encoder; do not invent a second
 method-mangling rule in the resolver.
 
 Native tests must cover statement calls, expression calls and partially applied
@@ -263,7 +320,10 @@ bound on process runtime where appropriate. Include:
 - The supplied main/helper fixture: expected native exit code 42.
 - Aliases, nested module paths, diamond imports and stable output order.
 - Same-spelling functions/classes in different modules, and shadowed locals.
+- Private functions/classes rejected through imports but usable inside their
+  defining module; corresponding exported items accessible to importers.
 - Qualified class types, constructors, methods and imported partial calls.
+- Invalid `export` placement on imports, methods, fields, locals and statements.
 - Missing files, syntax/type failures in imports, invalid members and aliases.
 - Import cycles, duplicate aliases, imported main and unimported references.
 - Compatible/incompatible duplicated C prototypes and unchanged C symbols.
@@ -281,8 +341,15 @@ remove its unsupported-syntax notice. Update documentation accordingly.
 Supply a standard-library root through CLI/configuration and later installation
 metadata; avoid embedding this worktree's absolute path. Use `import std.io;`
 and `io.println(...)` with a Blink wrapper around an exact `@C` declaration.
-The wrapper is exported; runtime declarations are also technically exported
-until visibility support exists. Document that limitation honestly.
+Mark the wrapper `export` and leave the raw runtime declaration unexported:
+
+```blink
+@C fun blink_rt_v1_io_println(text: string) => i32;
+
+export fun println(text: string) => i32 {
+  return blink_rt_v1_io_println(text);
+}
+```
 
 Import resolution makes declarations available to typing, but does not provide
 their implementations. A C++ runtime archive still needs to be built and linked
@@ -294,11 +361,12 @@ compilation can come later without changing the source import syntax.
 
 ## Working on the scaffold
 
-The worktree was created on `cdx/modules` from `11c9b53` (`cdx/ternary`). It lives
+The worktree is on `cdx/modules`, rebased onto `4cb44bf` (`master`). It lives
 at `/home/robert/projects/blink/build/worktrees/modules`; treat this directory
 as a real checkout, even though its parent is named `build`. Do not delete it
 as a generated artifact. Existing `make clean` does not target this location.
-Changes are initially uncommitted so you can review and develop them.
+The plan scaffold is committed on the branch; inspect the worktree status before
+starting implementation so later edits are easy to distinguish.
 
 From this worktree's `frontend/`, build just the new library:
 

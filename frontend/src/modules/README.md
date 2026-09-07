@@ -8,7 +8,8 @@ deliberately not a dependency of `Compiler` yet. Its entry points return
 - `module_model.ml`: provisional contracts and diagnostics.
 - `module_loader.ml`: parsing, path lookup, dependency graph.
 - `module_symbols.ml`: one encoding rule for internal declaration names.
-- `module_resolver.ml`: scoped name resolution before existing typing.
+- `module_resolver.ml`: export filtering and scoped name resolution before
+  existing typing.
 
 TODO(modules-10): Wire the completed loader and resolver into Compiler and the
 CLI only after the isolated tests pass; see the guide for API compatibility.

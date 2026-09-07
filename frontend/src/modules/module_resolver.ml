@@ -1,8 +1,10 @@
 open Module_model
 
-(* TODO(modules-07): Build per-module exports/import aliases, resolve qualified
-   functions AND type names, and recursively rewrite with lexical scope.
-   Never rename an Id solely because its spelling matches a global function.
+(* TODO(modules-07): Build per-module public-export/private-local tables plus
+   import aliases; resolve qualified functions, classes and class types.
+   Only declarations marked with the top-level export keyword are importable.
+   Recursively rewrite with lexical scope.
+   Never rename an Id solely because its spelling matches a top-level function.
    Walk initializers, lambdas, ternaries, annotations and class signatures too. *)
 (* TODO(modules-08): Validate the resolved representation with existing typing:
    preserve nominal class identity, method/constructor behavior, partial calls

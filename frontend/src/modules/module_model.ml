@@ -6,8 +6,9 @@ type module_id = string list
 
 type config = { project_root : string; stdlib_root : string option }
 
-(* TODO(modules-02): Move the import syntax into Ast when extending Ast.program.
-   Replace this draft record with an alias to that authoritative AST type. *)
+(* TODO(modules-02): Move import syntax and top-level function/class export
+   metadata into Ast when extending Ast.program. Replace this draft record with
+   an alias to that authoritative AST type. Global variables are out of scope. *)
 type import = {
   path : module_id;
   alias : string option;
