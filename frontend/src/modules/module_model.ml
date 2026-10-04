@@ -18,6 +18,8 @@ type graph = { entry : module_id; dependency_order : source list }
 
 type diagnostic = { loc : Util.Range.t; message : string }
 
+type state = Visiting | Visited
+
 let pending step =
   Error
     {

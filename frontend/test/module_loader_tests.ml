@@ -137,6 +137,32 @@ let test_parse_file context =
   ignore (failure "not a regular file" (Loader.parse_source ~id:[] ~filename:project));
   ignore (failure "missing.bl" (Loader.parse_source ~id:[] ~filename:(Filename.concat project "missing.bl")))
 
+let test_parse_import context =
+  let project, stdlib, config = roots context in
+  Unix.mkdir (Filename.concat project "app") 0o700;
+  let filename = Filename.concat project "app/helper.bl" in
+  write filename "import absent; export fun answer() => i32 { return 42; }";
+  let source = success (Loader.parse_import config (import "app.helper as helper")) in
+  assert_equal [ "app"; "helper" ] source.id;
+  assert_equal (Unix.realpath filename) source.filename;
+  (match source.program with
+  | Prog ([ dependency ], [ { elt = { export_loc = Some _; _ }; loc = (file, _, _) } ]) ->
+      assert_equal "absent" (show_qualified_name dependency.elt.path);
+      assert_equal source.filename file
+  | _ -> assert_failure "imported AST must retain imports, exports and locations");
+  let std_filename = Filename.concat stdlib "io.bl" in
+  write std_filename "export fun print() {}";
+  let std_source = success (Loader.parse_import config (import "std.io")) in
+  assert_equal [ "std"; "io" ] std_source.id;
+  assert_equal (Unix.realpath std_filename) std_source.filename;
+  let missing = import "app.missing" in
+  let error = failure "app/missing.bl" (Loader.parse_import config missing) in
+  assert_equal missing.loc error.loc;
+  write filename "fun broken(";
+  let error = failure "Parser Error" (Loader.parse_import config (import "app.helper")) in
+  let file, _, _ = error.loc in
+  assert_equal (Unix.realpath filename) file
+
 let test_syntax _ =
   let program = parse "import std.io as io;\nexport inline fun f(x: geo.Circle) => geo.Circle { return x; }\nexport @C fun puts(s: string) => i32;\nexport class Box { let value: geo.Circle; }\nfun private_helper() {}" in
   (match program with
@@ -261,6 +287,7 @@ let () = run_test_tt_main ("Module loading" >::: [
   "bad roots" >:: test_bad_roots;
   "permissions" >:: test_permissions;
   "file parsing" >:: test_parse_file;
+  "import parsing" >:: test_parse_import;
   "syntax" >:: test_syntax;
   "qualified uses" >:: test_qualified_uses;
 ])

@@ -1,4 +1,4 @@
-(** File parsing and canonical path lookup. Graph traversal remains a stub.
+(** File parsing, canonical path lookup and dependency graph traversal.
     Relative roots use the caller's working directory; absolute roots make
     lookup independent of it. Symlinks escaping their root are rejected. *)
 open Module_model
@@ -74,6 +74,17 @@ let resolve_path (config : config) (import : import) : (string, diagnostic) resu
             else (
               readable_file filename;
               Ok filename))
+
+let import_id (import : import) =
+  List.map (fun part -> part.Ast.elt) (Ast.name_components import.elt.path)
+
+(** Resolve and parse one imported module without following its imports.
+    Its logical identity includes every path component, including std. *)
+let parse_import (config : config) (import : import) : (source, diagnostic) result =
+  match resolve_path config import with
+  | Error error -> Error error
+  | Ok filename ->
+      parse_source ~id:(import_id import) ~filename
 
 (** Prepare the inputs to DFS without traversing any imports. The returned
     roots and source filename are canonical absolute paths. Entry identity is
