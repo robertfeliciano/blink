@@ -1,3 +1,0 @@
-export fun answer() => i32 {
-  return 42;
-}
