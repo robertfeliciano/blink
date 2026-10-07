@@ -1,34 +1,35 @@
-# Module scaffold
+# Module implementation
 
 Start with [the ordered implementation guide](../../../../docs/modules.md).
-The `blink.modules` library builds independently of the native backend. It is
-deliberately not a dependency of `Compiler` yet. `parse_source` and `resolve_path`
-are implemented; graph traversal and name resolution still return pending errors.
+The `blink.modules` library builds independently of the native backend and is
+used by `Compiler.compile_file` before the existing typing/lowering pipeline.
 
 `prepare_entry` prepares canonical roots and the parsed entry module. `load`
-extracts its imports, then stops at the DFS TODO for manual implementation.
-It does not load dependencies or return a partial graph.
+performs DFS, parses shared dependencies once, detects cycles and ambiguous
+module identities, and returns deterministic dependency-first source order.
+State is fresh for every load call.
 
 Module interfaces are inferred from the `.ml` files, matching the main frontend
 libraries. There are no separate `.mli` files; helper definitions are therefore
 visible to other OCaml modules as well.
 
-- `module_model.ml`: provisional contracts and diagnostics.
+- `module_model.ml`: compile-time contracts and diagnostics.
 - `module_loader.ml`: parsing, path lookup, dependency graph.
 - `module_symbols.ml`: one encoding rule for internal declaration names.
 - `module_resolver.ml`: export filtering and scoped name resolution before
   existing typing.
 
-Sections 01–04 are complete: located qualified names/import/export metadata,
-source-order preservation, syntax parsing, file parsing, and canonical lookup.
-`Module_model.import` aliases the authoritative Ast type. Recursive imports and
-export visibility enforcement await graph loading and name resolution.
+All twelve module steps are implemented. The resolver indexes each file's
+declarations and direct imports, rewrites names with lexical scope and explicit
+export checks, then combines files. Functions/classes use reserved length-coded
+identities; `main` and external C prototypes retain exact names. Error display
+decodes internal identities without global state. Compatible shared C prototypes
+are deduplicated by the existing type checker, after nominal names resolve.
 
-TODO(modules-10): Wire the completed loader and resolver into Compiler and the
-CLI only after the isolated tests pass; see the guide for API compatibility.
+The CLI/wrapper accept `-module-root` and `-stdlib-root`. The default project
+root is the entry directory; standard-library roots are explicit. `stdlib/io.bl`
+exports `println` over private libc `puts`; a custom C++ runtime is a follow-up.
 
-TODO(modules-11): Add an independent OUnit suite and multi-file native tests.
-The planned input files under docs/module-fixtures are not active tests yet.
-
-TODO(modules-12): Add the installed standard-library root and std.io only once
-ordinary source modules work. Importing a declaration does not link a runtime.
+AST/loader/resolver suites run independently without libbackend.a. The native
+module suite tests multi-file calls/classes/closures, O0/O2, C symbols, stdlib
+output, failures, and the wrapper from outside the project directory.

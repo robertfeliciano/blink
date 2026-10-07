@@ -1,13 +1,49 @@
 # Blink
 and you'll miss it...
 
-## Module implementation scaffold
+## Imports and modules
 
-Import/export syntax and individual-file lookup are implemented; recursive
-import compilation is not enabled yet. The [module implementation guide](docs/modules.md)
-provides twelve ordered TODOs, component contracts, validation criteria, and the
-first planned multi-file fixture. The independently buildable scaffold lives in
-`frontend/src/modules/` and is not wired into the compiler pipeline.
+Each `.bl` file is a module. Imports introduce a local alias; only functions,
+function prototypes and classes marked `export` are accessible through it.
+Private declarations remain usable inside their defining file.
+
+```blink
+// geometry.bl
+export class Box { let value: i32 = 42; }
+
+// main.bl
+import geometry as shapes;
+import std.io;
+
+fun main() => i32 {
+    let box: shapes.Box = new shapes.Box {};
+    io.println("Hello modules!");
+    let result = box.value;
+    free box;
+    return result;
+}
+```
+
+```sh
+make
+./compile -O0 -stdlib-root stdlib examples/modules/main.bl
+./new_output.o
+```
+
+The project import root defaults to the entry file's directory. Pass
+`-module-root DIR` for a larger source tree: `import app.geometry;` maps to
+`DIR/app/geometry.bl`. `std.io` resolves only under `-stdlib-root DIR`, to
+`DIR/io.bl`. No standard-library path is hardcoded; specify it explicitly.
+Both options work with `blink` and `compile`, including from another directory.
+`std.io.println` uses libc `puts`, adds a newline, and returns its status.
+
+Imports must precede declarations. Aliases cannot be reused by declarations or
+local bindings. Import cycles, private-member access and imported `main`
+declarations are errors. Imports are not re-exported, and there are no globals,
+wildcard imports, packages or runtime module initialization.
+
+The [module implementation guide](docs/modules.md) explains all twelve completed
+steps, compiler phase boundaries, tests and the future C++ runtime milestone.
 
 ## Develop with Docker
 

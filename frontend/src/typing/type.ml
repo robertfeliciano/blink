@@ -29,9 +29,7 @@ let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
   in
   let args', frtyp' = validate_and_convert_signature fn tc args frtyp in
   let tc' =
-    List.fold_left
-      (fun acc (ty, id) -> add_local acc id (ty, false))
-      tc args'
+    List.fold_left (fun acc (ty, id) -> add_local acc id (ty, false)) tc args'
   in
   let _tc_final, typed_body, does_ret =
     type_block tc' frtyp' body false enclosing_class
@@ -66,7 +64,8 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
          instead."
   | _, Some { elt = Lambda _ | TypedLambda _; loc = _ } ->
       type_error stmt_n
-        "Lambdas not allowed at class field level - please use function instead."
+        "Lambdas not allowed at class field level - please use function \
+         instead."
   | Some ty, Some e ->
       let typed_ty = validate_and_convert_ty stmt_n tc ty in
       let te, e_ty = type_exp_as typed_ty tc e (Some cname) in
@@ -95,8 +94,7 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
     match lookup_class_option cname tc with
     | Some (fields, _) ->
         List.map
-          (fun (field, field_ty, is_const, _) ->
-            (field, (field_ty, is_const)))
+          (fun (field, field_ty, is_const, _) -> (field, (field_ty, is_const)))
           fields
     | None -> type_error cn ("Class " ^ cname ^ " is undefined.")
   in
@@ -137,13 +135,7 @@ let create_proto_ctxt (tc : Tctxt.t) (pns : proto node list) : Tctxt.t =
             let func_type =
               validate_and_convert_function_ty pn tc pn.elt.args pn.elt.frtyp
             in
-            let externally_defined =
-              List.exists
-                (fun anno_n ->
-                  let { elt = i; loc = _ }, _ = anno_n in
-                  i = "C")
-                pn.elt.annotations
-            in
+            let externally_defined = has_annotation "C" pn.elt.annotations in
             let new_tc =
               Tctxt.set_proto tc pn.elt.fname (func_type, externally_defined)
             in
@@ -189,7 +181,8 @@ let create_class_name_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
       | None -> Tctxt.add_class tc cname [] [])
     tc cns
 
-let get_method_header (tc : Tctxt.t) (method_node : fdecl node) : method_header =
+let get_method_header (tc : Tctxt.t) (method_node : fdecl node) : method_header
+    =
   let ({ fname; frtyp; args; _ } : fdecl) = method_node.elt in
   let typed_args, typed_ret =
     validate_and_convert_signature method_node tc args frtyp
@@ -257,6 +250,37 @@ let check_undefined_protos tc =
         ("The following function prototypes are undefined:\n"
         ^ String.concat "\n" undefined_protos)
 
+(* Resolution preserves exact C names. Reconcile shared declarations only after
+   nominal class identities are resolved, using the ordinary signature rules.
+   Do not deduplicate solely by spelling: LLVM would silently rename conflicts. *)
+let reconcile_external_prototypes tc prototypes =
+  let seen = Hashtbl.create 16 in
+  List.filter
+    (fun (prototype : proto node) ->
+      let name = prototype.elt.fname in
+      match Hashtbl.find_opt seen name with
+      | None ->
+          Hashtbl.add seen name prototype;
+          true
+      | Some previous ->
+          if
+            not
+              (has_annotation "C" previous.elt.annotations
+              && has_annotation "C" prototype.elt.annotations)
+          then
+            type_error prototype ("Duplicate function prototype " ^ name ^ ".");
+          let signature node =
+            validate_and_convert_function_ty node tc node.elt.args
+              node.elt.frtyp
+          in
+          if not (equal_ty (signature previous) (signature prototype)) then
+            type_error prototype
+              ("Conflicting @C signatures for " ^ name ^ "; first declared at "
+              ^ Util.Range.string_of_range previous.loc
+              ^ ".");
+          false)
+    prototypes
+
 let type_program ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
@@ -267,10 +291,13 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   let fns, cns, pns = Ast.partition_declarations prog in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
   let class_headers = create_class_header_ctxt class_names cns in
-  let cc, classes_with_fields = create_class_ctxt class_headers cns in
-  let pc = create_proto_ctxt cc pns in
+  let pns = reconcile_external_prototypes class_headers pns in
+  let pc = create_proto_ctxt class_headers pns in
   let fc = create_fn_ctxt pc fns in
   check_undefined_protos fc;
+  (* Field defaults may call module functions too. Collect every function header
+     before checking initializers, just as we do before checking function bodies. *)
+  let fc, classes_with_fields = create_class_ctxt fc cns in
   let typed_classes =
     List.map
       (fun (class_node, fields) -> type_class fc fields class_node)
@@ -289,14 +316,12 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
-  try Ok (type_program ~optimization_level prog)
-  with
+  try Ok (type_program ~optimization_level prog) with
   | TypeError msg ->
       let err = Fmt.str "Type Error: %s" msg in
       Error (Core.Error.of_string err)
   | exn ->
       let err =
-        Fmt.str "Internal Typechecker Error: %s"
-          (Printexc.to_string exn)
+        Fmt.str "Internal Typechecker Error: %s" (Printexc.to_string exn)
       in
       Error (Core.Error.of_string err)

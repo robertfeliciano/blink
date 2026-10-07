@@ -1,28 +1,41 @@
 # Implementing modules in Blink
 
-This branch implements module syntax and individual-file lookup/parsing.
-Recursive import compilation is not enabled: the `frontend/src/modules/` library
-is independently buildable but its loader is not called by the compiler.
-Unfinished graph/resolver entry points return descriptive `Error` values.
-The `.bl` files in `docs/module-fixtures/` describe the first acceptance case;
-they are not registered as runnable examples or tests yet.
+Imports are implemented through the complete compiler pipeline. This document
+records the twelve steps, their implementation decisions, and why each belongs
+in its phase. Functions, prototypes, and classes require `export` to be accessed
+through an import. No global variables or module `.mli` files were added.
 
-Current checkpoint: sections 01–04 are complete. Qualified names retain each
-component's range plus the whole name's range. Imports, exported functions and
-classes, qualified class types, and qualified object initializers parse. File
-lookup canonicalizes paths, isolates stdlib lookup, and rejects symlink escapes.
-Typing still rejects unresolved imports and qualified class names; section 05
-graph construction and section 07 name resolution must precede their compilation.
+The file-based path is:
 
-Work through `TODO(modules-01)` through `TODO(modules-12)` in order. The matching
-markers in the scaffold point back here. Add tests as each behavior is built;
-step 11 completes the integration coverage rather than postponing all testing.
+```text
+entry file + roots -> parse/DFS graph -> per-file name resolution
+                  -> combined AST -> typing -> desugaring -> existing C++/LLVM
+```
+
+Sections 01–12 are implemented for this module MVP. Section 12 bootstraps
+`std.io` with the already-linked C library, not a new C++ runtime archive.
+Installation/package metadata and a versioned C++ runtime remain follow-up
+projects, not prerequisites for source imports.
+
+Try the multi-file example from the repository root after `make`:
+
+```sh
+./compile -O0 -stdlib-root stdlib examples/modules/main.bl
+./new_output.o
+# prints: Hello from Blink modules!; exits 42
+```
+
+The default project root is the entry file's directory. To compile an entry
+below a larger source tree, pass `-module-root DIR`. Standard-library imports
+require `-stdlib-root DIR`; that directory contains `io.bl`, not `std/io.bl`.
+The compiler never searches the process directory or a hardcoded checkout path
+for a missing standard library. Output remains in the caller's directory.
 
 ## 01 — Settle the module contract
 
 **Owner:** `module_model.ml`. **Depends on:** nothing.
 
-Agreed first-version rules (enforcement is implemented in later steps):
+Implemented first-version rules:
 
 - One file is one module. Module identity comes from the path relative to a
   configured root; there is no `module` declaration in source.
@@ -101,8 +114,8 @@ records the located declaration and whether `export` was present. This keeps
 visibility on a module-owned declaration rather than adding an `exported` field
 to `fdecl`, which is also reused for class methods. Include functions,
 prototypes, and classes in the top-level variant.
-The scaffold's simpler import record is provisional: replace it with an alias
-to the AST definition so parsing and loading do not maintain competing schemas.
+`Module_model.import` aliases the AST definition, so parsing and loading do not
+maintain competing schemas.
 
 Extend `Ast.program` to carry imports and top-level declarations, then update
 every constructor/pattern in the frontend and tests. Leave the currently unused
@@ -115,7 +128,7 @@ name : id node }`, wrapped in a source node. `RClass`, `ObjInit`, and import pat
 all reuse it. A required final name makes empty paths unrepresentable.
 `unqualified_name`, `name_components`, and `unqualified_id` provide shared
 construction/access operations; `show_qualified_name` joins components for
-display only. The future resolver supplies internal unqualified identities
+display only. The resolver supplies internal unqualified identities
 before typed AST conversion; typed/desugared class representations are unchanged.
 
 **Done when:** existing AST construction tests compile, source printers show
@@ -179,10 +192,10 @@ filename, or an import-located error containing the attempted path. In-root
 symlinks are accepted; escaping symlinks, directories, missing/unreadable files,
 invalid path components, and missing stdlib configuration are rejected. Absolute
 configured roots make lookup independent of the caller's working directory.
-Relative roots are supported relative to that directory at call time; the
-future compilation entry point should freeze roots once before graph traversal.
+Relative roots are supported relative to that directory at call time;
+`prepare_entry` freezes roots once before graph traversal.
 Two logical names resolving to one file produce the same canonical filename;
-detecting that graph-level identity ambiguity remains part of section 05.
+graph-level identity ambiguity is detected by section 05's loader.
 
 Run `dune exec test/module_loader_tests.exe` from `frontend/` for syntax,
 qualified-name, file parsing, and temporary-filesystem lookup tests.
@@ -206,7 +219,7 @@ explicitly rooted import, and all failure cases have deterministic diagnostics.
 
 ## 05 — Load the dependency graph
 
-Entry setup is implemented; DFS is deliberately left for you. `prepare_entry`
+Entry setup and DFS are implemented. `prepare_entry`
 canonicalizes and validates the configured roots and entry file, requires a
 readable `.bl` file inside the project root, derives its module id from that
 canonical relative path, and parses it once. For `src/app/main.bl` with root
@@ -215,13 +228,20 @@ Invalid identifier components and the reserved project `std` root are rejected.
 Relative roots and entry filenames are interpreted against the current working
 directory at the start of preparation; supplied stdlib roots must be directories.
 
-`load` calls this helper and extracts the entry's imports. At the numbered DFS
-TODO, you have `config` (canonical roots), `entry` (parsed source and identity),
-and `imports` (located declarations in source order). Nothing resolves or parses
-dependencies yet, and no visiting/visited tables are created. `load` propagates
-setup errors or returns an explicit DFS-not-implemented diagnostic after valid
-setup, rather than returning an incomplete graph. Tests use `prepare_entry`
-directly to inspect successful setup. Implement the traversal at this boundary.
+`load` calls this helper, seeds its per-call source cache with the parsed entry,
+and follows imports using DFS. Canonical filenames key the source cache and
+visiting/visited table. Imports are visited in source order; completed modules
+are appended after their dependencies, yielding stable dependency-first order.
+Already visited modules are reused, including diamond dependencies and imports
+through different local aliases. Every module is parsed once within a load call.
+
+An edge to a visiting module reports the cycle chain at that import's range.
+Different logical ids resolving to one canonical file report an identity
+ambiguity there. Lookup failures retain the importing file's location, while
+syntax errors retain the dependency's location. All state is local to `load`,
+so later calls observe changed source files and recover after earlier failures.
+The result records the entry's logical id separately from its ordered sources.
+Name resolution and export enforcement are separate passes over this graph.
 
 **Owner:** `module_loader.load`. **Depends on:** 03–04.
 
@@ -240,6 +260,23 @@ information without concatenating text, which would destroy source locations.
 tests, and repeated compilation does not leak loader state.
 
 ## 06 — Give declarations stable internal identities
+
+Implemented in `module_symbols.ml` and the resolver's declaration indexing.
+For example, `helper.answer` becomes `_BLM1_6helper_6answer`. The module
+component count, component lengths, and final-name length prevent ownership or
+separator ambiguities. `_BLM` cannot be written as a source identifier and is
+distinct from existing `_Z` method mangling and generated closure names.
+
+Entry `main` and `@C` prototype names bypass encoding. Definitions annotated
+`@C` are rejected: the supported foreign interface is a prototype plus an
+ordinary Blink wrapper. A C prototype cannot share a module-local declaration
+name with a Blink definition. A same-spelling Blink function in another module
+is fine because its internal identity is different.
+
+`Module_symbols.display_names` reverses the encoding in compiler diagnostics,
+including identities inside printed types; there is no global display-name
+cache. Shared C prototypes are reconciled during typing (section 08), before
+the backend receives them.
 
 **Owner:** `module_symbols.encode`. **Depends on:** 05.
 
@@ -264,6 +301,28 @@ distinct, one module's identity is stable across importers, and C names remain
 exact.
 
 ## 07 — Resolve names with lexical scope
+
+Implemented in `module_resolver.ml`. It first indexes every file's own
+declarations and direct import aliases, then rewrites each file independently.
+A symbol is public only if a declaration for it has `export` (a local
+prototype/definition pair describes one symbol). Missing and private imported
+members have different diagnostics. Alias references alone are not values.
+
+The walker handles all existing expression and statement constructors,
+including annotations, class defaults, nested blocks, loop variables, lambdas,
+captures, partial calls, casts, arrays and conditional expressions. Parameters
+and preceding local declarations take priority over module functions. Each
+nested block has its own binding set; lambda bodies see only explicit captures,
+parameters, module declarations and existing implicit class fields. Aliases
+cannot be reused by parameters, locals, loop/lambda bindings or implicit fields.
+Field and method spellings stay unchanged; class ownership and the constructor
+name are rewritten together.
+
+Qualified types/initializers resolve through direct aliases to the same nominal
+class identity used in that class's defining file. Only after all files resolve
+does the pass combine declarations, removing imports and export metadata.
+This ordering is essential: flattening first would make private or unimported
+names accidentally accessible.
 
 **Owner:** `module_resolver.resolve`. **Depends on:** 05–06.
 
@@ -302,6 +361,24 @@ transitive imports do not leak names.
 
 ## 08 — Integrate resolved names with typing
 
+Implemented using the existing type checker and string-based nominal types.
+`left.Box` and `right.Box` have distinct internal names, so existing type
+equality rejects interchanging them without adding a second class type system.
+Same-class casts are accepted; casts between different nominal classes fail.
+
+`reconcile_external_prototypes` validates resolved C signatures using the
+existing conversion and `equal_ty` helpers. Compatible declarations differing
+only in parameter names collapse to one prototype; incompatible signatures
+report the conflicting source location and the first declaration's location.
+All function/prototype headers are collected before class defaults, allowing
+defaults to call private or imported functions. Ordinary undefined prototypes
+still fail through the existing checker.
+
+Default constructor synthesis validates a zero-argument constructor returning
+its own class. Other method/field/`this` behavior is retained. The compiler
+renders internal names back into module-qualified source names on failure;
+original AST ranges still point into the defining file.
+
 **Files:** `typing/type.ml`, `type_stmt.ml`, `tctxt.ml`, conversion/printing
 helpers and typing tests. **Depends on:** 07.
 
@@ -319,6 +396,21 @@ Existing single-file programs must still type-check without imports.
 fail, and partial application and local shadowing retain existing semantics.
 
 ## 09 — Audit lowering, the bridge and LLVM symbols
+
+Completed without changing the desugared AST layout or C++ bridge/backend.
+Resolved top-level function names cross the existing FFI as ordinary strings.
+Class identities enter existing method mangling before lowering projections or
+partial method applications, so same-spelling methods on unrelated classes
+remain distinct.
+
+Native coverage exposed two existing lowering gaps: a synthesized default
+constructor call used a bare class symbol while its definition used method
+mangling, and a lambda capturing a function tried to default-initialize raw
+`RFun` storage. Constructor calls now use the existing method encoder. Function
+captures use closure-struct fields, the existing function boxing path and the
+ordinary lifted-local conversion path. There is no second method encoder or
+new FFI constructor. Tests exercise these paths at O0 and O2, plus statement
+calls, imported function/method partial application, closures and nominal casts.
 
 **Files:** `desugaring/desugar*.ml`, backend bridge declarations and
 `backend/src/codegen/{decl,exp,stmt,generator}.cpp`. **Depends on:** 08.
@@ -339,6 +431,23 @@ update its positional C++ converter and add native bridge coverage together.
 structure, and separate modules cannot collide in LLVM's symbol table.
 
 ## 10 — Connect the CLI and compiler pipeline
+
+Implemented. `Compiler.compile_file` returns a result: load graph, optionally
+print each original parsed module in dependency order, resolve names, then
+call the shared `compile_program` pipeline exactly once. Typed/desugared debug
+output shows internal names, useful for inspecting symbol lowering. All debug
+and optimization flags still work.
+
+The original lexbuf-based `Compiler.compile` API keeps its unit return and
+diagnostic behavior. In-memory sources with unresolved imports receive the
+existing explicit error; no implicit filesystem origin is invented.
+
+`blink` exposes `-module-root DIR` and `-stdlib-root DIR` and exits 1 for load,
+resolution, typing or lowering errors. The wrapper forwards root options as
+quoted array elements, locates `blink` next to the script and stops immediately
+on compiler failure. Filenames containing spaces or shell metacharacters are
+safe because arguments are never evaluated as shell commands. Existing fixed
+output filenames and optimization-level validation are unchanged.
 
 **Files:** `frontend/src/compiler.ml`, `blink.ml`, `frontend/src/dune`, `compile`.
 **Depends on:** 03–09.
@@ -364,7 +473,33 @@ explicit roots, wrapper options work, and existing callers keep their behavior.
 
 ## 11 — Complete regression coverage and the first milestone
 
-**Files:** new `frontend/test/test_modules.ml`, Dune test definitions, existing
+Implemented in independently runnable AST, loader and resolver suites, plus
+`module_e2e.ml`. `module_test_support.ml` provides common graph/source fixture
+helpers without linking the native backend. Native tests create complete
+temporary projects, invoke the real compiler, verify generated IR using LLVM
+16 `llc`, link and assert native exit statuses at O0 and O2. Executables have a
+ten-second runtime bound via the standard `timeout` utility.
+
+The original docs fixture is now an active native test (exit 42).
+`examples/modules/` demonstrates exported functions/classes, a private helper,
+an alias, instance methods and `std.io`. Wrapper tests use a temporary copy
+beside the just-built compiler, avoiding a stale root `blink` executable.
+They compile from outside the project root and confirm that a failed subsequent
+compilation stops instead of linking old IR. Loader tests verify fresh state
+across repeated calls in one process; integration tests verify dependency edits
+and stable output across repeated real compiler invocations.
+
+Focused commands from `frontend/`:
+
+```sh
+dune exec test/module_ast_tests.exe
+dune exec test/module_loader_tests.exe
+dune exec test/module_resolver_tests.exe
+dune build src/blink.exe
+dune exec test/module_e2e.exe
+```
+
+**Files:** `frontend/test/module_resolver_tests.ml`, `module_e2e.ml`, Dune definitions, existing
 parser/typing/desugaring suites, native test support and e2e suite.
 **Depends on:** test incrementally; finish after 10.
 
@@ -395,7 +530,30 @@ remove its unsupported-syntax notice. Update documentation accordingly.
 
 ## 12 — Add the first standard-library module
 
-**Files:** eventual `stdlib/io.bl`, runtime build/linking files and README.
+Implemented as `stdlib/io.bl` using libc for the bootstrap milestone:
+
+```blink
+@C fun puts(text: string) => i32;
+
+export fun println(text: string) => i32 {
+  return puts(text);
+}
+```
+
+`io.println` writes the string plus a newline and returns `puts`' status
+(negative on error; success is not guaranteed to be zero). The raw `puts`
+prototype is private. `-stdlib-root` points to the directory containing `io.bl`;
+`std.io` never resolves to a project's `std/io.bl`, even if that file exists.
+Native tests verify actual stdout, not just successful type checking. Clang
+already links libc, so this module needs no additional archive or linker flag.
+
+This deliberately defers a custom C++ runtime and installation metadata.
+The exported Blink wrapper provides the stable source API; replacing its
+private call with a versioned runtime symbol later does not change importers.
+The following is the intended future runtime-backed form, not the bootstrap
+module currently shipped:
+
+**Files:** `stdlib/io.bl`, `examples/modules/`, README, native module tests.
 **Depends on:** 11; C++ runtime work is a separate next milestone.
 
 Supply a standard-library root through CLI/configuration and later installation
@@ -412,21 +570,21 @@ export fun println(text: string) => i32 {
 ```
 
 Import resolution makes declarations available to typing, but does not provide
-their implementations. A C++ runtime archive still needs to be built and linked
-by `compile` and native tests. Keep that archive independent of LLVM/OCaml.
+foreign implementations. If switching the wrapper to a custom runtime symbol,
+build and link a C++ archive in `compile` and native tests. Keep that archive
+independent of LLVM/OCaml; do not claim a declaration alone implements a runtime.
 
 After this milestone, consider visibility before a broad public standard
 library, followed by selective imports and package configuration. Separate
 compilation can come later without changing the source import syntax.
 
-## Working on the scaffold
+## Working on modules
 
 The worktree is on `cdx/modules`, rebased onto `4cb44bf` (`master`). It lives
 at `/home/robert/projects/blink/build/worktrees/modules`; treat this directory
 as a real checkout, even though its parent is named `build`. Do not delete it
 as a generated artifact. Existing `make clean` does not target this location.
-The plan scaffold is committed on the branch; inspect the worktree status before
-starting implementation so later edits are easy to distinguish.
+Inspect the worktree status before changing it so existing edits are preserved.
 
 From this worktree's `frontend/`, build just the new library:
 
@@ -447,8 +605,6 @@ make test
 Build artifacts are per-worktree. The new library needs the configured OCaml
 dependencies but no native backend archive. Full compiler/native suites require
 the backend and LLVM 16 toolchain. Inspect formatter output before accepting
-unrelated formatting changes. Find all implementation markers with:
-
-```sh
-rg -n 'TODO\(modules-[0-9]+\)' frontend/src/modules
-```
+unrelated formatting changes. The numbered implementation scaffold no longer
+contains pending entry points; this document retains the original acceptance
+criteria as an explanation and regression checklist.

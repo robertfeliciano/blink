@@ -1,0 +1,8 @@
+// Bootstrap std.io uses the C library linked by clang. A versioned C++ runtime
+// can replace this private declaration without changing importers.
+@C fun puts(text: string) => i32;
+
+// Write a string followed by a newline. Return puts' status (negative on error).
+export fun println(text: string) => i32 {
+    return puts(text);
+}

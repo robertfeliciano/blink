@@ -13,18 +13,14 @@ let no_loc x = { elt = x; loc = Range.norange }
 type id = string
 type qualified_name = { qualifiers : id node list; name : id node }
 
-let unqualified_name name =
-  { elt = { qualifiers = []; name }; loc = name.loc }
-
+let unqualified_name name = { elt = { qualifiers = []; name }; loc = name.loc }
 let name_components name = name.elt.qualifiers @ [ name.elt.name ]
 
 let show_qualified_name name =
   String.concat "." (List.map (fun part -> part.elt) (name_components name))
 
 let unqualified_id name =
-  match name.elt.qualifiers with
-  | [] -> Some name.elt.name.elt
-  | _ -> None
+  match name.elt.qualifiers with [] -> Some name.elt.name.elt | _ -> None
 
 type sint = Ti8 | Ti16 | Ti32 | Ti64 | Ti128 [@@deriving show]
 type uint = Tu8 | Tu16 | Tu32 | Tu64 | Tu128 [@@deriving show]
@@ -138,6 +134,9 @@ and block = stmt node list
 type gdecl = { name : id; init : exp node }
 type annotation = id node * exp node list option
 
+let has_annotation name annotations =
+  List.exists (fun (id, _) -> id.elt = name) annotations
+
 type fdecl = {
   annotations : annotation list;
   frtyp : ret_ty;
@@ -171,11 +170,7 @@ type top_level_decl =
   | Class of cdecl node
   | Prototype of proto node
 
-type top_level = {
-  declaration : top_level_decl;
-  export_loc : Range.t option;
-}
-
+type top_level = { declaration : top_level_decl; export_loc : Range.t option }
 type program = Prog of import node list * top_level node list
 
 (* Preserve source order in the AST; consumers that collect headers by kind
@@ -302,8 +297,7 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
-        (show_qualified_name cn)
-        fields_s (indent lvl)
+        (show_qualified_name cn) fields_s (indent lvl)
   | Lambda (scope, params, body) ->
       let scope_s =
         "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
@@ -517,5 +511,7 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
   prefix ^ declaration
 
 let show_prog (Prog (imports, declarations)) =
-  let items = List.map show_import imports @ List.map show_top_level declarations in
+  let items =
+    List.map show_import imports @ List.map show_top_level declarations
+  in
   Printf.sprintf "Program{\n%s\n}" (String.concat "\n" items)

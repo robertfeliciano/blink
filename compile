@@ -4,14 +4,26 @@ set -o pipefail
 FILENAME=""
 OPT_LEVEL="-O0"
 OPT_LEVEL_SET=false
+MODULE_OPTIONS=()
+BLINK_BIN="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/blink"
 LLVM_LL="new_output.ll"
 LLVM_S="new_output.s"
 LLVM_O="new_output.o"
 
 parse_args() {
     local arg
-    for arg in "$@"; do
+    while [[ $# -gt 0 ]]; do
+        arg="$1"
+        shift
         case "$arg" in
+            -module-root|-stdlib-root)
+                if [[ $# -eq 0 || "$1" == -* ]]; then
+                    printf "Error: %s requires a directory argument\n" "$arg" >&2
+                    return 1
+                fi
+                MODULE_OPTIONS+=("$arg" "$1")
+                shift
+                ;;
             -O0|-O1|-O2|-O3)
                 if [[ "$OPT_LEVEL_SET" == true ]]; then
                     printf "Error: only one optimization level may be specified\n" >&2
@@ -45,10 +57,8 @@ sanitize_filename() {
         printf "Error: missing filename argument\n" >&2
         return 1
     fi
-    if [[ ! "$fn" =~ ^[A-Za-z0-9._/-]+$ ]]; then
-        printf "Error: invalid characters in filename\n" >&2
-        return 1
-    fi
+    # Arguments are always passed as quoted array elements, never evaluated as
+    # shell text. Real paths may contain spaces, apostrophes, or '#' characters.
     if [[ ! "$fn" =~ \.bl$ ]]; then
         printf "Error: filename must end with .bl\n" >&2
         return 1
@@ -58,7 +68,7 @@ sanitize_filename() {
 run_blink() {
     local fn; fn="$1"
     local optimization_level; optimization_level="$2"
-    if ! ./blink "$optimization_level" "$fn"; then
+    if ! "$BLINK_BIN" "$optimization_level" "${MODULE_OPTIONS[@]}" "$fn"; then
         printf "Error: blink failed\n" >&2
         return 1
     fi

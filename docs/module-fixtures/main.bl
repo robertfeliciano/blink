@@ -1,4 +1,4 @@
-// Planned syntax: this fixture is NOT supported by the current compiler.
+// Acceptance fixture: compile with this directory as the project root.
 import helper;
 
 fun main() => i32 {
