@@ -58,7 +58,7 @@ let compile_and_run ~expected_exit =
   assert_nonempty_file "program.o";
   assert_success "native linking" "clang program.o -o program -lm";
   assert_nonempty_file "program";
-  assert_exit_code expected_exit "./program"
+  assert_exit_code expected_exit "timeout 10 ./program"
 
 let in_temp_dir ~prefix test_context callback =
   let temp_dir = bracket_tmpdir ~prefix test_context in

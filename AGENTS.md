@@ -34,9 +34,11 @@ The primary implementation languages and tools are:
 
 The end-to-end flow is:
 
-1. `frontend/src/blink.ml` parses command-line options and opens the input.
-2. `frontend/src/compiler.ml` coordinates all frontend phases.
-3. `frontend/src/parsing/` turns tokens into `Ast.program`.
+1. `frontend/src/blink.ml` parses command-line options and selects module roots.
+2. `frontend/src/compiler.ml` loads and resolves the source graph, then coordinates
+   the frontend phases once for the combined program.
+3. `frontend/src/parsing/` turns each source file into `Ast.program`;
+   `frontend/src/modules/` loads dependencies and resolves export-aware names.
 4. `frontend/src/typing/` validates and annotates the source AST.
 5. `frontend/src/desugaring/` lowers high-level constructs.
 6. `Desugared_ast.convert_caml_ast` calls the C++ OCaml FFI entry point.
@@ -85,6 +87,16 @@ They are ignored and should not be committed.
 - `frontend/src/ast/dune` exposes the AST library.
 
 ### Parsing
+
+The module implementation lives in `frontend/src/modules/` as the standalone
+`blink.modules` library. DFS loads a dependency-first graph with cycle detection.
+Per-file name resolution enforces exports and lexical scope before combining
+declarations for typing. Module-owned symbols and classes have stable internal
+identities; entry `main` and `@C` symbols retain exact names. Shared C signatures
+are reconciled by typing. No module data crosses the native FFI.
+See `docs/modules.md` for the twelve implemented steps, `examples/modules/` for
+a runnable example, and `stdlib/io.bl` for bootstrap `std.io` using libc.
+Module interfaces are inferred from `.ml`, without module `.mli` files.
 
 - `frontend/src/parsing/lexer.mll` defines keywords, literals, and tokens.
 - `frontend/src/parsing/parser.mly` defines syntax and precedence.
@@ -168,6 +180,9 @@ The generated module targets the build host and uses position-independent code.
 ### Tests
 
 - `frontend/test/frontend_tests.ml` gathers parser, typer, and desugar suites.
+- `frontend/test/module_{ast,loader,resolver}_tests.ml` test module phases.
+- `frontend/test/module_e2e.ml` tests multi-file native programs and CLI/wrapper
+  behavior; `module_test_support.ml` provides reusable source fixtures.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
@@ -179,7 +194,8 @@ The generated module targets the build host and uses position-independent code.
 
 Native tests run in OUnit-managed temporary directories.
 They verify generated files and expected process exit codes.
-They require `llc`, `clang`, and a previously built native backend.
+They require `llc`, `clang`, the standard `timeout` utility, and a previously
+built native backend. Module native cases verify IR and execute at O0 and O2.
 
 ## Build and development
 
@@ -247,6 +263,10 @@ Compile and link a runnable native program:
 The optimization flag may appear before or after the filename.
 Only one input file and one optimization flag are accepted.
 The wrapper validates `.bl` filenames and rejects unknown options.
+`-module-root DIR` sets the project import root (default: entry directory).
+`-stdlib-root DIR` sets the root containing `io.bl` for `std.io` imports.
+The wrapper finds `blink` beside itself and forwards root paths as quoted
+arguments, so compilation from a different working directory is supported.
 All generated output is written relative to the current working directory.
 
 ## Test commands

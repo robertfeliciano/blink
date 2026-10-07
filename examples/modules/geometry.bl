@@ -1,0 +1,5 @@
+export class Box {
+    let value: i32 = 0;
+
+    fun read() => i32 { return value; }
+}

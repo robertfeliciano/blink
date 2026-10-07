@@ -41,8 +41,8 @@ type lambda_converter = {
 }
 
 (** Project a field from the current closure value. The closure, rather than
-    projections cached at its declaration, is the source of truth so
-    assignments remain visible across control-flow joins. *)
+    projections cached at its declaration, is the source of truth so assignments
+    remain visible across control-flow joins. *)
 let project_lambda_field converter suffix field_name field_ty =
   let projection = gensym (converter.closure_var ^ suffix) in
   ( Decl
@@ -76,8 +76,27 @@ let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
     - an environment struct containing captured values;
     - a lifted function whose first argument is an opaque environment pointer;
     - a closure value containing the environment and function pointers. *)
-let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
+let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
     (scope, args, rty, body) : lifted_lambda =
+  (* Function captures are closure values in memory, not raw RFun fields. Keep
+     their original types on the lifted local declarations so the normal
+     function-level pass installs closure call converters for these locals. *)
+  let cs, env_fields =
+    List.fold_left_map
+      (fun cs (name, capture_ty) ->
+        let field_ty, declaration = transform_ty capture_ty cs in
+        let cs =
+          match declaration with Some cd -> add_cdecl cd cs | None -> cs
+        in
+        ( cs,
+          {
+            prelude = [];
+            fieldName = name;
+            ftyp = field_ty;
+            init = create_default_init field_ty;
+          } ))
+      cs scope
+  in
   let r = RFun (List.map snd args, rty) in
   let lty = TRef r in
   (* get the lambda struct we are desugaring down to *)
@@ -94,12 +113,6 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   (* lifted unique lambda env struct name *)
   let lifted_lambda_scope = lambda_env_struct_name sym in
   (* set the fields of the env struct to the scope vars of the lambda *)
-  let env_fields =
-    List.map
-      (fun (i, t) ->
-        { prelude = []; fieldName = i; ftyp = t; init = create_default_init t })
-      scope
-  in
   (* create env struct *)
   let lambda_env =
     { cname = lifted_lambda_scope; fields = env_fields; annotations = [] }
@@ -111,7 +124,11 @@ let rec lift_lambda (cs : cdecl list) (vname_opt : id option)
   let env_ty = TRef (RClass lifted_lambda_scope) in
   let env_ptr_ty = create_ptr_to env_ty in
   let i8_name = vname_env ^ "i8" in
-  let set_lambda_env_fields = List.map (fun (i, t) -> (i, Id (i, t))) scope in
+  let set_lambda_env_fields =
+    match captured_values with
+    | Some values -> values
+    | None -> List.map (fun (i, t) -> (i, Id (i, t))) scope
+  in
   let lambda_env_decl =
     (* declare new lambda env struct instance *)
     Decl
@@ -183,11 +200,11 @@ and lift_partial_application cs lctxt vname_opt callee bound_args bound_types
   match callee with
   | PartialValue
       (PartialApply
-        ( inner_callee,
-          inner_bound_args,
-          inner_bound_types,
-          _inner_remaining_types,
-          _inner_rty )) ->
+         ( inner_callee,
+           inner_bound_args,
+           inner_bound_types,
+           _inner_remaining_types,
+           _inner_rty )) ->
       (* Chained partial applications capture the same original callee. Fold
          their bound prefixes together so lowering allocates one closure and
          one environment rather than an unreachable chain of wrappers. *)
@@ -333,7 +350,20 @@ and lift_single_partial_application cs lctxt vname_opt callee bound_args
 and lift_lambdas_from_exps (cs : cdecl list)
     (lctxt : (id * lambda_converter) list) (vname_opt : id option) = function
   | Lambda (scope, args, rty, body) ->
-      let res = lift_lambda cs vname_opt (scope, args, rty, body) in
+      (* Box global function captures using the same path as other function
+         rvalues; already-local closures remain the existing closure value. *)
+      let (cs, capture_fs, capture_stmts), captured_values =
+        List.fold_left_map
+          (fun (cs, fs, stmts) (name, ty) ->
+            let cs, new_fs, setup, _, _, value, _ =
+              lift_lambdas_from_exps cs lctxt None (Id (name, ty))
+            in
+            ((cs, fs @ new_fs, stmts @ setup), (name, value)))
+          (cs, [], []) scope
+      in
+      let res =
+        lift_lambda ~captured_values cs vname_opt (scope, args, rty, body)
+      in
       let outer_cs = add_cdecls res.structs cs in
       (* A lifted lambda is an ordinary function declaration. Running it through
          the function-level pass recursively lifts any lambdas in its body and
@@ -343,8 +373,8 @@ and lift_lambdas_from_exps (cs : cdecl list)
         lift_lambda_from_fdecl outer_cs res.function_decl
       in
       ( final_cs,
-        lifted_fdecls,
-        res.setup,
+        capture_fs @ lifted_fdecls,
+        capture_stmts @ res.setup,
         Some res.value,
         Some res.function_pointer,
         Id (fst res.value, snd res.value),
@@ -511,7 +541,8 @@ and lift_lambdas_from_exps (cs : cdecl list)
       let fs' = fs1 @ fs2 in
       let ss = ss1 @ ss2 in
       (cs', fs', ss, None, None, Bop (b, e1', e2', ty), None)
-  | Conditional (cond, (true_block, when_true), (false_block, when_false), ty) ->
+  | Conditional (cond, (true_block, when_true), (false_block, when_false), ty)
+    ->
       let cond_cs, cond_fs, cond_stmts, _, _, cond', _ =
         lift_lambdas_from_exps cs lctxt None cond
       in
@@ -528,9 +559,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
         let value_cs, value_fs, value_stmts, _, _, value', _ =
           lift_lambdas_from_exps block_cs branch_lctxt None value
         in
-        ( value_cs,
-          block_fs @ value_fs,
-          (block' @ value_stmts, value') )
+        (value_cs, block_fs @ value_fs, (block' @ value_stmts, value'))
       in
       let true_cs, true_fs, true_branch =
         lift_branch cond_cs true_block when_true

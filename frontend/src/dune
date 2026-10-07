@@ -10,7 +10,8 @@
   compiler
   util
   typing
-  desugaring)
+  desugaring
+  modules)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint
@@ -20,7 +21,7 @@
  (public_name blink)
  (name compiler)
  (modules compiler)
- (libraries core parsing util desugaring typing)
+ (libraries core parsing util desugaring typing modules)
  (preprocess
   (pps ppx_jane bisect_ppx --conditional))
  (lint

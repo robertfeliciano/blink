@@ -91,13 +91,19 @@ let rec lists_equal_exact equal xs ys =
   | x :: xs, y :: ys -> equal x y && lists_equal_exact equal xs ys
   | _ -> false
 
-let check_body_return_completeness (node : 'a node)
-    (ret_ty : Typed_ast.ret_ty) ~(does_ret : bool) ~(body_kind : string) : unit =
+let check_body_return_completeness (node : 'a node) (ret_ty : Typed_ast.ret_ty)
+    ~(does_ret : bool) ~(body_kind : string) : unit =
   match ret_ty with
   | Typed_ast.RetVoid -> ()
   | Typed_ast.RetVal _ when does_ret -> ()
   | Typed_ast.RetVal _ ->
       type_error node ("Missing return statement in " ^ body_kind ^ ".")
+
+let resolved_class_name name =
+  match Ast.unqualified_id name with
+  | Some id -> id
+  | None ->
+      type_error name "Qualified class names must be resolved before typing."
 
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
@@ -113,8 +119,8 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
         type_error l "array length is too large for this target"
       else typecheck_ty l tc t
   | RClass c ->
-      if None = Tctxt.lookup_class_option c tc then
-        type_error l "class undefined"
+      if None = Tctxt.lookup_class_option (resolved_class_name c) tc then
+        type_error c "class undefined"
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt
@@ -196,20 +202,21 @@ let widest_int (ity1 : Typed_ast.int_ty) (ity2 : Typed_ast.int_ty) (n : 'a node)
       match unsigned_of_width (max (uint_width u1) (uint_width u2)) with
       | Some u -> TUnsigned u
       | None -> invalid ())
-  | TSigned s, TUnsigned u | TUnsigned u, TSigned s ->
+  | TSigned s, TUnsigned u | TUnsigned u, TSigned s -> (
       let signed_width = sint_width s in
       let unsigned_width = uint_width u in
       let target_width =
         if signed_width > unsigned_width then Some signed_width
         else next_signed_width unsigned_width
       in
-      (match Option.bind target_width signed_of_width with
+      match Option.bind target_width signed_of_width with
       | Some target -> TSigned target
       | None ->
           type_error n
             ("Cannot safely promote mixed signed and unsigned integers with "
            ^ string_of_int signed_width ^ "-bit and "
-           ^ string_of_int unsigned_width ^ "-bit widths."))
+            ^ string_of_int unsigned_width
+            ^ "-bit widths."))
 
 let widest_float (fty1 : Typed_ast.float_ty) (fty2 : Typed_ast.float_ty) :
     Typed_ast.float_ty =
@@ -218,8 +225,8 @@ let widest_float (fty1 : Typed_ast.float_ty) (fty2 : Typed_ast.float_ty) :
 let meet_number (n : 'a node) : Typed_ast.ty * Typed_ast.ty -> Typed_ast.ty =
   function
   | TInt i1, TInt i2 -> TInt (widest_int i1 i2 n)
-  | (TFloat Tf64, TInt _ | TInt _, TFloat Tf64) -> TFloat Tf64
-  | (TFloat Tf32, TInt i | TInt i, TFloat Tf32) ->
+  | TFloat Tf64, TInt _ | TInt _, TFloat Tf64 -> TFloat Tf64
+  | TFloat Tf32, TInt i | TInt i, TFloat Tf32 ->
       (* f32 can represent every integer of up to 16 bits exactly. Wider integer
          operands promote the operation to f64 to avoid needless precision loss. *)
       if int_width i <= 16 then TFloat Tf32 else TFloat Tf64
@@ -248,8 +255,7 @@ and equal_ref_ty (r1 : Typed_ast.ref_ty) (r2 : Typed_ast.ref_ty) : bool =
   | RString, RString -> true
   | RArray (t1, sz1), RArray (t2, sz2) -> sz1 = sz2 && equal_ty t1 t2
   | RFun (params1, ret1), RFun (params2, ret2) ->
-      lists_equal_exact equal_ty params1 params2
-      && equal_ret_ty ret1 ret2
+      lists_equal_exact equal_ty params1 params2 && equal_ret_ty ret1 ret2
   | RClass c1, RClass c2 -> String.equal c1 c2
   | _ -> false
 
@@ -274,6 +280,7 @@ and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) :
     bool =
   match (t1, t2) with
   | RString, RString -> true
+  | RClass left, RClass right -> left = right
   | RArray (t1', sz1), RArray (t2', sz2) -> sz1 = sz2 && subtype tc t1' t2'
   | RFun (pty1, rty1), RFun (pty2, rty2) ->
       let contrav_params = lists_equal_exact equal_ty pty2 pty1 in
@@ -314,20 +321,17 @@ let max_finite_f32 = Int32.float_of_bits 0x7f7fffffl
 
 let float_is_representable_in_ty (n : float) (t : Typed_ast.float_ty) : bool =
   if not (Float.is_finite n) then false
-  else
-    match t with
-    | Tf32 -> Float.abs n <= max_finite_f32
-    | Tf64 -> true
+  else match t with Tf32 -> Float.abs n <= max_finite_f32 | Tf64 -> true
 
-let int_is_exactly_representable_in_float_ty (n : Z.t)
-    (t : Typed_ast.float_ty) : bool =
+let int_is_exactly_representable_in_float_ty (n : Z.t) (t : Typed_ast.float_ty)
+    : bool =
   let precision, max_bits =
     match t with Tf32 -> (24, 128) | Tf64 -> (53, 1024)
   in
   let bits = Z.numbits n in
   bits = 0
-  || (bits <= max_bits
-     && (bits <= precision || Z.trailing_zeros n >= bits - precision))
+  || bits <= max_bits
+     && (bits <= precision || Z.trailing_zeros n >= bits - precision)
 
 let exact_nonnegative_int (node : 'a node) description value =
   if Z.sign value < 0 then type_error node (description ^ " cannot be negative")
@@ -359,8 +363,7 @@ let rec eval_const_exp (e : exp node) : Z.t option =
           Z.shift_left v1 (exact_nonnegative_int e2 "Shift amount" v2))
   | Bop (Lshr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
-          Z.shift_right_trunc v1
-            (exact_nonnegative_int e2 "Shift amount" v2))
+          Z.shift_right_trunc v1 (exact_nonnegative_int e2 "Shift amount" v2))
   | Bop (Ashr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
           Z.shift_right v1 (exact_nonnegative_int e2 "Shift amount" v2))

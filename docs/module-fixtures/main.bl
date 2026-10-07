@@ -1,0 +1,6 @@
+// Acceptance fixture: compile with this directory as the project root.
+import helper;
+
+fun main() => i32 {
+  return helper.answer();
+}

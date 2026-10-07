@@ -46,13 +46,24 @@ let command =
       and o1 = flag "-O1" no_arg ~doc:"Use LLVM -O1 optimizations"
       and o2 = flag "-O2" no_arg ~doc:"Use LLVM -O2 optimizations"
       and o3 = flag "-O3" no_arg ~doc:"Use LLVM -O3 optimizations"
+      and module_root =
+        flag "-module-root" (optional string)
+          ~doc:"DIR Project import root (default: entry file directory)"
+      and stdlib_root =
+        flag "-stdlib-root" (optional string)
+          ~doc:
+            "DIR Standard-library root containing io.bl (required for std \
+             imports)"
       and filename = anon (maybe_with_default "-" ("filename" %: blink_file)) in
       fun () ->
         let optimization_level = select_optimization_level o0 o1 o2 o3 in
-        In_channel.with_file filename ~f:(fun ic ->
-            let lexbuf = Lexing.from_channel ic in
-            lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = filename };
-            compile ~print_ast ~print_tast ~print_dast ~optimization_level
-              lexbuf))
+        match
+          compile_file ?module_root ?stdlib_root ~print_ast ~print_tast
+            ~print_dast ~optimization_level filename
+        with
+        | Ok () -> ()
+        | Error error ->
+            eprintf "%s\n" (Error.to_string_hum error);
+            exit 1)
 
 let () = Command_unix.run ~version:"1.0" ~build_info:"RWO" command

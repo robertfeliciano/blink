@@ -42,8 +42,8 @@ let validate_assignment_operator stmt_n op lhs_ty =
   let require_number () =
     if not (is_number lhs_ty) then
       type_error stmt_n
-        ("Assignment operator " ^ show_aop op ^ " requires a numeric target, got "
-       ^ Printer.show_ty lhs_ty ^ ".")
+        ("Assignment operator " ^ show_aop op
+       ^ " requires a numeric target, got " ^ Printer.show_ty lhs_ty ^ ".")
   in
   let require_integer () =
     if not (is_integer lhs_ty) then
@@ -239,7 +239,7 @@ and type_lvalue (tc : Tctxt.t) (lhs : Ast.exp node)
       match Tctxt.lookup_option id tc with
       | Some (_, true) ->
           type_error lhs "Attempting to assign to a constant binding."
-  | Some _ -> type_exp tc lhs enclosing_class
+      | Some _ -> type_exp tc lhs enclosing_class
       | None -> type_error lhs ("variable " ^ id ^ " is not defined"))
   | Proj (obj, field) ->
       let projection = type_projection None tc lhs obj field enclosing_class in
@@ -385,7 +385,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       let te1', te2', operand_ty, res_ty =
         match binop with
-        | Eqeq | Neq when is_number lty && is_number rty ->
+        | (Eqeq | Neq) when is_number lty && is_number rty ->
             let te1', te2', operand_ty = promote_numbers () in
             (te1', te2', operand_ty, Typed_ast.TBool)
         | Eqeq | Neq ->
@@ -433,8 +433,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           (typed_constant, constant_ty)
       | _ ->
           check_expected_ty expected res_ty e;
-          ( Typed_ast.Bop (convert_binop binop, te1', te2', res_ty),
-            res_ty ))
+          (Typed_ast.Bop (convert_binop binop, te1', te2', res_ty), res_ty))
   | Uop (unop, e1) ->
       let te1, ety = type_exp tc e1 enclosing_class in
       let unop' = convert_unop unop in
@@ -452,9 +451,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       (Typed_ast.Uop (unop', te1, res_ty), res_ty)
   | Conditional (cond, when_true, when_false) ->
-      let typed_cond, _ =
-        type_exp_as Typed_ast.TBool tc cond enclosing_class
-      in
+      let typed_cond, _ = type_exp_as Typed_ast.TBool tc cond enclosing_class in
       let typed_true, typed_false, result_ty =
         match expected with
         | Some target_ty ->
@@ -466,9 +463,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             in
             (typed_true, typed_false, target_ty)
         | None ->
-            let typed_true, true_ty =
-              type_exp tc when_true enclosing_class
-            in
+            let typed_true, true_ty = type_exp tc when_true enclosing_class in
             let typed_false, false_ty =
               type_exp tc when_false enclosing_class
             in
@@ -486,11 +481,10 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             else
               type_error e
                 ("Conditional branches have incompatible types "
-                ^ Printer.show_ty true_ty ^ " and "
-                ^ Printer.show_ty false_ty ^ ".")
+               ^ Printer.show_ty true_ty ^ " and " ^ Printer.show_ty false_ty
+               ^ ".")
       in
-      ( Typed_ast.Conditional
-          (typed_cond, typed_true, typed_false, result_ty),
+      ( Typed_ast.Conditional (typed_cond, typed_true, typed_false, result_ty),
         result_ty )
   | Index (e_iter, e_idx) ->
       let t_iter, iter_ty = type_exp tc e_iter enclosing_class in
@@ -517,7 +511,12 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       (match t with
       | TRef (RFun _) -> type_error e "Cannot cast functions/lambdas."
       | _ -> ());
-      if subtype tc e_ty tty then (Typed_ast.Cast (te, tty), tty)
+      if subtype tc e_ty tty then
+        (* Classes are nominal; an accepted class cast is an identity cast.
+           Erase it here so field projection retains its ordinary lvalue. *)
+        match tty with
+        | TRef (RClass _) -> (te, tty)
+        | _ -> (Typed_ast.Cast (te, tty), tty)
       else
         type_error ec
           ("Cannot cast " ^ Printer.show_exp te ^ " which has type "
@@ -548,9 +547,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let local_tc, t_scope = type_lambda_scope tc scope in
       let tc' = { tc with locals = local_tc } in
       let rhs_args =
-        List.map
-          (fun (i, t) -> (i, validate_and_convert_ty e tc t))
-          args
+        List.map (fun (i, t) -> (i, validate_and_convert_ty e tc t)) args
       in
       let rhs_ret = validate_and_convert_ret_ty e tc rhs_ret in
       match expected with
@@ -565,14 +562,17 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
               (lists_equal_exact
                  (fun t1 (_, t2) -> equal_ty t1 t2)
                  lhs_arg_types rhs_args)
-          then
-            type_error e "LHS and RHS types must match exactly.";
+          then type_error e "LHS and RHS types must match exactly.";
           if not (equal_ret_ty lhs_ret rhs_ret) then
             type_error e "LHS and RHS types must match exactly.";
-          create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class t_scope
+          create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class
+            t_scope
       | None ->
-          create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class t_scope)
-  | ObjInit ({ elt = cname; loc = cloc }, inits) ->
+          create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class
+            t_scope)
+  | ObjInit (class_name, inits) ->
+      let cname = resolved_class_name class_name in
+      let cloc = class_name.loc in
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
         | Some c -> c
@@ -663,12 +663,14 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
         (Typed_ast.Cast (te, expected), expected)
       else
         type_error e
-         ("Integer literal " ^ Z.to_string n ^ " cannot be represented exactly as "
-         ^ Printer.show_ty expected ^ ".")
+          ("Integer literal " ^ Z.to_string n
+         ^ " cannot be represented exactly as " ^ Printer.show_ty expected ^ "."
+          )
   | Bop _, Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
       type_exp ~expected tc e enclosing_class
-  | (Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _ | Conditional _),
-    _ ->
+  | ( ( Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _
+      | Conditional _ ),
+      _ ) ->
       type_exp ~expected tc e enclosing_class
   | _ ->
       let te, actual = type_exp tc e enclosing_class in
@@ -702,15 +704,15 @@ and type_func_app (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
             bound_types args
         with
         | Some typed_args ->
-          if remaining_types = [] then
-            match ret_ty with
-            | RetVoid when from_exp ->
-                Error "assigning void function return type to variable."
-            | _ -> Ok (FullApplication (bound_types, typed_args, ret_ty))
-          else
-            Ok
-              (PartialApplication
-                 (bound_types, typed_args, remaining_types, ret_ty))
+            if remaining_types = [] then
+              match ret_ty with
+              | RetVoid when from_exp ->
+                  Error "assigning void function return type to variable."
+              | _ -> Ok (FullApplication (bound_types, typed_args, ret_ty))
+            else
+              Ok
+                (PartialApplication
+                   (bound_types, typed_args, remaining_types, ret_ty))
         | None -> Error "failed to pair function arguments")
   | _ -> Error "attempted to call a non-function type."
 
@@ -757,8 +759,7 @@ and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
   | Array (h :: t), exp_opt ->
       let exp_ty, exp_len =
         match exp_opt with
-        | Some (TRef (RArray (ety, elen))) ->
-            (Some ety, Some elen)
+        | Some (TRef (RArray (ety, elen))) -> (Some ety, Some elen)
         | Some other ->
             type_error en
               ("Expected " ^ Printer.show_ty other ^ " but got an array.")
@@ -799,9 +800,13 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
       let default_constructor = cname in
       let constructor =
         match Tctxt.lookup_method_option cname default_constructor tc with
-        | Some (RetVal rt, _) ->
+        | Some (RetVal rt, []) when equal_ty rt (TRef (RClass cname)) ->
             Typed_ast.Call (Id (default_constructor, rt), [], [], rt)
-        | Some (_, _) ->
+        | Some (RetVal _, _) ->
+            type_error stmt_n
+              ("Default constructor for " ^ cname
+             ^ " must take no arguments and return its own class.")
+        | Some (RetVoid, _) ->
             type_error stmt_n
               ("Default constructor for " ^ cname ^ " cannot return void.")
         | None ->
@@ -809,7 +814,8 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
               ("Must provide a default constructor for " ^ cname ^ " class.")
       in
       constructor
-  | Typed_ast.TRef (RFun _) -> type_error stmt_n "Default functions not allowed."
+  | Typed_ast.TRef (RFun _) ->
+      type_error stmt_n "Default functions not allowed."
   | Typed_ast.TRef (RArray (t, sz)) as array_ty ->
       let elems = List.init sz (fun _ -> create_default_init stmt_n tc t) in
       Typed_ast.Array (elems, array_ty)

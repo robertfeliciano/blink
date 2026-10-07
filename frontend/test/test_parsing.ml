@@ -72,30 +72,31 @@ let test_top_level_declarations _ =
      class Box { let value: i32 = 0; }\n\
      fun main() => i32 { return 0; }"
   in
-  match parse_exn source with
-  | Prog (functions, classes, prototypes) ->
-      assert_equal ~printer:string_of_int 1 (List.length functions);
-      assert_equal ~printer:string_of_int 1 (List.length classes);
-      assert_equal ~printer:string_of_int 1 (List.length prototypes)
+  let functions, classes, prototypes = partition_declarations (parse_exn source) in
+  assert_equal ~printer:string_of_int 1 (List.length functions);
+  assert_equal ~printer:string_of_int 1 (List.length classes);
+  assert_equal ~printer:string_of_int 1 (List.length prototypes)
 
 let test_inline_modifier _ =
   let source =
     "inline fun increment(value: i32) => i32 { return value + 1; }\n\
      fun main() => i32 { return increment(1); }"
   in
-  match parse_exn source with
-  | Prog ([ inline_function; main ], [], []) ->
+  let program = parse_exn source in
+  match partition_declarations program with
+  | [ inline_function; main ], [], [] ->
       assert_bool "inline function should retain its modifier"
         inline_function.elt.inline;
       assert_bool "ordinary function should not be inline" (not main.elt.inline)
-  | program ->
+  | _ ->
       assert_failure
         (Printf.sprintf "unexpected AST for inline modifier:\n%s"
            (show_prog program))
 
 let test_operator_precedence _ =
-  match parse_exn "fun main() => i32 { return 2 + 3 * 4; }" with
-  | Prog ([ function_ ], [], []) -> (
+  let program = parse_exn "fun main() => i32 { return 2 + 3 * 4; }" in
+  match partition_declarations program with
+  | [ function_ ], [], [] -> (
       match function_.elt.body with
       | [ { elt = Ret (Some expression); _ } ] -> (
           match expression.elt with
@@ -112,18 +113,19 @@ let test_operator_precedence _ =
           | _ ->
               assert_failure "multiplication should bind tighter than addition")
       | _ -> assert_failure "expected a single return statement")
-  | program ->
+  | _ ->
       assert_failure
         (Printf.sprintf "unexpected AST for precedence test:\n%s"
            (show_prog program))
 
 let returned_expression source =
-  match parse_exn source with
-  | Prog ([ function_ ], [], []) -> (
+  let program = parse_exn source in
+  match partition_declarations program with
+  | [ function_ ], [], [] -> (
       match function_.elt.body with
       | [ { elt = Ret (Some expression); _ } ] -> expression.elt
       | _ -> assert_failure "expected a single return statement")
-  | program ->
+  | _ ->
       assert_failure
         (Printf.sprintf "unexpected expression program:\n%s" (show_prog program))
 
