@@ -14,23 +14,22 @@ namespace Constants {
     enum TyVariant { TY_TInt = 0, TY_TFloat = 1, TY_TRef = 2 };
 
     enum ExpVariant {
-        EXP_Bool    = 0,
-        EXP_Int     = 1,
-        EXP_Float   = 2,
-        EXP_Str     = 3,
-        EXP_Id      = 4,
-        EXP_Call    = 5,
-        EXP_Bop     = 6,
-        EXP_Uop     = 7,
-        EXP_Index   = 8,
-        EXP_Array   = 9,
-        EXP_Cast    = 10,
-        EXP_Proj    = 11,
-        EXP_ObjInit = 12,
-        EXP_Lambda       = 13,
-        EXP_Null         = 14,
-        EXP_PartialApply = 15,
-        EXP_Conditional  = 16
+        EXP_Bool        = 0,
+        EXP_Int         = 1,
+        EXP_Float       = 2,
+        EXP_Str         = 3,
+        EXP_Id          = 4,
+        EXP_Call        = 5,
+        EXP_Bop         = 6,
+        EXP_Uop         = 7,
+        EXP_Index       = 8,
+        EXP_Array       = 9,
+        EXP_Cast        = 10,
+        EXP_Proj        = 11,
+        EXP_ObjInit     = 12,
+        EXP_Lambda      = 13,
+        EXP_Null        = 14,
+        EXP_Conditional = 15
     };
 
     enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1, UNOP_BNeg = 2 };

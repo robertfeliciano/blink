@@ -80,7 +80,6 @@ type exp =
       * ret_ty
       * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
-  | PartialApply of exp * exp list * ty list * ty list * ret_ty
   | Conditional of exp * exp * exp * ty
 
 and vdecl = id * ty * exp * bool

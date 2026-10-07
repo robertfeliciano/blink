@@ -58,13 +58,7 @@ type exp =
   | ObjInit of id * (id * exp) list
   | Lambda of (id * ty) list * (id * ty) list * ret_ty * block
   | Null of ty
-  | PartialApply of partial_callee * exp list * ty list * ty list * ret_ty
   | Conditional of exp * (block * exp) * (block * exp) * ty
-
-and partial_callee =
-  | PartialNamed of id
-  | PartialMethod of exp * id * id
-  | PartialValue of exp
 
 and vdecl = id * ty * exp * bool
 

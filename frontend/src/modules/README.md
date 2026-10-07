@@ -1,6 +1,5 @@
 # Module implementation
 
-Start with [the ordered implementation guide](../../../../docs/modules.md).
 The `blink.modules` library builds independently of the native backend and is
 used by `Compiler.compile_file` before the existing typing/lowering pipeline.
 
@@ -27,7 +26,7 @@ decodes internal identities without global state. Compatible shared C prototypes
 are deduplicated by the existing type checker, after nominal names resolve.
 
 The CLI/wrapper accept `-module-root` and `-stdlib-root`. The default project
-root is the entry directory; standard-library roots are explicit. `stdlib/io.bl`
+root is the entry directory; standard-library roots are explicit. `runtime/stdlib/io.bl`
 exports `println` over private libc `puts`; a custom C++ runtime is a follow-up.
 
 AST/loader/resolver suites run independently without libbackend.a. The native

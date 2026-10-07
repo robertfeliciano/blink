@@ -246,8 +246,8 @@ let rec exp_contains_lambda (exp : DA.exp) =
       List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
   | DA.Bop (_, lhs, rhs, _) ->
       exp_contains_lambda lhs || exp_contains_lambda rhs
-  | DA.Conditional
-      (condition, (then_block, then_exp), (else_block, else_exp), _) ->
+  | DA.Conditional (condition, (then_block, then_exp), (else_block, else_exp), _)
+    ->
       exp_contains_lambda condition
       || List.exists stmt_contains_lambda then_block
       || exp_contains_lambda then_exp
@@ -257,7 +257,6 @@ let rec exp_contains_lambda (exp : DA.exp) =
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index
-  | DA.PartialApply _ -> true
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
 and stmt_contains_lambda (stmt : DA.stmt) =
@@ -318,247 +317,6 @@ fun main() => i32 {
         (Printf.sprintf "unexpected nested lambda lowering:\n%s"
            (Printer.show_desugared_program program))
 
-let test_partial_application_lifting _ =
-  let source =
-    {|
-fun add(left: i32, middle: i32, right: i32) => i32 {
-    return left + middle + right;
-}
-fun main() => i32 {
-    let add_left: (i32, i32) -> i32 = add(10);
-    let result = add_left(20, 12);
-    free add_left;
-    return result;
-}
-|}
-  in
-  match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) ->
-      assert_bool "partial application should produce a lifted wrapper"
-        (List.exists
-           (fun (fn : DA.fdecl) ->
-             Core.String.is_prefix fn.fname ~prefix:"Lifted")
-           functions);
-      assert_bool "no partial-application nodes should remain"
-        (not
-           (List.exists
-              (fun (fn : DA.fdecl) -> List.exists stmt_contains_lambda fn.body)
-              functions))
-  | program ->
-      assert_failure
-        (Printf.sprintf "unexpected partial-application lowering:\n%s"
-           (Printer.show_desugared_program program))
-
-let rec exp_contains_call (exp : DA.exp) =
-  match exp with
-  | DA.Call _ -> true
-  | DA.Array (args, _) -> List.exists exp_contains_call args
-  | DA.ObjInit (_, fields) ->
-      List.exists (fun (_, value) -> exp_contains_call value) fields
-  | DA.Bop (_, lhs, rhs, _) ->
-      exp_contains_call lhs || exp_contains_call rhs
-  | DA.Conditional
-      (condition, (then_block, then_exp), (else_block, else_exp), _) ->
-      exp_contains_call condition
-      || List.exists stmt_contains_call then_block
-      || exp_contains_call then_exp
-      || List.exists stmt_contains_call else_block
-      || exp_contains_call else_exp
-  | DA.Uop (_, value, _) | DA.Cast (value, _) | DA.Proj (value, _, _) ->
-      exp_contains_call value
-  | DA.Index (collection, index, _) ->
-      exp_contains_call collection || exp_contains_call index
-  | DA.PartialApply (_, args, _, _, _) -> List.exists exp_contains_call args
-  | DA.Lambda (_, _, _, body) -> List.exists stmt_contains_call body
-  | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
-
-and stmt_contains_call (stmt : DA.stmt) =
-  match stmt with
-  | DA.Assn (lhs, rhs, _) -> exp_contains_call lhs || exp_contains_call rhs
-  | DA.Decl (_, _, init, _) -> exp_contains_call init
-  | DA.Ret (Some value) -> exp_contains_call value
-  | DA.Ret None -> false
-  | DA.SCall _ -> true
-  | DA.Free values -> List.exists exp_contains_call values
-  | DA.If (condition, then_block, else_block) ->
-      exp_contains_call condition
-      || List.exists stmt_contains_call then_block
-      || List.exists stmt_contains_call else_block
-  | DA.While (condition, body) ->
-      exp_contains_call condition || List.exists stmt_contains_call body
-  | DA.Break | DA.Continue -> false
-
-let test_chained_partial_application_cleanup _ =
-  let source =
-    {|
-fun add(left: i32, middle: i32, right: i32) => i32 {
-    return left + middle + right;
-}
-fun main() => i32 {
-    let result = add(10)(20)(12);
-    return result;
-}
-|}
-  in
-  match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) ->
-      let main =
-        match
-          List.find_opt
-            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
-            functions
-        with
-        | Some fn -> fn
-        | None -> assert_failure "expected a lowered main function"
-      in
-      let indexed_body = List.mapi (fun index stmt -> (index, stmt)) main.body in
-      let cleaned_closure_names =
-        List.concat_map
-          (fun (free_index, stmt) ->
-            match stmt with
-            | DA.Free values ->
-                List.filter_map
-                  (function
-                    | DA.Id (closure_name, DA.TRef (DA.RClass _)) ->
-                        if
-                          List.exists
-                            (fun (decl_index, prior_stmt) ->
-                              match prior_stmt with
-                              | DA.Decl (name, _, _, _)
-                                when Core.String.equal name closure_name ->
-                                  decl_index < free_index
-                                  && List.exists
-                                       (fun (call_index, candidate) ->
-                                         decl_index < call_index
-                                         && call_index < free_index
-                                         && stmt_contains_call candidate)
-                                       indexed_body
-                              | _ -> false)
-                            indexed_body
-                          && List.exists
-                               (fun (return_index, candidate) ->
-                                 return_index > free_index
-                                 && match candidate with
-                                    | DA.Ret _ -> true
-                                    | _ -> false)
-                               indexed_body
-                        then Some closure_name
-                        else None
-                    | _ -> None)
-                  values
-            | _ -> [])
-          indexed_body
-        |> List.sort_uniq Core.String.compare
-      in
-      assert_bool
-        (Printf.sprintf
-           "expected the generated intermediate closure to be declared, \
-            consumed, and then cleaned up before return:\n%s"
-           (Printer.show_block main.body))
-        (List.length cleaned_closure_names >= 1)
-  | program ->
-      assert_failure
-        (Printf.sprintf "unexpected chained partial-application lowering:\n%s"
-           (Printer.show_desugared_program program))
-
-let test_anonymous_void_partial_application_cleanup _ =
-  let source =
-    {|
-fun consume(left: i32, right: i32) => void {}
-fun main() => i32 {
-    consume(1)(2);
-    return 42;
-}
-|}
-  in
-  match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) ->
-      let main =
-        match
-          List.find_opt
-            (fun (fn : DA.fdecl) -> Core.String.equal fn.fname "main")
-            functions
-        with
-        | Some fn -> fn
-        | None -> assert_failure "expected a lowered main function"
-      in
-      let indexed_body = List.mapi (fun index stmt -> (index, stmt)) main.body in
-      let has_ordered_cleanup =
-        List.exists
-          (fun (free_index, stmt) ->
-            match stmt with
-            | DA.Free
-                [
-                  DA.Id (cleanup_env, _);
-                  DA.Id (closure_name, DA.TRef (DA.RClass _));
-                ] ->
-                List.exists
-                  (fun (call_index, call_stmt) ->
-                    match call_stmt with
-                    | DA.SCall
-                        (callee, [ DA.Id (call_env, _); DA.Int ("2", _) ]) ->
-                        call_index < free_index
-                        && List.exists
-                             (fun (decl_index, candidate) ->
-                               decl_index < call_index
-                               && match candidate with
-                                  | DA.Decl
-                                      ( name,
-                                        _,
-                                        DA.Proj
-                                          ( DA.Id (source, _),
-                                            "lambdaptr",
-                                            _ ),
-                                        true ) ->
-                                      Core.String.equal name callee
-                                      && Core.String.equal source closure_name
-                                  | _ -> false)
-                             indexed_body
-                        && List.exists
-                             (fun (decl_index, candidate) ->
-                               decl_index < call_index
-                               && match candidate with
-                                  | DA.Decl
-                                      ( name,
-                                        _,
-                                        DA.Proj
-                                          (DA.Id (source, _), "envptr", _),
-                                        true ) ->
-                                      Core.String.equal name call_env
-                                      && Core.String.equal source closure_name
-                                  | _ -> false)
-                             indexed_body
-                        && List.exists
-                             (fun (decl_index, candidate) ->
-                               call_index < decl_index
-                               && decl_index < free_index
-                               && match candidate with
-                                  | DA.Decl
-                                      ( name,
-                                        _,
-                                        DA.Proj
-                                          (DA.Id (source, _), "envptr", _),
-                                        true ) ->
-                                      Core.String.equal name cleanup_env
-                                      && Core.String.equal source closure_name
-                                  | _ -> false)
-                             indexed_body
-                    | _ -> false)
-                  indexed_body
-            | _ -> false)
-          indexed_body
-      in
-      assert_bool
-        (Printf.sprintf
-           "expected the generated void partial closure to be called before \
-            its environment and closure are freed:\n%s"
-           (Printer.show_block main.body))
-        has_ordered_cleanup
-  | program ->
-      assert_failure
-        (Printf.sprintf "unexpected void partial-application lowering:\n%s"
-           (Printer.show_desugared_program program))
-
 let test_function_reassignment_projects_current_closure _ =
   let source =
     {|
@@ -566,8 +324,8 @@ fun add(left: i32, right: i32) => i32 {
     return left + right;
 }
 fun main() => i32 {
-    let f: (i32) -> i32 = add(1);
-    if true { f = add(2); }
+    let f: (i32) -> i32 = fn(value) { return add(1, value); };
+    if true { f = fn(value) { return add(2, value); }; }
     let result = f(40);
     free f;
     return result;
@@ -588,28 +346,15 @@ fun main() => i32 {
       let rec check_after_branch = function
         | DA.If _
           :: DA.Decl
-               ( call_fptr,
-                 _,
-                 DA.Proj (DA.Id ("f", _), "lambdaptr", _),
-                 true )
-          :: DA.Decl
-               ( call_env,
-                 _,
-                 DA.Proj (DA.Id ("f", _), "envptr", _),
-                 true )
+               (call_fptr, _, DA.Proj (DA.Id ("f", _), "lambdaptr", _), true)
+          :: DA.Decl (call_env, _, DA.Proj (DA.Id ("f", _), "envptr", _), true)
           :: DA.Decl
                ( "result",
                  _,
                  DA.Call
-                   ( callee,
-                     DA.Id (call_env_arg, _) :: [ DA.Int ("40", _) ],
-                     _ ),
+                   (callee, DA.Id (call_env_arg, _) :: [ DA.Int ("40", _) ], _),
                  false )
-          :: DA.Decl
-               ( free_env,
-                 _,
-                 DA.Proj (DA.Id ("f", _), "envptr", _),
-                 true )
+          :: DA.Decl (free_env, _, DA.Proj (DA.Id ("f", _), "envptr", _), true)
           :: DA.Free [ DA.Id (free_env_arg, _); DA.Id ("f", _) ]
           :: _
           when Core.String.equal callee call_fptr
@@ -621,7 +366,8 @@ fun main() => i32 {
             assert_failure
               (Printf.sprintf
                  "call and free should project from the current closure after \
-                  the branch:\n%s"
+                  the branch:\n\
+                  %s"
                  (Printer.show_block main.body))
       in
       check_after_branch main.body
@@ -635,7 +381,7 @@ let test_conditional_preserves_branch_local_preludes _ =
     {|
 fun add(left: i32, right: i32) => i32 { return left + right; }
 fun main() => i32 {
-    let selected: (i32) -> i32 = true ? add(2) : add(3);
+    let selected: (i32) -> i32 = true ? fn(value) { return add(2, value); } : fn(value) { return add(3, value); };
     let result = selected(40);
     free selected;
     return result;
@@ -643,7 +389,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) ->
+  | DA.Prog (_, functions, _, []) -> (
       let main =
         match
           List.find_opt
@@ -661,10 +407,8 @@ fun main() => i32 {
             | _ -> None)
           main.body
       in
-      (match conditional with
-      | Some
-          (DA.Conditional
-            (_, (then_prelude, _), (else_prelude, _), _)) ->
+      match conditional with
+      | Some (DA.Conditional (_, (then_prelude, _), (else_prelude, _), _)) ->
           assert_bool "true branch setup should remain branch-local"
             (then_prelude <> []);
           assert_bool "false branch setup should remain branch-local"
@@ -678,25 +422,6 @@ fun main() => i32 {
       assert_failure
         (Printf.sprintf "unexpected conditional lowering:\n%s"
            (Printer.show_desugared_program program))
-
-let test_conditional_anonymous_cleanup _ =
-  let source =
-    "fun add(a: i32, b: i32) => i32 { return a + b; }\n\
-     fun main() => i32 { return (true ? add(1) : add(2))(40); }"
-  in
-  match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, _) ->
-      let main = List.find (fun (f : DA.fdecl) -> f.fname = "main") functions in
-      let rec check seen_call = function
-        | [] -> assert_failure "missing guarded closure cleanup after call"
-        | DA.If (_, cleanup, []) :: _
-          when seen_call
-               && List.exists
-                    (function DA.Free values -> List.length values = 2 | _ -> false)
-                    cleanup -> ()
-        | stmt :: rest -> check (seen_call || stmt_contains_call stmt) rest
-      in
-      check false main.body
 
 let suite =
   let pipeline_tests =
@@ -716,15 +441,9 @@ let suite =
          "inline propagation" >:: test_inline_propagation;
          "lambda lifting" >:: test_lambda_lifting;
          "nested lambda lifting" >:: test_nested_lambda_lifting;
-         "partial application lifting" >:: test_partial_application_lifting;
-         "chained partial application cleanup"
-         >:: test_chained_partial_application_cleanup;
-         "anonymous void partial application cleanup"
-         >:: test_anonymous_void_partial_application_cleanup;
          "function reassignment projects current closure"
          >:: test_function_reassignment_projects_current_closure;
          "conditional preserves branch-local preludes"
          >:: test_conditional_preserves_branch_local_preludes;
-         "conditional anonymous cleanup" >:: test_conditional_anonymous_cleanup;
          "parsed and typed programs" >::: pipeline_tests;
        ]
