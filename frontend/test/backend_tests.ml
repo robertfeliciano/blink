@@ -10,6 +10,7 @@ let fixtures =
     { name = "object-field"; expected_exit = 44 };
     { name = "conditional"; expected_exit = 42 };
     { name = "literal-values"; expected_exit = 42 };
+    { name = "interface-dispatch"; expected_exit = 42 };
   ]
 
 let test_fixture fixture test_context =

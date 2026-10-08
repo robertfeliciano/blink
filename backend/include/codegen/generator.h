@@ -36,6 +36,9 @@ struct Generator {
     std::unordered_map<std::string, llvm::StructType*> structTypes;
     std::unordered_map<std::string, const CDecl*>      classEnv;
 
+    std::unordered_map<std::string, const InterfaceDecl*> interfaceEnv;
+    std::map<std::pair<std::string, std::string>, llvm::GlobalVariable*> interfaceTables;
+
     ExpToLLVisitor    expVisitor;
     StmtToLLVisitor   stmtVisitor;
     TypeToLLGenerator typeGen;
@@ -44,6 +47,12 @@ struct Generator {
 
     std::vector<llvm::BasicBlock*> breakTargets;
     std::vector<llvm::BasicBlock*> continueTargets;
+
+    llvm::FunctionType* codegenInterfaceMethodType(const Proto& proto);
+    void codegenInterfaceTables(const Program& p);
+    llvm::Value* codegenInterfaceCall(const Exp& receiver, unsigned slot,
+                                     const std::vector<std::unique_ptr<Exp>>& args);
+    llvm::Value* interfaceObject(llvm::Value* value);
 
     void codegenStdlib();
     void configureTarget();

@@ -30,6 +30,7 @@ let rec show_ref_ty = function
   | RString -> "string"
   | RArray (t, sz) -> Printf.sprintf "%s_x_%d" (show_ty t) sz
   | RClass cn -> Printf.sprintf "%s" cn
+  | RInterface name -> "interface " ^ name
   | RFun (tys, r) -> (
       String.concat "_" (List.map show_ty tys)
       ^
@@ -163,6 +164,11 @@ let rec show_exp ?(lvl = 0) = function
         scope_s args_s (show_ret_ty ret_ty)
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)
+  | InterfaceMethod (receiver, slot, ty) ->
+      Printf.sprintf "InterfaceMethod(%s, %d, %s)" (show_exp receiver) slot
+        (show_ty ty)
+  | InterfaceCast (receiver, cname, iname) ->
+      "InterfaceCast(" ^ show_exp receiver ^ ", " ^ cname ^ ", " ^ iname ^ ")"
   | Conditional (cond, when_true, when_false, ty) ->
       Printf.sprintf "Conditional(%s, %s, %s, %s)"
         (show_exp ~lvl:(lvl + 1) cond)
@@ -331,12 +337,24 @@ let show_cdecl ?(lvl = 0) { annotations; cname; impls; fields; methods } =
     methods_s
     (indent (lvl + 1))
 
-let show_typed_program (Prog (optimization_level, fns, cns, pns)) =
+let show_typed_program (Prog (optimization_level, fns, cns, pns, interfaces)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
+  let interfaces_s =
+    String.concat "\n"
+      (List.map
+         (fun (name, methods) ->
+           "interface " ^ name ^ " {\n"
+           ^ String.concat "\n" (List.map (show_proto ~lvl:1) methods)
+           ^ "\n}")
+         interfaces)
+  in
   Printf.sprintf
     "Program{optimization=%s;\n\
+     Interfaces{\n\
+     %s\n\
+     }\n\
      Classes{\n\
      %s\n\
      }\n\
@@ -347,4 +365,4 @@ let show_typed_program (Prog (optimization_level, fns, cns, pns)) =
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    cns_s pn_s fns_s
+    interfaces_s cns_s pn_s fns_s

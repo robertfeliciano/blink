@@ -18,7 +18,12 @@ let function_ ?(args = []) name body =
 let arithmetic () =
   let result = DA.Bop (DA.Add, int 20, int 22, i32) in
   DA.Prog
-    (optimization_level, [ function_ "main" [ DA.Ret (Some result) ] ], [], [])
+    ( optimization_level,
+      [ function_ "main" [ DA.Ret (Some result) ] ],
+      [],
+      [],
+      [],
+      [] )
 
 let function_call () =
   let double =
@@ -30,7 +35,7 @@ let function_call () =
   let main =
     function_ "main" [ DA.Ret (Some (DA.Call ("double", [ int 21 ], i32))) ]
   in
-  DA.Prog (optimization_level, [ double; main ], [], [])
+  DA.Prog (optimization_level, [ double; main ], [], [], [], [])
 
 let array_index () =
   let array_ty = DA.TRef (DA.RArray (i32, 3)) in
@@ -41,7 +46,7 @@ let array_index () =
       DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
 
 let object_field () =
   let field name =
@@ -72,7 +77,7 @@ let object_field () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [], [], [])
 
 let conditional () =
   let expression =
@@ -85,6 +90,8 @@ let conditional () =
   DA.Prog
     ( optimization_level,
       [ function_ "main" [ DA.Ret (Some expression) ] ],
+      [],
+      [],
       [],
       [] )
 
@@ -105,7 +112,85 @@ let literal_values () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
+
+let interface_dispatch () =
+  let box_ty = DA.TRef (DA.RClass "Box") in
+  let iface_ty = DA.TRef (DA.RInterface "Value") in
+  let box =
+    DA.
+      {
+        cname = "Box";
+        annotations = [];
+        fields = [ { prelude = []; fieldName = "n"; ftyp = i32; init = int 0 } ];
+      }
+  in
+  let receiver = DA.Id ("this", box_ty) in
+  let get =
+    function_
+      ~args:[ (box_ty, "this"); (i32, "extra") ]
+      "box_get"
+      [
+        DA.Ret
+          (Some
+             (DA.Bop
+                (DA.Add, DA.Proj (receiver, "n", i32), DA.Id ("extra", i32), i32)));
+      ]
+  in
+  let set =
+    DA.
+      {
+        annotations = [];
+        frtyp = RetVoid;
+        fname = "box_set";
+        args = [ (box_ty, "this"); (i32, "value") ];
+        inline = false;
+        body =
+          [ Assn (Proj (receiver, "n", i32), Id ("value", i32), i32); Ret None ];
+      }
+  in
+  let read =
+    function_
+      ~args:[ (iface_ty, "item") ]
+      "read"
+      [
+        DA.InterfaceSCall (DA.Id ("item", iface_ty), 1, [ int 20 ], DA.RetVoid);
+        DA.Ret
+          (Some
+             (DA.InterfaceCall (DA.Id ("item", iface_ty), 0, [ int 22 ], i32)));
+      ]
+  in
+  let main =
+    function_ "main"
+      [
+        DA.Decl ("box", box_ty, DA.ObjInit ("Box", []), false);
+        DA.Decl
+          ( "view",
+            iface_ty,
+            DA.InterfaceCast (DA.Id ("box", box_ty), "Box", "Value"),
+            false );
+        DA.Decl
+          ( "result",
+            i32,
+            DA.Call ("read", [ DA.Id ("view", iface_ty) ], i32),
+            false );
+        DA.Free [ DA.Id ("view", iface_ty) ];
+        DA.Ret (Some (DA.Id ("result", i32)));
+      ]
+  in
+  let protos =
+    [
+      DA.{ annotations = []; frtyp = RetVal i32; fname = "get"; args = [ i32 ] };
+      DA.{ annotations = []; frtyp = RetVoid; fname = "set"; args = [ i32 ] };
+    ]
+  in
+  DA.Prog
+    ( optimization_level,
+      [ get; set; read; main ],
+      [ box ],
+      [],
+      [ ("Value", protos) ],
+      [ ("Box", "Value", [ "box_get"; "box_set" ]) ] )
 
 let fixtures =
   [
@@ -115,6 +200,7 @@ let fixtures =
     ("object-field", object_field);
     ("conditional", conditional);
     ("literal-values", literal_values);
+    ("interface-dispatch", interface_dispatch);
   ]
 
 let () =

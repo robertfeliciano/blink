@@ -73,6 +73,10 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
     llvm_unreachable("Calling unknown function.");
 }
 
+Value* StmtToLLVisitor::operator()(const InterfaceSCall& s) {
+    return gen.codegenInterfaceCall(*s.receiver, s.slot, s.args);
+}
+
 Value* StmtToLLVisitor::operator()(const If& s) {
     Value* condVal = gen.codegenExp(*s.cond);
 
@@ -179,7 +183,10 @@ Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
         Value* toBeFreed = gen.codegenExp(*e);
-        Value* freeVal   = gen.builder->CreateCall(freeFun, {toBeFreed});
+        const Ty& ty = gen.getExpTy(*e);
+        if (ty.tag == TyTag::TRef && ty.ref_ty->tag == RefTyTag::RInterface)
+            toBeFreed = gen.interfaceObject(toBeFreed);
+        gen.builder->CreateCall(freeFun, {toBeFreed});
     }
 
     return nullptr;

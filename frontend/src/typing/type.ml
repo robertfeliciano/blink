@@ -118,7 +118,7 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
   {
     annotations = annotations';
     cname;
-    impls;
+    impls = List.map resolved_class_name impls;
     fields = tfields;
     methods = tmethods;
   }
@@ -281,6 +281,97 @@ let reconcile_external_prototypes tc prototypes =
           false)
     prototypes
 
+let create_interface_ctxt tc declarations =
+  let tc =
+    List.fold_left
+      (fun tc (i : idecl node) ->
+        if
+          Option.is_some (lookup_interface_option i.elt.iname tc)
+          || Option.is_some (lookup_class_option i.elt.iname tc)
+        then type_error i ("Duplicate interface or class " ^ i.elt.iname ^ ".");
+        { tc with interfaces = (i.elt.iname, []) :: tc.interfaces })
+      tc declarations
+  in
+  List.fold_left
+    (fun tc (i : idecl node) ->
+      let seen = Hashtbl.create 8 in
+      let methods =
+        List.map
+          (fun (p : proto node) ->
+            if Hashtbl.mem seen p.elt.fname then
+              type_error p ("Duplicate interface method " ^ p.elt.fname ^ ".");
+            Hashtbl.add seen p.elt.fname ();
+            if p.elt.annotations <> [] then
+              type_error p "Interface prototypes cannot have annotations.";
+            let args, ret =
+              validate_and_convert_signature p tc p.elt.args p.elt.frtyp
+            in
+            (p.elt.fname, ret, args))
+          i.elt.protos
+      in
+      {
+        tc with
+        interfaces =
+          (i.elt.iname, methods) :: List.remove_assoc i.elt.iname tc.interfaces;
+      })
+    tc declarations
+
+let validate_implementations tc classes =
+  List.fold_left
+    (fun tc (c : cdecl node) ->
+      let seen = Hashtbl.create 8 in
+      let method_names = Hashtbl.create 8 in
+      List.iter
+        (fun (m : fdecl node) ->
+          if Hashtbl.mem method_names m.elt.fname then
+            type_error m ("Duplicate class method " ^ m.elt.fname ^ ".");
+          Hashtbl.add method_names m.elt.fname ())
+        c.elt.methods;
+      let names =
+        List.map
+          (fun name ->
+            let iname = resolved_class_name name in
+            if Hashtbl.mem seen iname then
+              type_error name ("Duplicate implemented interface " ^ iname ^ ".");
+            Hashtbl.add seen iname ();
+            let required =
+              match lookup_interface_option iname tc with
+              | Some methods -> methods
+              | None -> type_error name ("Unknown interface " ^ iname ^ ".")
+            in
+            List.iter
+              (fun (method_name, ret, args) ->
+                match
+                  List.find_opt
+                    (fun (m : fdecl node) ->
+                      m.elt.fname = method_name && m.elt.fname <> c.elt.cname)
+                    c.elt.methods
+                with
+                | None ->
+                    type_error c
+                      ("Class " ^ c.elt.cname ^ " is missing interface method "
+                     ^ method_name ^ " from " ^ iname ^ ".")
+                | Some method_node ->
+                    let actual_args, actual_ret =
+                      validate_and_convert_signature method_node tc
+                        method_node.elt.args method_node.elt.frtyp
+                    in
+                    if
+                      not
+                        (lists_equal_exact equal_ty (List.map fst args)
+                           (List.map fst actual_args)
+                        && equal_ret_ty ret actual_ret)
+                    then
+                      type_error method_node
+                        ("Interface method " ^ method_name
+                       ^ " signature does not match " ^ iname ^ "."))
+              required;
+            iname)
+          c.elt.impls
+      in
+      { tc with implementations = (c.elt.cname, names) :: tc.implementations })
+    tc classes
+
 let type_program ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
@@ -290,7 +381,10 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   | [] -> ());
   let fns, cns, pns = Ast.partition_declarations prog in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
-  let class_headers = create_class_header_ctxt class_names cns in
+  let interfaces = Ast.interface_declarations prog in
+  let interface_ctxt = create_interface_ctxt class_names interfaces in
+  let class_headers = create_class_header_ctxt interface_ctxt cns in
+  let class_headers = validate_implementations class_headers cns in
   let pns = reconcile_external_prototypes class_headers pns in
   let pc = create_proto_ctxt class_headers pns in
   let fc = create_fn_ctxt pc fns in
@@ -312,7 +406,15 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
       pns
   in
   let typed_funs = List.map (type_fn fc) fns in
-  Prog (optimization_level, typed_funs, typed_classes, typed_protos)
+  Prog
+    ( optimization_level,
+      typed_funs,
+      typed_classes,
+      typed_protos,
+      List.map
+        (fun (i : idecl node) ->
+          (i.elt.iname, List.map (type_proto fc) i.elt.protos))
+        interfaces )
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =

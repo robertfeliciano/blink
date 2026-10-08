@@ -7,25 +7,9 @@
 
 void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     std::vector<llvm::Type*> argTys;
-    for (auto& arg : fn.args) {
-        const Ty& argTy = arg.first;
-
-        if (is_obj_ty(argTy)) {
-            argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
-        } else {
-            llvm::Type* baseTy = gen.codegenType(argTy);
-            argTys.push_back(baseTy);
-        }
-    }
-
-    const RetTy& retTy = fn.frtyp;
-    llvm::Type*  llRetTy;
-
-    if (retTy.tag == RetTyTag::RetVal && is_obj_ty(*retTy.val)) {
-        llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
-    } else {
-        llRetTy = gen.codegenRetType(fn.frtyp);
-    }
+    for (auto& arg : fn.args)
+        argTys.push_back(gen.typeGen.codegenValueTy(arg.first));
+    llvm::Type* llRetTy = gen.typeGen.codegenValueRetTy(fn.frtyp);
 
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
@@ -49,23 +33,9 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
 
 void DeclToLLVisitor::codegenProto(const Proto& p) {
     std::vector<llvm::Type*> argTys;
-    for (auto& argTy : p.args) {
-        if (is_obj_ty(argTy)) {
-            argTys.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
-        } else {
-            llvm::Type* baseTy = gen.codegenType(argTy);
-            argTys.push_back(baseTy);
-        }
-    }
-
-    const RetTy& retTy = p.frtyp;
-    llvm::Type*  llRetTy;
-
-    if (retTy.tag == RetTyTag::RetVal && is_obj_ty(*retTy.val)) {
-        llRetTy = llvm::PointerType::getUnqual(*gen.ctxt);
-    } else {
-        llRetTy = gen.codegenRetType(p.frtyp);
-    }
+    for (auto& argTy : p.args)
+        argTys.push_back(gen.typeGen.codegenValueTy(argTy));
+    llvm::Type* llRetTy = gen.typeGen.codegenValueRetTy(p.frtyp);
 
     bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
 
@@ -119,13 +89,7 @@ void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
     llvmFields.reserve(cd.fields.size());
 
     for (auto& fld : cd.fields) {
-        if (is_obj_ty(fld.ftyp)) {
-            // obj types (structs/arrays) are stored as ptrs
-            llvmFields.push_back(llvm::PointerType::getUnqual(*gen.ctxt));
-        } else {
-            // primitives are stored directly
-            llvmFields.push_back(gen.codegenType(fld.ftyp));
-        }
+        llvmFields.push_back(gen.typeGen.codegenValueTy(fld.ftyp));
     }
 
     llvm::StructType* st = llvm::StructType::create(*gen.ctxt, cd.cname);

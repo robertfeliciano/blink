@@ -33,6 +33,13 @@ struct SCall {
     std::vector<std::unique_ptr<Exp>> args;
 };
 
+struct InterfaceSCall {
+    std::unique_ptr<Exp>               receiver;
+    unsigned                           slot;
+    std::vector<std::unique_ptr<Exp>> args;
+    RetTy                              ret;
+};
+
 struct If {
     std::unique_ptr<Exp>               cond;
     std::vector<std::unique_ptr<Stmt>> then_branch;
@@ -51,7 +58,7 @@ struct Free {
 struct Break {};
 struct Continue {};
 
-using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Free, Break, Continue>;
+using StmtVariant = std::variant<Assn, VDecl, Ret, SCall, If, While, Free, Break, Continue, InterfaceSCall>;
 
 struct Stmt {
     StmtVariant val;

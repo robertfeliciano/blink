@@ -54,6 +54,7 @@ let rec mangle_ty = function
   | D.TInt i -> mangle_int i
   | D.TFloat f -> mangle_float f
   | D.TRef (RClass cname) -> len_and_name cname
+  | D.TRef (RInterface name) -> "I" ^ len_and_name name
   | D.TRef RString -> "str"
   | D.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int.to_string sz
   | D.TRef (RFun (tys, r)) ->
@@ -126,7 +127,7 @@ let rec create_default_init t =
       (* D.Call (Id (default_constructor, TRef (RClass cname)), [], TRef (RClass cname)) *)
   | D.TRef (RFun _) -> desugar_error "Default functions not allowed."
   (* | D.TRef (RGeneric _) -> type_error stmt_n "Generic default init to come some" *)
-  | D.TRef (RPtr _) -> Null t
+  | D.TRef (RPtr _) | D.TRef (RInterface _) -> Null t
   | D.TRef (RArray (t, sz)) ->
       let lst = List.init sz (fun _ -> create_default_init t) in
       let t' = D.TRef (RArray (t, sz)) in

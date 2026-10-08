@@ -13,6 +13,10 @@ class TypeToLLGenerator {
     explicit TypeToLLGenerator(Generator& g) : gen(g) {}
 
     llvm::Type* codegenTy(const Ty& ty);
+    // Runtime values for classes and arrays are pointers; interfaces remain aggregates.
+    llvm::Type* codegenValueTy(const Ty& ty);
+    llvm::Type* codegenValueRetTy(const RetTy& ty);
+    llvm::StructType* getInterfaceType();
     llvm::Type* codegenRetTy(const RetTy& ty);
     llvm::Type* codegenRefTy(const RefTy& rt);
 

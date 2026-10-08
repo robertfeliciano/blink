@@ -22,6 +22,19 @@ let base_op = function
   | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
+let interface_receiver_ty = function
+  | D.Id (_, ty)
+  | Call (_, _, ty)
+  | Cast (_, ty)
+  | Proj (_, _, ty)
+  | Index (_, _, ty)
+  | Conditional (_, _, _, ty)
+  | InterfaceCall (_, _, _, ty) ->
+      ty
+  | InterfaceCast (_, _, name) -> D.TRef (RInterface name)
+  | Null ty -> ty
+  | _ -> desugar_error "Cannot determine interface receiver type."
+
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
   | Assn (lhs, op, rhs, t) when op <> Eq ->
@@ -134,6 +147,11 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
       cstmts @ [ While (cond', body') ]
+  | SCall (InterfaceMethod (receiver, slot, _), args, types, ret) ->
+      let setup, receiver, args =
+        desugar_interface_application receiver args types
+      in
+      setup @ [ D.InterfaceSCall (receiver, slot, args, convert_ret_ty ret) ]
   | SCall (Proj (inst, pname, cname, _t), args, types, ret) ->
       let istmts, inst' = desugar_exp inst in
       let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
@@ -201,6 +219,15 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
   | Array (elems, ty) ->
       let ss, elems' = List.map desugar_exp elems |> flatten in
       (ss, D.Array (elems', convert_ty ty))
+  | InterfaceCast (receiver, cname, iname) ->
+      let ss, receiver = desugar_exp receiver in
+      (ss, D.InterfaceCast (receiver, cname, iname))
+  | InterfaceMethod _ -> desugar_error "Interface method value requires a call."
+  | Call (InterfaceMethod (receiver, slot, _), args, types, ty) ->
+      let setup, receiver, args =
+        desugar_interface_application receiver args types
+      in
+      (setup, D.InterfaceCall (receiver, slot, args, convert_ty ty))
   | Cast (e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))
@@ -313,5 +340,27 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             (true_stmts, when_true'),
             (false_stmts, when_false'),
             convert_ty ty ) )
+
+and desugar_interface_application receiver args types =
+  (* Freeze each value before closure conversion can hoist a later argument's
+     setup. Full calls preserve receiver-first, left-to-right evaluation. *)
+  let setup, receiver = desugar_exp receiver in
+  let receiver_ty = interface_receiver_ty receiver in
+  let receiver_name = gensym "interface_receiver" in
+  let arguments =
+    List.map2
+      (fun arg ty ->
+        let setup, value = desugar_exp arg in
+        let ty = convert_ty ty in
+        let name = gensym "interface_arg" in
+        (setup @ [ D.Decl (name, ty, value, true) ], (name, ty)))
+      args types
+  in
+  let argument_setup, bindings = List.split arguments in
+  ( setup
+    @ [ D.Decl (receiver_name, receiver_ty, receiver, true) ]
+    @ List.concat argument_setup,
+    D.Id (receiver_name, receiver_ty),
+    List.map (fun (name, ty) -> D.Id (name, ty)) bindings )
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

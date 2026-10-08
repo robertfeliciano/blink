@@ -4,7 +4,7 @@ and you'll miss it...
 ## Imports and modules
 
 Each `.bl` file is a module. Imports introduce a local alias; only functions,
-function prototypes and classes marked `export` are accessible through it.
+function prototypes, classes and interfaces marked `export` are accessible through it.
 Private declarations remain usable inside their defining file.
 
 ```blink
@@ -44,6 +44,49 @@ wildcard imports, packages or runtime module initialization.
 
 The [module implementation notes](frontend/src/modules/README.md) describe
 compiler phase boundaries, tests and the future C++ runtime milestone.
+
+## Interfaces
+
+Interfaces declare method prototypes. A class explicitly implements an interface
+with `impl` and must define every declared method with exactly the same parameter
+types, in the same order, and the same return type. Parameter names may differ.
+
+```blink
+export interface Reading {
+    fun read() => i32;
+}
+
+class Sensor impl Reading {
+    let value: i32 = 10;
+    fun read() => i32 { return this.value; }
+}
+
+fun read_value(source: Reading) => i32 {
+    return source.read();
+}
+```
+
+An implementing class can be passed to an interface-typed parameter. Calls
+through the interface dispatch to the object's concrete implementation at
+runtime. Converting a class reference to an interface keeps the same object;
+changes made through its methods remain visible through the original reference.
+
+Interfaces can be exported and imported like classes, including qualified types
+and implementations such as `class Sensor impl contracts.Reading`. A class can
+implement multiple interfaces with a comma-separated list. Interfaces contain
+prototypes only; they cannot be instantiated or contain fields or method bodies.
+
+See [the interface guide](docs/interfaces.md) for runtime representation and
+ownership details.
+
+The [interface example](examples/interfaces/main.bl) imports an exported
+interface, chooses between two implementing classes at runtime, and passes the
+result to a function accepting that interface:
+
+```sh
+./compile -O2 examples/interfaces/main.bl
+./new_output.o
+```
 
 ## Develop with Docker
 

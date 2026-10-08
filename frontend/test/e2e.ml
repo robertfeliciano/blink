@@ -340,6 +340,268 @@ let test_underapplication (name, source) test_context =
       assert_bool "type errors must stop before LLVM emission"
         (not (Sys.file_exists "new_output.ll")))
 
+let interface_fixtures =
+  [
+    {
+      name = "interface-arguments-evaluated-left-to-right";
+      source =
+        {|interface I { fun apply(first: i32, callback: (i32) -> i32) => i32; }
+class C impl I {
+  fun apply(first: i32, callback: (i32) -> i32) => i32 { return first + callback(0); }
+}
+class Counter { let trace: i32 = 0; }
+fun mark(counter: Counter, digit: i32) => i32 {
+  counter.trace = counter.trace * 10 + digit; return digit;
+}
+fun make_callback(counter: Counter, digit: i32) => (i32) -> i32 {
+  let amount = mark(counter, digit);
+  return fn[amount](value) { return amount + value; };
+}
+fun main() => i32 {
+  let c = new C {}; let item: I = c; let counter = new Counter {};
+  let first = item.apply(mark(counter, 1), make_callback(counter, 2));
+  let second = item.apply(mark(counter, 3), make_callback(counter, 4));
+  item.apply(mark(counter, 5), make_callback(counter, 6));
+  let trace = counter.trace;
+  free c, counter;
+  if first == 3 and second == 7 and trace == 123456 { return 42; }
+  return 1;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-method-returned-closure";
+      source =
+        {|interface I { fun make(offset: i32) => (i32) -> i32; }
+class C impl I {
+  fun make(offset: i32) => (i32) -> i32 {
+    return fn[offset](value) { return offset + value; };
+  }
+}
+fun main() => i32 {
+  let c = new C {}; let item: I = c;
+  let add: (i32) -> i32 = item.make(2);
+  let result = add(40); free add, c; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-runtime-choice";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 20; } }
+class D impl I { fun value() => i32 { return 22; } }
+fun read(x: I) => i32 { return x.value(); }
+fun choose(c: C, d: D, useC: bool) => I {
+  let x: I = c;
+  if not useC { x = d; }
+  return x;
+}
+fun main() => i32 {
+  let c = new C {}; let d = new D {};
+  let result = read(choose(c, d, true)) + read(choose(c, d, false));
+  free c, d; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-void-dispatch-alias";
+      source =
+        {|interface I { fun add(amount: i32) => void; fun value() => i32; }
+class C impl I {
+  let n: i32 = 10;
+  fun value() => i32 { return n; }
+  fun add(amount: i32) => void { n += amount; }
+}
+fun mutate(x: I) => void { x.add(32); }
+fun main() => i32 {
+  let c = new C {}; let alias: I = c; mutate(alias);
+  let result = c.n; free c; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-field-array-return";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 20; } }
+class D impl I { fun value() => i32 { return 22; } }
+class Holder { let item: I = null; }
+fun make() => I { return new D {}; }
+fun main() => i32 {
+  let c = new C {}; let d: I = make();
+  let h = new Holder { item = c };
+  let items: [I; 2] = [h.item, d];
+  let same: [I; 2] = items as [I; 2];
+  let result = same[0].value() + same[1].value();
+  free c, d, h; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-multiple-implementations";
+      source =
+        {|interface Left { fun value() => i32; }
+interface Right { fun other() => i32; }
+class C impl Left, Right {
+  fun value() => i32 { return 20; }
+  fun other() => i32 { return 22; }
+}
+fun left(x: Left) => i32 { return x.value(); }
+fun right(x: Right) => i32 { return x.other(); }
+fun main() => i32 {
+  let c = new C {}; let result = left(c) + right(c); free c; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-receiver-evaluated-once";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 40; } }
+class Counter { let calls: i32 = 0; }
+fun get(c: C, counter: Counter) => I { counter.calls += 1; return c; }
+fun main() => i32 {
+  let c = new C {}; let counter = new Counter {};
+  let result = get(c, counter).value() + counter.calls * 2;
+  free c, counter; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-method-parameter-and-return";
+      source =
+        {|interface I { fun value() => i32; fun echo(other: I) => I; }
+class C impl I {
+  fun value() => i32 { return 20; }
+  fun echo(other: I) => I { return other; }
+}
+class D impl I {
+  fun value() => i32 { return 22; }
+  fun echo(other: I) => I { return other; }
+}
+fun main() => i32 {
+  let c = new C {}; let d = new D {}; let first: I = c;
+  let second: I = first.echo(d);
+  first.value();
+  let result = first.value() + second.value();
+  free c, d; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-null-field-and-default-local";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 42; } }
+class Holder { let item: I; }
+fun main() => i32 {
+  let missing: I; let holder = new Holder { item = null };
+  if missing != null { return 90; }
+  if holder.item != null { return 91; }
+  holder.item = new C {};
+  let result = holder.item.value(); free holder.item, holder; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-conditional-aggregate";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 20; } }
+class D impl I { fun value() => i32 { return 22; } }
+fun choose(c: C, d: D, condition: bool) => I {
+  let selected: I = condition ? c : d; return selected;
+}
+fun main() => i32 {
+  let c = new C {}; let d = new D {};
+  let result = choose(c, d, true).value() + choose(c, d, false).value();
+  free c, d; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-concrete-class-method-ABI";
+      source =
+        {|class Box { let n: i32 = 42; }
+interface I { fun echo(item: Box) => Box; }
+class C impl I { fun echo(item: Box) => Box { return item; } }
+fun main() => i32 {
+  let c = new C {}; let item: I = c; let box = new Box {};
+  let result = item.echo(box).n;
+  free c, box; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-receiver-before-lambda-argument";
+      source =
+        {|interface I { fun apply(f: (i32) -> i32) => i32; }
+class C impl I { fun apply(f: (i32) -> i32) => i32 { return f(20); } }
+class Counter { let calls: i32 = 0; }
+fun get(c: C, counter: Counter) => I {
+  counter.calls = counter.calls * 10 + 1; return c;
+}
+fun mark(counter: Counter) => i32 {
+  counter.calls = counter.calls * 10 + 2; return 10;
+}
+fun make_callback(counter: Counter) => (i32) -> i32 {
+  let amount = mark(counter);
+  return fn[amount](value) { return amount + value; };
+}
+fun main() => i32 {
+  let c = new C {}; let counter = new Counter {};
+  let result = get(c, counter).apply(make_callback(counter)) + counter.calls;
+  free c, counter; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-conversion-from-concrete-array";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { let n: i32; fun value() => i32 { return n; } }
+fun read(item: I) => i32 { return item.value(); }
+fun main() => i32 {
+  let c = new C { n = 20 }; let d = new C { n = 22 };
+  let concrete: [C; 2] = [c, d];
+  let result = read(concrete[0]) + read(concrete[1]);
+  free c, d; return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-null-equality-and-free";
+      source =
+        {|interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return 42; } }
+fun main() => i32 {
+  let empty: I = null;
+  let c = new C {}; let first: I = c; let second: I = c;
+  if empty != null { return 90; }
+  if first == null { return 91; }
+  if first != second { return 92; }
+  let result = first.value(); free first; return result;
+}|};
+      expected_exit = 42;
+    };
+  ]
+
+let test_interface_fixture optimization fixture context =
+  check_frontend_stages fixture;
+  let compiler = Native_test_support.executable_path "../src/blink.exe" in
+  Native_test_support.in_temp_dir
+    ~prefix:("blink-" ^ fixture.name ^ "-")
+    context
+    (fun () ->
+      Core.Out_channel.write_all "program.bl" ~data:fixture.source;
+      Native_test_support.assert_success_silently "interface compiler"
+        (Printf.sprintf "%s %s program.bl" (Filename.quote compiler)
+           optimization);
+      Native_test_support.assert_success "LLVM verification"
+        "llc --filetype=null new_output.ll -o /dev/null";
+      Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
+
 let test_parse_failure_stops_at_parser _ =
   let source = "fun main( => i32 { return 1; }" in
   match Parsing.Parse.parse_prog (Lexing.from_string source) with
@@ -462,6 +724,15 @@ let suite =
                 (fun ((name, _) as fixture) ->
                   name >:: test_underapplication fixture)
                 Call_arity_fixtures.underapplication;
+         "interface runtime dispatch"
+         >::: List.concat_map
+                (fun fixture ->
+                  List.map
+                    (fun optimization ->
+                      fixture.name ^ optimization
+                      >:: test_interface_fixture optimization fixture)
+                    [ "-O0"; "-O2" ])
+                interface_fixtures;
          "native execution" >::: executable_tests;
        ]
 

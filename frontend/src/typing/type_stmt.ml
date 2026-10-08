@@ -116,6 +116,15 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
             Typed_ast.(
               SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, ret_ty)),
             false )
+      | Ok
+          ( (Typed_ast.InterfaceMethod _ as callee),
+            arg_types,
+            typed_args,
+            ret_ty ) ->
+          (match ret_ty with
+          | Typed_ast.RetVoid -> ()
+          | _ -> type_warning stmt_n "Ignoring non-void function");
+          (tc, Typed_ast.SCall (callee, typed_args, arg_types, ret_ty), false)
       | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
       let typed_callee, typ = type_exp tc f enclosing_class in
@@ -311,6 +320,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           check_expected_ty expected rt e;
           Typed_ast.
             (Call (Proj (tobj, mth, cname, t), typed_args, arg_types, rt), rt)
+      | Ok ((Typed_ast.InterfaceMethod _ as callee), types, args, RetVal ret) ->
+          check_expected_ty expected ret e;
+          (Typed_ast.Call (callee, args, types, ret), ret)
       | Error msg -> type_error e msg
       | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
@@ -322,8 +334,23 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
       | _ -> type_error e "Unreachable state.?")
   | Bop (binop, e1, e2) -> (
-      let te1, lty = type_exp tc e1 enclosing_class in
-      let te2, rty = type_exp tc e2 enclosing_class in
+      let te1, lty, te2, rty =
+        match (binop, e1.elt, e2.elt) with
+        | (Eqeq | Neq), Null, Null ->
+            type_error e "Cannot infer types for two null operands."
+        | (Eqeq | Neq), Null, _ ->
+            let te2, rty = type_exp tc e2 enclosing_class in
+            let te1, lty = type_exp_as rty tc e1 enclosing_class in
+            (te1, lty, te2, rty)
+        | (Eqeq | Neq), _, Null ->
+            let te1, lty = type_exp tc e1 enclosing_class in
+            let te2, rty = type_exp_as lty tc e2 enclosing_class in
+            (te1, lty, te2, rty)
+        | _ ->
+            let te1, lty = type_exp tc e1 enclosing_class in
+            let te2, rty = type_exp tc e2 enclosing_class in
+            (te1, lty, te2, rty)
+      in
       let promote te from_ty to_ty =
         if equal_ty from_ty to_ty then te else Typed_ast.Cast (te, to_ty)
       in
@@ -469,6 +496,11 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
            Erase it here so field projection retains its ordinary lvalue. *)
         match tty with
         | TRef (RClass _) -> (te, tty)
+        | TRef (RInterface iname) -> (
+            match e_ty with
+            | TRef (RClass cname) ->
+                (Typed_ast.InterfaceCast (te, cname, iname), tty)
+            | _ -> (te, tty))
         | _ -> (Typed_ast.Cast (te, tty), tty)
       else
         type_error ec
@@ -525,6 +557,8 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
             t_scope)
   | ObjInit (class_name, inits) ->
       let cname = resolved_class_name class_name in
+      if Option.is_some (Tctxt.lookup_interface_option cname tc) then
+        type_error class_name ("Cannot construct interface " ^ cname ^ ".");
       let cloc = class_name.loc in
       let cfields, _methods =
         match Tctxt.lookup_class_option cname tc with
@@ -587,6 +621,15 @@ and type_projection (expected : Typed_ast.ty option) (tc : Tctxt.t)
       | None ->
           type_error projection
             ("Class " ^ class_id ^ " has no member field " ^ field))
+  | Typed_ast.TRef (RInterface iname) -> (
+      match Tctxt.lookup_interface_method_option iname field tc with
+      | Some _ ->
+          type_error projection
+            "Interface methods must be called directly; method values are not \
+             supported."
+      | None ->
+          type_error projection
+            ("Interface " ^ iname ^ " has no member method " ^ field))
   | _ -> type_error obj "Must project field of a class."
 
 and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
@@ -596,6 +639,14 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
     | Typed_ast.Int (value, _), Typed_ast.TInt int_ty ->
         type_integer_constant e value int_ty
     | _ when equal_ty actual expected -> (te, expected)
+    | _, Typed_ast.TRef (RInterface iname) -> (
+        match actual with
+        | TRef (RClass cname) when Tctxt.implements cname iname tc ->
+            (Typed_ast.InterfaceCast (te, cname, iname), expected)
+        | _ ->
+            type_error e
+              ("Expected implementing class for interface " ^ iname ^ ", got "
+             ^ Printer.show_ty actual ^ "."))
     | _ when is_number actual && is_number expected ->
         let promoted = meet_number e (actual, expected) in
         if equal_ty promoted expected then
@@ -682,6 +733,19 @@ and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
                       typed_args,
                       rt ))
           | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
+      | Typed_ast.TRef (RInterface iname) -> (
+          match Tctxt.lookup_interface_method_option iname mth tc with
+          | None -> Error ("Interface " ^ iname ^ " has no member method " ^ mth)
+          | Some (slot, (_, ret, headers)) -> (
+              let typ = Typed_ast.TRef (RFun (List.map fst headers, ret)) in
+              match type_func_app args typ from_exp tc enclosing_class with
+              | Error message -> Error message
+              | Ok (types, args, ret) ->
+                  Ok
+                    ( Typed_ast.InterfaceMethod (tobj, slot, typ),
+                      types,
+                      args,
+                      ret )))
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."
 
@@ -755,6 +819,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
               ("Must provide a default constructor for " ^ cname ^ " class.")
       in
       constructor
+  | Typed_ast.TRef (RInterface iname) -> Typed_ast.Null (RInterface iname)
   | Typed_ast.TRef (RFun _) ->
       type_error stmt_n "Default functions not allowed."
   | Typed_ast.TRef (RArray (t, sz)) as array_ty ->

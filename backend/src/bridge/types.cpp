@@ -76,6 +76,11 @@ RefTy convert_ref_ty(value v) {
                 ref.cname = std::string(String_val(Field(v, 0)));
                 break;
             }
+            case Constants::REFTY_Interface: {
+                ref.tag = RefTyTag::RInterface;
+                ref.cname = String_val(Field(v, 0));
+                break;
+            }
             case Constants::REFTY_Fun: {
                 ref.tag   = RefTyTag::RFun;
                 value tys = Field(v, 0);
@@ -139,5 +144,5 @@ RetTy convert_ret_ty(value v) {
 }
 
 bool is_obj_ty(const Ty& t) {
-    return t.tag == TyTag::TRef && (t.ref_ty->tag == RefTyTag::RClass || t.ref_ty->tag == RefTyTag::RClass);
+    return t.tag == TyTag::TRef && (t.ref_ty->tag == RefTyTag::RClass || t.ref_ty->tag == RefTyTag::RArray);
 }

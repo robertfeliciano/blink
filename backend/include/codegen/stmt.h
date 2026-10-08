@@ -22,6 +22,7 @@ class StmtToLLVisitor {
     llvm::Value* operator()(const Ret& s);
     llvm::Value* operator()(const SCall& s);
     llvm::Value* operator()(const If& s);
+    llvm::Value* operator()(const InterfaceSCall& s);
     llvm::Value* operator()(const While& s);
     llvm::Value* operator()(const Break& s);
     llvm::Value* operator()(const Continue& s);

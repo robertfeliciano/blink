@@ -46,6 +46,25 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "exported interface runtime dispatch"
+             [
+               ( "contracts.bl",
+                 "export interface I { fun value() => i32; } export fun \
+                  read(item: I) => i32 { return item.value(); }" );
+               ( "first.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 20; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "second.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 22; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "main.bl",
+                 "import contracts; import first; import second; fun main() => \
+                  i32 { let a: contracts.I = first.make(); let b: contracts.I \
+                  = second.make(); let result = contracts.read(a) + \
+                  contracts.read(b); free a, b; return result; }" );
+             ];
            native
              ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
              "module example"

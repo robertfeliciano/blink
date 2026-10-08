@@ -13,6 +13,40 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "exported interfaces and qualified implementation"
+           [
+             ( [ "contracts" ],
+               "export interface I { fun value() => i32; } export fun read(x: \
+                I) => i32 { return x.value(); }" );
+             ( [ "main" ],
+               "import contracts; class C impl contracts.I { fun value() => \
+                i32 { return 42; } } fun main() => i32 { let x: contracts.I = \
+                new C {}; return contracts.read(x); }" );
+           ];
+         types "same interface spelling in distinct modules"
+           [
+             ([ "left" ], "export interface I { fun value() => i32; }");
+             ([ "right" ], "export interface I { fun value() => i32; }");
+             ( [ "main" ],
+               "import left; import right; class C impl left.I, right.I { fun \
+                value() => i32 { return 42; } } fun main() => i32 { let l: \
+                left.I = new C {}; let r: right.I = new C {}; return \
+                l.value(); }" );
+           ];
+         rejects "private interface cannot be implemented" "is private"
+           [
+             ([ "contracts" ], "interface I { fun value() => i32; }");
+             ( [ "main" ],
+               "import contracts; class C impl contracts.I { fun value() => \
+                i32 { return 42; } } fun main() => i32 { return 0; }" );
+           ];
+         rejects "private interface cannot be annotated" "is private"
+           [
+             ([ "contracts" ], "interface I { fun value() => i32; }");
+             ( [ "main" ],
+               "import contracts; fun read(x: contracts.I) => i32 { return \
+                x.value(); } fun main() => i32 { return 0; }" );
+           ];
          ( "symbol encoding" >:: fun _ ->
            let encode owner name =
              match Modules.Module_symbols.encode ~owner ~name with
@@ -250,7 +284,7 @@ let suite =
            [ helper; main "return helper.missing();" ];
          rejects "module is not a value" "not a value"
            [ helper; main "let value = helper; return 0;" ];
-         rejects "function is not a type" "not a class"
+         rejects "function is not a type" "not the required class or interface type"
            [ helper; main "let value: helper.answer; return 0;" ];
          rejects "class is not a function" "not a function"
            [

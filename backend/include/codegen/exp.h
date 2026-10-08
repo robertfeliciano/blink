@@ -30,6 +30,9 @@ class ExpToLLVisitor {
     Value* operator()(const ENull& e);
     Value* operator()(const EConditional& e);
 
+    Value* operator()(const EInterfaceCast& e);
+    Value* operator()(const EInterfaceCall& e);
+
     static const Ty& getExpTy(const Exp& exp) {
         return std::visit([](const auto& node) -> const Ty& { return node.ty; }, exp.val);
     };

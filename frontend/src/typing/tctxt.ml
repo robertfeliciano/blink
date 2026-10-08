@@ -18,10 +18,20 @@ type t = {
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
+  interfaces : (id * method_header list) list;
+  implementations : (id * id list) list;
   protos : ctxt; (* id -> type and defined_yet *)
 }
 
-let empty = { locals = []; globals = []; classes = []; protos = [] }
+let empty =
+  {
+    locals = [];
+    globals = [];
+    classes = [];
+    protos = [];
+    interfaces = [];
+    implementations = [];
+  }
 
 let show_tys tctxt =
   String.concat "\n"
@@ -104,3 +114,18 @@ let lookup_method_option c_name m_name c =
   match lookup_class_option c_name c with
   | None -> None
   | Some (_fields, methods) -> lookup_method_aux m_name methods
+
+let lookup_interface_option id c = List.assoc_opt id c.interfaces
+
+let implements cname iname c =
+  match List.assoc_opt cname c.implementations with
+  | Some names -> List.mem iname names
+  | None -> false
+
+let lookup_interface_method_option iname mname c =
+  match lookup_interface_option iname c with
+  | None -> None
+  | Some methods ->
+      List.find_opt
+        (fun (_, (name, _, _)) -> name = mname)
+        (List.mapi (fun slot method_ -> (slot, method_)) methods)

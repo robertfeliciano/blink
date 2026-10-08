@@ -91,7 +91,7 @@ They are ignored and should not be committed.
 The module implementation lives in `frontend/src/modules/` as the standalone
 `blink.modules` library. DFS loads a dependency-first graph with cycle detection.
 Per-file name resolution enforces exports and lexical scope before combining
-declarations for typing. Module-owned symbols and classes have stable internal
+declarations for typing. Module-owned symbols, classes and interfaces have stable internal
 identities; entry `main` and `@C` symbols retain exact names. Shared C signatures
 are reconciled by typing. No module data crosses the native FFI.
 See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
@@ -113,7 +113,7 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
-- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, and prototypes.
+- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces, and prototypes.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
 - `frontend/src/typing/dune` exposes the typing library.
@@ -122,6 +122,16 @@ Type failures are reported with source locations through `type_error` helpers.
 Keep constness and class context intact when extending context operations.
 Function prototypes and definitions are collected before bodies are checked.
 Classes track fields and method headers in a separate class context.
+
+Language interfaces declare method prototypes; classes opt in with `impl` and
+must define each method with exactly matching ordered parameter and return
+types. Interfaces support `export` and qualified imported names. Typing inserts
+class-to-interface conversions, and lowering supplies ordered method tables and
+interface calls. See `docs/interfaces.md` and `examples/interfaces/`.
+Runtime interface values contain an object pointer and a shared method-table
+pointer, passed as an LLVM aggregate. Conversions preserve object identity and
+do not allocate a wrapper. Keep interface value types distinct from class and
+array types whose LLVM values are pointers.
 
 ### Desugaring
 
@@ -186,6 +196,7 @@ The generated module targets the build host and uses position-independent code.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
+- `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
 - `frontend/test/e2e.ml` compiles source text through the complete pipeline.
 - `frontend/test/backend_tests.ml` tests bridge/codegen with constructed ASTs.
 - `frontend/test/backend_fixture_compiler.ml` builds those backend fixtures.

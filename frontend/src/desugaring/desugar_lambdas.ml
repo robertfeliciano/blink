@@ -72,6 +72,42 @@ let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
 let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
   List.fold_left (fun acc cd -> add_cdecl cd acc) old_cs new_cs
 
+let lower_call_result cs fs stmts ty make_call =
+  match ty with
+  | TRef (RFun (arg_tys, rty)) ->
+      let struct_ty, declaration = transform_ty ty cs in
+      let cs =
+        match declaration with Some cd -> add_cdecl cd cs | None -> cs
+      in
+      let value = gensym "returned_closure" in
+      let function_pointer = gensym "returned_fptr" in
+      let environment = gensym "returned_env" in
+      let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
+      let function_pointer_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
+      let setup =
+        [
+          Decl (value, struct_ty, make_call struct_ty, true);
+          Decl
+            ( function_pointer,
+              function_pointer_ty,
+              Proj (Id (value, struct_ty), "lambdaptr", function_pointer_ty),
+              true );
+          Decl
+            ( environment,
+              i8_ptr,
+              Proj (Id (value, struct_ty), "envptr", i8_ptr),
+              true );
+        ]
+      in
+      ( cs,
+        fs,
+        stmts @ setup,
+        Some (value, struct_ty),
+        Some function_pointer,
+        Id (value, struct_ty),
+        Some environment )
+  | _ -> (cs, fs, stmts, None, None, make_call ty, None)
+
 (** Closure conversion produces:
     - an environment struct containing captured values;
     - a lifted function whose first argument is an opaque environment pointer;
@@ -227,6 +263,22 @@ and lift_lambdas_from_exps (cs : cdecl list)
         Some res.function_pointer,
         Id (fst res.value, snd res.value),
         Some res.environment )
+  | InterfaceCast (receiver, cname, iname) ->
+      let ncs, nfs, ns, _, _, receiver, _ =
+        lift_lambdas_from_exps cs lctxt None receiver
+      in
+      (ncs, nfs, ns, None, None, InterfaceCast (receiver, cname, iname), None)
+  | InterfaceCall (receiver, slot, args, ty) ->
+      let ncs, nfs, ns, _, _, receiver, _ =
+        lift_lambdas_from_exps cs lctxt None receiver
+      in
+      let (ncs, nfs, ns), args =
+        List.fold_left_map
+          (lift_lambdas_from_list lctxt None)
+          (ncs, nfs, ns) args
+      in
+      lower_call_result ncs nfs ns ty (fun ty ->
+          InterfaceCall (receiver, slot, args, ty))
   | Call (callee, es, ty) -> (
       let (ncs, nfs, nstmts), es' =
         List.fold_left_map
@@ -250,41 +302,9 @@ and lift_lambdas_from_exps (cs : cdecl list)
             Some function_pointer,
             transformed_call,
             Some environment )
-      | None -> (
-          let base_call = Call (callee, es', ty) in
-          match ty with
-          | TRef (RFun (arg_tys, rty)) ->
-              (* calling function that returns a lambda *)
-              let tmp_v = "%fn" in
-              let fptr_v = gensym (tmp_v ^ "_fptr") in
-              let env_v = gensym (tmp_v ^ "_env") in
-              let struct_ty, _ = transform_ty ty ncs in
-              let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-              let l_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
-
-              let binding_stmts =
-                [
-                  Decl (tmp_v, struct_ty, base_call, true);
-                  Decl
-                    ( fptr_v,
-                      l_ptr_ty,
-                      Proj (Id (tmp_v, struct_ty), "lambdaptr", l_ptr_ty),
-                      true );
-                  Decl
-                    ( env_v,
-                      i8_ptr,
-                      Proj (Id (tmp_v, struct_ty), "envptr", i8_ptr),
-                      true );
-                ]
-              in
-              ( ncs,
-                nfs,
-                nstmts @ binding_stmts,
-                Some (tmp_v, struct_ty),
-                Some fptr_v,
-                Id (tmp_v, struct_ty),
-                Some env_v )
-          | _ -> (ncs, nfs, nstmts, None, None, base_call, None)))
+      | None ->
+          lower_call_result ncs nfs nstmts ty (fun ty -> Call (callee, es', ty))
+      )
   | Id (i, ty) as e -> (
       match List.assoc_opt i lctxt with
       | Some _ ->
@@ -517,6 +537,20 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
           in
           (cs', nfs @ fs, lctxt, ns @ [ Ret (Some e') ])
       | None -> (cs, fs, lctxt, [ Ret rval ]))
+  | InterfaceSCall (receiver, slot, args, ret) ->
+      let ncs, nfs, ns, _, _, receiver, _ =
+        lift_lambdas_from_exps cs lctxt None receiver
+      in
+      let (ncs, nfs, ns), args =
+        List.fold_left_map
+          (lift_lambdas_from_list lctxt None)
+          (ncs, nfs, ns) args
+      in
+      let ret, declaration = transform_ret_ty ret ncs in
+      let ncs =
+        match declaration with Some cd -> add_cdecl cd ncs | None -> ncs
+      in
+      (ncs, nfs @ fs, lctxt, ns @ [ InterfaceSCall (receiver, slot, args, ret) ])
   | SCall (i, es) ->
       let (ecs, efs, ess), es' =
         List.fold_left_map (lift_lambdas_from_list lctxt None) (cs, [], []) es

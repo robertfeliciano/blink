@@ -30,7 +30,7 @@ struct RetTy {
     std::unique_ptr<Ty> val; // for RetVal
 };
 
-enum class RefTyTag { RString, RArray, RClass, RFun, RPtr };
+enum class RefTyTag { RString, RArray, RClass, RFun, RPtr, RInterface };
 
 struct RefTy {
     RefTyTag tag;
@@ -43,7 +43,7 @@ struct RefTy {
     std::unique_ptr<Ty> inner;
     int                 size = 0;
 
-    // for RClass
+    // for RClass or RInterface
     std::string cname;
 
     // for RPtr

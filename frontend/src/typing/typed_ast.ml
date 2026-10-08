@@ -11,6 +11,7 @@ and ref_ty =
   | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
+  | RInterface of id
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -81,6 +82,8 @@ type exp =
       * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
   | Conditional of exp * exp * exp * ty
+  | InterfaceCast of exp * id * id
+  | InterfaceMethod of exp * int * ty
 
 and vdecl = id * ty * exp * bool
 (* and ldecl = id * ref_ty * exp *)
@@ -140,4 +143,9 @@ type proto = {
 }
 
 type program =
-  | Prog of Util.Optimization_level.t * fdecl list * cdecl list * proto list
+  | Prog of
+      Util.Optimization_level.t
+      * fdecl list
+      * cdecl list
+      * proto list
+      * (id * proto list) list

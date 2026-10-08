@@ -30,7 +30,7 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
   }
 
 let desugar_program (prog : Typed.program) : program =
-  let (Prog (optimization_level, fns, cns, pns)) = prog in
+  let (Prog (optimization_level, fns, cns, pns, interfaces)) = prog in
   let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
   let extracted_methods, structs = List.split (List.map desugar_class cns) in
@@ -50,7 +50,51 @@ let desugar_program (prog : Typed.program) : program =
       (structs, []) initial_fn_list
   in
 
-  Prog (optimization_level, final_fns, final_cs, desugared_protos)
+  let interfaces =
+    List.map
+      (fun (name, methods) -> (name, List.map desugar_proto methods))
+      interfaces
+  in
+  let implementations =
+    List.concat_map
+      (fun (c : Typed.cdecl) ->
+        List.map
+          (fun name ->
+            let methods = List.assoc name interfaces in
+            let symbols =
+              List.map
+                (fun (p : proto) ->
+                  mangle_name ~enclosing_class:c.cname p.fname
+                    (TRef (RClass c.cname) :: p.args)
+                    p.frtyp)
+                methods
+            in
+            (c.cname, name, symbols))
+          c.impls)
+      cns
+  in
+  let interfaces =
+    List.map
+      (fun (name, methods) ->
+        ( name,
+          List.map
+            (fun (p : proto) ->
+              {
+                p with
+                args =
+                  List.map (fun ty -> fst (transform_ty ty final_cs)) p.args;
+                frtyp = fst (transform_ret_ty p.frtyp final_cs);
+              })
+            methods ))
+      interfaces
+  in
+  Prog
+    ( optimization_level,
+      final_fns,
+      final_cs,
+      desugared_protos,
+      interfaces,
+      implementations )
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

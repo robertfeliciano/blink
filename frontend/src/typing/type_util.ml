@@ -119,8 +119,10 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
         type_error l "array length is too large for this target"
       else typecheck_ty l tc t
   | RClass c ->
-      if None = Tctxt.lookup_class_option (resolved_class_name c) tc then
-        type_error c "class undefined"
+      if
+        None = Tctxt.lookup_class_option (resolved_class_name c) tc
+        && None = Tctxt.lookup_interface_option (resolved_class_name c) tc
+      then type_error c "class undefined"
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt
@@ -129,15 +131,31 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
 
+let rec resolve_interface_ty tc = function
+  | Typed_ast.TRef (RClass name)
+    when Option.is_some (Tctxt.lookup_interface_option name tc) ->
+      Typed_ast.TRef (RInterface name)
+  | TRef (RArray (ty, size)) -> TRef (RArray (resolve_interface_ty tc ty, size))
+  | TRef (RFun (args, ret)) ->
+      TRef
+        (RFun
+           ( List.map (resolve_interface_ty tc) args,
+             resolve_interface_ret_ty tc ret ))
+  | ty -> ty
+
+and resolve_interface_ret_ty tc = function
+  | Typed_ast.RetVoid -> Typed_ast.RetVoid
+  | RetVal ty -> RetVal (resolve_interface_ty tc ty)
+
 let validate_and_convert_ty (node : 'a Ast.node) (tc : Tctxt.t) (ty : Ast.ty) :
     Typed_ast.ty =
   typecheck_ty node tc ty;
-  Conversions.convert_ty ty
+  resolve_interface_ty tc (Conversions.convert_ty ty)
 
 let validate_and_convert_ret_ty (node : 'a Ast.node) (tc : Tctxt.t)
     (ret_ty : Ast.ret_ty) : Typed_ast.ret_ty =
   typecheck_ret_ty node tc ret_ty;
-  Conversions.convert_ret_ty ret_ty
+  resolve_interface_ret_ty tc (Conversions.convert_ret_ty ret_ty)
 
 let validate_and_convert_signature (node : 'a Ast.node) (tc : Tctxt.t)
     (args : (Ast.ty * id) list) (ret_ty : Ast.ret_ty) :
@@ -256,7 +274,7 @@ and equal_ref_ty (r1 : Typed_ast.ref_ty) (r2 : Typed_ast.ref_ty) : bool =
   | RArray (t1, sz1), RArray (t2, sz2) -> sz1 = sz2 && equal_ty t1 t2
   | RFun (params1, ret1), RFun (params2, ret2) ->
       lists_equal_exact equal_ty params1 params2 && equal_ret_ty ret1 ret2
-  | RClass c1, RClass c2 -> String.equal c1 c2
+  | RClass c1, RClass c2 | RInterface c1, RInterface c2 -> String.equal c1 c2
   | _ -> false
 
 and equal_ret_ty (r1 : Typed_ast.ret_ty) (r2 : Typed_ast.ret_ty) : bool =
@@ -280,11 +298,14 @@ and subtype_ref (tc : Tctxt.t) (t1 : Typed_ast.ref_ty) (t2 : Typed_ast.ref_ty) :
     bool =
   match (t1, t2) with
   | RString, RString -> true
-  | RClass left, RClass right -> left = right
-  | RArray (t1', sz1), RArray (t2', sz2) -> sz1 = sz2 && subtype tc t1' t2'
+  | RClass left, RClass right | RInterface left, RInterface right ->
+      left = right
+  | RClass cname, RInterface iname -> Tctxt.implements cname iname tc
+  | RArray (t1', sz1), RArray (t2', sz2) -> sz1 = sz2 && equal_ty t1' t2'
   | RFun (pty1, rty1), RFun (pty2, rty2) ->
-      let contrav_params = lists_equal_exact equal_ty pty2 pty1 in
-      contrav_params && subtype_ret_ty tc rty1 rty2
+      (* Function casts preserve the callable ABI and do not synthesize a wrapper
+         to convert results, including concrete references to interfaces. *)
+      lists_equal_exact equal_ty pty1 pty2 && equal_ret_ty rty1 rty2
   | _ -> false
 
 and subtype_ret_ty (tc : Tctxt.t) (t1 : Typed_ast.ret_ty)

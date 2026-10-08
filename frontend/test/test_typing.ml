@@ -635,7 +635,7 @@ let test_matching_prototype_and_definition _ =
      fun main() => i32 { return identity(7); }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, []) -> ()
+  | Typed.Prog (_, _, _, [], []) -> ()
   | _ -> assert_failure "resolved prototype should not be emitted"
 
 let test_matching_void_prototype_and_definition _ =
@@ -665,7 +665,7 @@ let test_external_prototype_is_defined _ =
      fun main() => i32 { return 0; }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [ _ ]) -> ()
+  | Typed.Prog (_, _, _, [ _ ], []) -> ()
   | _ -> assert_failure "external prototype should be emitted"
 
 let test_declared_source_types_are_validated _ =

@@ -108,6 +108,15 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
         return ty.int_ty->tag == IntTyTag::Unsigned;
     };
 
+    if (e.op == BinOp::Eqeq || e.op == BinOp::Neq) {
+        const Ty& lhsTy = getExpTy(*e.left);
+        const Ty& rhsTy = getExpTy(*e.right);
+        if (lhsTy.tag == TyTag::TRef && lhsTy.ref_ty->tag == RefTyTag::RInterface)
+            lhs = gen.interfaceObject(lhs);
+        if (rhsTy.tag == TyTag::TRef && rhsTy.ref_ty->tag == RefTyTag::RInterface)
+            rhs = gen.interfaceObject(rhs);
+    }
+
     bool lhsUnsigned = isUnsignedIntTy(getExpTy(*e.left));
     bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
 
@@ -293,7 +302,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         args.push_back(val);
 
         const Ty& argTy = gen.getExpTy(*arg);
-        argTys.push_back(gen.codegenType(argTy));
+        argTys.push_back(gen.typeGen.codegenValueTy(argTy));
     }
 
     const std::string& calleeId = e.callee;
@@ -315,7 +324,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
                 calleeSlot,
                 calleeId + "_load");
 
-        llvm::Type* retTy = gen.codegenType(e.ty);
+        llvm::Type* retTy = gen.typeGen.codegenValueTy(e.ty);
 
         // get function type
         llvm::FunctionType* fnTy =
@@ -331,9 +340,9 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
-    llvm::Type* resultTy = gen.codegenType(e.ty);
+    llvm::Type* resultTy = gen.typeGen.codegenValueTy(e.ty);
 
-    if (resultTy->isAggregateType()) {
+    if (e.ty.tag == TyTag::TRef && e.ty.ref_ty->tag == RefTyTag::RArray) {
         // some kind of collection, like an array
         return elemPtr;
     } else {
@@ -348,8 +357,8 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
     Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
 
-    llvm::Type* innerTy     = arrTy->getArrayElementType();
-    bool        isAggregate = innerTy->isAggregateType();
+    llvm::Type* innerTy = arrTy->getArrayElementType();
+    bool isAggregate = e.ty.ref_ty->inner->tag == TyTag::TRef && e.ty.ref_ty->inner->ref_ty->tag == RefTyTag::RArray;
 
     llvm::DataLayout dl         = gen.mod->getDataLayout();
     Value*           size       = nullptr;
@@ -389,7 +398,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
     }
 
     llvm::Type* sourceTy = source->getType();
-    llvm::Type* destTy   = gen.codegenType(e.ty);
+    llvm::Type* destTy   = gen.typeGen.codegenValueTy(e.ty);
 
     if (sourceTy == destTy) {
         return source;
@@ -449,13 +458,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
 Value* ExpToLLVisitor::operator()(const EProj& e) {
     Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
-    llvm::Type* fieldTy;
-    if (is_obj_ty(e.ty)) {
-        // load a pointer for obj (struct/array) types
-        fieldTy = llvm::PointerType::getUnqual(*gen.ctxt);
-    } else {
-        fieldTy = gen.codegenType(e.ty);
-    }
+    llvm::Type* fieldTy = gen.typeGen.codegenValueTy(e.ty);
 
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
@@ -498,12 +501,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
         const Field& fd = classDecl.fields[idx];
 
-        llvm::Type* storageTy;
-        if (is_obj_ty(fd.ftyp)) {
-            storageTy = llvm::PointerType::getUnqual(*gen.ctxt);
-        } else {
-            storageTy = gen.codegenType(fd.ftyp);
-        }
+        llvm::Type* storageTy = gen.typeGen.codegenValueTy(fd.ftyp);
 
         for (auto& stmtPtr : fd.prelude) {
             // TODO think this goes with codegen exp of fields...
@@ -528,15 +526,10 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     return objPtr;
 }
 
-static llvm::Type* codegenExpResultType(Generator& gen, const Ty& ty) {
-    llvm::Type* result_type = gen.codegenType(ty);
-    if (result_type->isAggregateType())
-        return llvm::PointerType::getUnqual(*gen.ctxt);
-    return result_type;
-}
-
 Value* ExpToLLVisitor::operator()(const ENull& e) {
-    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+    llvm::Type* result_type = gen.typeGen.codegenValueTy(e.ty);
+    if (e.ty.tag == TyTag::TRef && e.ty.ref_ty->tag == RefTyTag::RInterface)
+        return llvm::Constant::getNullValue(result_type);
     auto*       pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
     if (!pointer_type)
         throw std::runtime_error("Null expression must have a reference type");
@@ -585,7 +578,7 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
     gen.builder->CreateBr(merge_block);
 
     gen.builder->SetInsertPoint(merge_block);
-    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+    llvm::Type* result_type = gen.typeGen.codegenValueTy(e.ty);
 
     if (then_value->getType() != result_type || else_value->getType() != result_type)
         throw std::runtime_error("Conditional expression branch value does not match its declared type");
@@ -594,4 +587,18 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
     result->addIncoming(then_value, then_end);
     result->addIncoming(else_value, else_end);
     return result;
+}
+
+Value* ExpToLLVisitor::operator()(const EInterfaceCast& e) {
+    Value* object = gen.codegenExp(*e.expr);
+    auto table = gen.interfaceTables.find({e.cname, e.iname});
+    if (table == gen.interfaceTables.end())
+        throw std::runtime_error("Missing interface implementation: " + e.cname + " impl " + e.iname);
+    Value* value = llvm::UndefValue::get(gen.typeGen.getInterfaceType());
+    value = gen.builder->CreateInsertValue(value, object, {0}, "interface_object");
+    return gen.builder->CreateInsertValue(value, table->second, {1}, "interface_value");
+}
+
+Value* ExpToLLVisitor::operator()(const EInterfaceCall& e) {
+    return gen.codegenInterfaceCall(*e.receiver, e.slot, e.args);
 }

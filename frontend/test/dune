@@ -28,7 +28,12 @@
 
 (test
  (name frontend_tests)
- (modules frontend_tests test_typing test_parsing test_desugaring)
+ (modules
+  frontend_tests
+  test_typing
+  test_parsing
+  test_desugaring
+  test_interfaces)
  (libraries
   blink.parsing
   blink.desugaring

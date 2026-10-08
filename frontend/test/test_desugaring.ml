@@ -22,6 +22,7 @@ let function_program body =
         };
       ],
       [],
+      [],
       [] )
 
 let desugar_exn program =
@@ -33,7 +34,7 @@ let desugar_exn program =
            (Core.Error.to_string_hum error))
 
 let only_function_body = function
-  | DA.Prog (_, [ fn ], [], []) -> fn.body
+  | DA.Prog (_, [ fn ], [], [], [], []) -> fn.body
   | program ->
       assert_failure
         (Printf.sprintf "expected one function and no declarations:\n%s"
@@ -123,11 +124,13 @@ let test_class_method_extraction _ =
       methods = [ method_ ];
     }
   in
-  match desugar_exn (Prog (optimization_level, [], [ class_ ], [])) with
+  match desugar_exn (Prog (optimization_level, [], [ class_ ], [], [])) with
   | DA.Prog
       ( _,
         [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
         [ { cname = "Box"; fields = [ { fieldName = "value"; _ } ]; _ } ],
+        [],
+        [],
         [] ) ->
       assert_bool "method name should be mangled" (fname <> "get")
   | program ->
@@ -164,7 +167,7 @@ let test_optimization_level_propagation _ =
   let requested = Util.Optimization_level.O3 in
   let typed =
     match Typing.Type.type_prog ~optimization_level:requested ast with
-    | Ok (Typing.Typed_ast.Prog (actual, _, _, _) as typed) ->
+    | Ok (Typing.Typed_ast.Prog (actual, _, _, _, _) as typed) ->
         assert_equal ~msg:"type checker optimization level" requested actual;
         typed
     | Error error ->
@@ -173,7 +176,7 @@ let test_optimization_level_propagation _ =
              (Core.Error.to_string_hum error))
   in
   match desugar_exn typed with
-  | DA.Prog (actual, _, _, _) ->
+  | DA.Prog (actual, _, _, _, _, _) ->
       assert_equal ~msg:"desugarer optimization level" requested actual
 
 let test_inline_propagation _ =
@@ -181,7 +184,7 @@ let test_inline_propagation _ =
     "inline fun increment(value: i32) => i32 { return value + 1; }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, [ fn ], [], []) ->
+  | DA.Prog (_, [ fn ], [], [], [], []) ->
       assert_bool "desugaring should preserve inline functions" fn.inline
   | program ->
       assert_failure
@@ -227,7 +230,7 @@ let test_lambda_lifting _ =
      }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, []) ->
+  | DA.Prog (_, functions, classes, [], [], []) ->
       assert_bool "lambda should produce a lifted function"
         (List.length functions > 1);
       assert_bool "lambda should produce closure structs"
@@ -257,6 +260,9 @@ let rec exp_contains_lambda (exp : DA.exp) =
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index
+  | DA.InterfaceCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
+  | DA.InterfaceCast (value, _, _) -> exp_contains_lambda value
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
 and stmt_contains_lambda (stmt : DA.stmt) =
@@ -265,6 +271,8 @@ and stmt_contains_lambda (stmt : DA.stmt) =
   | DA.Decl (_, _, init, _) -> exp_contains_lambda init
   | DA.Ret (Some exp) -> exp_contains_lambda exp
   | DA.Ret None -> false
+  | DA.InterfaceSCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
   | DA.SCall (_, args) | DA.Free args -> List.exists exp_contains_lambda args
   | DA.If (cond, then_block, else_block) ->
       exp_contains_lambda cond
@@ -290,7 +298,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, []) ->
+  | DA.Prog (_, functions, classes, [], [], []) ->
       let lifted_functions =
         List.filter
           (fun (fn : DA.fdecl) ->
@@ -333,7 +341,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) ->
+  | DA.Prog (_, functions, _, [], [], []) ->
       let main =
         match
           List.find_opt
@@ -389,7 +397,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, []) -> (
+  | DA.Prog (_, functions, _, [], [], []) -> (
       let main =
         match
           List.find_opt

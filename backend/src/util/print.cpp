@@ -106,6 +106,7 @@ std::string tyToString(const Ty& ty) {
                     return "[" + std::to_string(r.size) + " x " + tyToString(*r.inner) + "]";
                     // return tyToString(*r.inner) + "[" + std::to_string(r.size) + "]";
                 }
+                case RefTyTag::RInterface:
                 case RefTyTag::RClass:
                     return r.cname;
                 case RefTyTag::RFun: {
@@ -249,6 +250,18 @@ struct ExpToStringVisitor {
         return res;
     }
     std::string operator()(const ENull& e) const { return "null " + tyToString(e.ty); }
+    std::string operator()(const EInterfaceCast& e) const {
+        return "(" + expToString(*e.expr) + " as " + e.iname + ")";
+    }
+    std::string operator()(const EInterfaceCall& e) const {
+        std::string out = expToString(*e.receiver) + ".slot" + std::to_string(e.slot) + "(";
+        for (size_t i = 0; i < e.args.size(); ++i) {
+            if (i)
+                out += ", ";
+            out += expToString(*e.args[i]);
+        }
+        return out + ")";
+    }
     std::string operator()(const EConditional& e) const {
         auto branchToString = [](const std::vector<std::shared_ptr<Stmt>>& prelude, const Exp& value) {
             std::string res;
@@ -291,6 +304,15 @@ struct StmtToStringVisitor {
         }
         res += ");";
         return res;
+    }
+    std::string operator()(const InterfaceSCall& s) const {
+        std::string out = indent(indentLevel) + expToString(*s.receiver) + ".slot" + std::to_string(s.slot) + "(";
+        for (size_t i = 0; i < s.args.size(); ++i) {
+            if (i)
+                out += ", ";
+            out += expToString(*s.args[i]);
+        }
+        return out + ");";
     }
     std::string operator()(const If& s) const {
         std::string res = indent(indentLevel) + "if (" + expToString(*s.cond) + ") {\n";
@@ -402,6 +424,12 @@ std::string cdeclToString(const CDecl& c) {
 
 std::string programToString(const Program& prog) {
     std::ostringstream oss;
+    for (const auto& interface : prog.interfaces) {
+        oss << "interface " << interface.iname << " {\n";
+        for (const auto& proto : interface.protos)
+            oss << indent(1) << protoToString(proto) << "\n";
+        oss << "}\n\n";
+    }
     for (const auto& c : prog.classes) {
         oss << cdeclToString(c) << "\n\n";
     }
