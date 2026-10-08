@@ -83,7 +83,29 @@ let conditional () =
         i32 )
   in
   DA.Prog
-    (optimization_level, [ function_ "main" [ DA.Ret (Some expression) ] ], [], [])
+    ( optimization_level,
+      [ function_ "main" [ DA.Ret (Some expression) ] ],
+      [],
+      [] )
+
+let literal_values () =
+  let body =
+    [
+      DA.Decl ("message", DA.TRef DA.RString, DA.Str "bridge", true);
+      DA.Decl ("nothing", DA.TRef DA.RString, DA.Null (DA.TRef DA.RString), true);
+      DA.Decl ("decimal", DA.TFloat DA.Tf64, DA.Float (42.0, DA.Tf64), true);
+      DA.Ret
+        (Some
+           (DA.Uop
+              ( DA.Neg,
+                DA.Uop
+                  ( DA.Neg,
+                    DA.Cast (DA.Id ("decimal", DA.TFloat DA.Tf64), i32),
+                    i32 ),
+                i32 )));
+    ]
+  in
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [])
 
 let fixtures =
   [
@@ -92,6 +114,7 @@ let fixtures =
     ("array-index", array_index);
     ("object-field", object_field);
     ("conditional", conditional);
+    ("literal-values", literal_values);
   ]
 
 let () =

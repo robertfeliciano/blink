@@ -422,50 +422,6 @@ let test_return_promotes_numeric_value _ =
     "fun widen(value: i16) => i64 { return value; }\n\
      fun main() => i32 { return widen(1) as i32; }"
 
-let test_function_partial_application _ =
-  let open Typed in
-  let int_ty = TInt (TSigned Ti32) in
-  let fn_ty = TRef (RFun ([ int_ty; int_ty ], RetVal TBool)) in
-  let tc = Tc.add_global Tc.empty "less_than" (fn_ty, false) in
-  let typed, ty =
-    type_exp ~tc
-      (Ast.Call
-         (mk_node (Ast.Id "less_than"), [ mk_node (Ast.Int (Z.of_int 10)) ]))
-  in
-  assert_ty (TRef (RFun ([ int_ty ], RetVal TBool))) ty;
-  match typed with
-  | PartialApply (_, [ Int _ ], [ bound_ty ], [ remaining_ty ], RetVal TBool) ->
-      assert_ty int_ty bound_ty;
-      assert_ty int_ty remaining_ty
-  | _ -> assert_failure "expected a typed partial application"
-
-let test_zero_argument_partial_application _ =
-  let open Typed in
-  let int_ty = TInt (TSigned Ti32) in
-  let fn_ty = TRef (RFun ([ int_ty ], RetVal TBool)) in
-  let tc = Tc.add_global Tc.empty "positive" (fn_ty, false) in
-  let typed, ty = type_exp ~tc (Ast.Call (mk_node (Ast.Id "positive"), [])) in
-  assert_ty fn_ty ty;
-  match typed with
-  | PartialApply (_, [], [], [ remaining_ty ], RetVal TBool) ->
-      assert_ty int_ty remaining_ty
-  | _ -> assert_failure "expected a zero-argument partial application"
-
-let test_discarded_partial_application _ =
-  assert_program_type_error
-    "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
-     fun main() => i32 { add(1); return 0; }"
-
-let test_void_partial_application _ =
-  assert_program_type_checks
-    "fun consume(left: i32, right: i32) => void {}\n\
-     fun main() => i32 {\n\
-    \  let finish: (i32) -> void = consume(1);\n\
-    \  finish(2);\n\
-    \  free finish;\n\
-    \  return 0;\n\
-     }"
-
 let test_method_call _ =
   let open Typed in
   let header =
@@ -482,24 +438,6 @@ let test_method_call _ =
   in
   let _, ty = type_exp ~tc call in
   assert_ty (TInt (TSigned Ti32)) ty
-
-let test_method_partial_application _ =
-  let open Typed in
-  let int_ty = TInt (TSigned Ti32) in
-  let header =
-    ("add", RetVal int_ty, [ (int_ty, "left"); (int_ty, "right") ])
-  in
-  let tc =
-    Tc.add_class Tc.empty "Box" [] [ header ] |> fun tc ->
-    Tc.add_global tc "box" (TRef (RClass "Box"), false)
-  in
-  let call =
-    Ast.Call
-      ( mk_node (Ast.Proj (mk_node (Ast.Id "box"), "add")),
-        [ mk_node (Ast.Int (Z.of_int 20)) ] )
-  in
-  let _, ty = type_exp ~tc call in
-  assert_ty (TRef (RFun ([ int_ty ], RetVal int_ty))) ty
 
 let test_const_assignment_rejected _ =
   let int_ty = Typed.(TInt (TSigned Ti32)) in
@@ -922,13 +860,19 @@ let suite =
          "function argument promotion"
          >:: test_function_call_promotes_numeric_argument;
          "return promotion" >:: test_return_promotes_numeric_value;
-         "function partial application" >:: test_function_partial_application;
-         "zero-argument partial application"
-         >:: test_zero_argument_partial_application;
-         "void partial application" >:: test_void_partial_application;
          "method call" >:: test_method_call;
-         "method partial application" >:: test_method_partial_application;
-         "discarded partial application" >:: test_discarded_partial_application;
+         "calls require all arguments"
+         >::: List.map
+                (fun (name, source) ->
+                  name >:: fun _ ->
+                  match Typing.Type.type_prog (parse_exn source) with
+                  | Error error ->
+                      let message = Core.Error.to_string_hum error in
+                      assert_bool ("expected an arity error, got: " ^ message)
+                        (Core.String.is_substring message
+                           ~substring:"invalid number of arguments")
+                  | Ok _ -> assert_failure "underapplication was accepted")
+                Call_arity_fixtures.underapplication;
          "const assignment" >:: test_const_assignment_rejected;
          "const field assignment" >:: test_const_field_assignment_rejected;
          "shallow const references" >:: test_const_references_are_shallow;

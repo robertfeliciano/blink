@@ -70,11 +70,11 @@ let fixtures =
       expected_exit = 42;
     };
     {
-      name = "conditional-partial-application";
+      name = "conditional-lambda";
       source =
-        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
-         fun main() => i32 {\n\
-        \  let selected: (i32) -> i32 = true ? add(2) : add(3);\n\
+        "fun main() => i32 {\n\
+        \  let selected: (i32) -> i32 = true ? fn(value) { return value + 2; } \
+         : fn(value) { return value + 3; };\n\
         \  let result = selected(40);\n\
         \  free selected;\n\
         \  return result;\n\
@@ -82,19 +82,10 @@ let fixtures =
       expected_exit = 42;
     };
     {
-      name = "conditional-anonymous-partial-cleanup";
+      name = "conditional-anonymous-lambda-call";
       source =
-        "fun add(a: i32, b: i32) => i32 { return a + b; }\n\
-         fun main() => i32 {\n\
-        \  let saved = add(2);\n\
-        \  let total = 0;\n\
-        \  for i in 0..20 {\n\
-        \    total += (i < 10 ? add(1) : (i < 15 ? saved : add(3)))(0);\n\
-        \  }\n\
-        \  let result = total + saved(5);\n\
-        \  free saved;\n\
-        \  return result;\n\
-         }";
+        "fun main() => i32 { return (true ? fn[](value: i32) -> i32 { return \
+         value + 2; } : fn[](value: i32) -> i32 { return value + 3; })(40); }";
       expected_exit = 42;
     };
     {
@@ -186,6 +177,57 @@ let fixtures =
       expected_exit = 3;
     };
     {
+      name = "full-void-calls-through-function-values";
+      source =
+        "class Box { let value: i32 = 0; } fun set(box: Box, value: i32) => \
+         void { box.value = value; } fun main() => i32 { let box = new Box {}; \
+         let setter = set; setter(box, 40); let add = fn[box](value: i32) -> \
+         void { box.value += value; }; add(2); free add; let result = \
+         box.value; free box; return result; }";
+      expected_exit = 42;
+    };
+    {
+      name = "returned-lambda-full-application";
+      source =
+        "fun make(offset: i32) => (i32, i32) -> i32 { return fn[offset](left, \
+         right) { return offset + left + right; }; } fun main() => i32 { let \
+         add = make(10); let result = add(20, 12); free add; return result; }";
+      expected_exit = 42;
+    };
+    {
+      name = "returned-lambda-immediate-full-application";
+      source =
+        "fun make() => (i32, i32) -> i32 { return fn(left, right) { return \
+         left + right; }; } fun main() => i32 { return make()(20, 22); }";
+      expected_exit = 42;
+    };
+    {
+      name = "function-parameter-full-application";
+      source =
+        "fun apply(f: (i32) -> i32, value: i32) => i32 { return f(value); } \
+         fun main() => i32 { let increment = fn[](value: i32) -> i32 { return \
+         value + 1; }; let result = apply(increment, 41); free increment; \
+         return result; }";
+      expected_exit = 42;
+    };
+    {
+      name = "full-call-arguments-evaluate-once-in-order";
+      source =
+        "class Counter { let value: i32 = 0; fun next() => i32 { value += 1; \
+         return value; } } fun digits(a: i32, b: i32, c: i32) => i32 { return \
+         a * 100 + b * 10 + c; } fun main() => i32 { let counter = new Counter \
+         {}; let result = digits(counter.next(), counter.next(), \
+         counter.next()); free counter; return result; }";
+      expected_exit = 123;
+    };
+    {
+      name = "prototype-function-value-full-call";
+      source =
+        "@C fun abs(value: i32) => i32; fun main() => i32 { let absolute = \
+         abs; return absolute(-42); }";
+      expected_exit = 42;
+    };
+    {
       name = "prototype-definition";
       source =
         "fun identity(value: i32) => i32;\n\
@@ -194,48 +236,12 @@ let fixtures =
       expected_exit = 7;
     };
     {
-      name = "global-partial-application";
-      source =
-        "fun add(left: i32, middle: i32, right: i32) => i32 {\n\
-        \  return left + middle + right;\n\
-         }\n\
-         fun main() => i32 {\n\
-        \  let add_left: (i32, i32) -> i32 = add(10);\n\
-        \  let result = add_left(20, 12);\n\
-        \  free add_left;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "chained-partial-application";
-      source =
-        "fun add(left: i32, middle: i32, right: i32) => i32 {\n\
-        \  return left + middle + right;\n\
-         }\n\
-         fun main() => i32 { return add(10)(20)(12); }";
-      expected_exit = 42;
-    };
-    {
-      name = "reassigned-partial-application";
-      source =
-        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
-         fun main() => i32 {\n\
-        \  let f: (i32) -> i32 = add(1);\n\
-        \  f = add(2);\n\
-        \  let result = f(40);\n\
-        \  free f;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
       name = "function-reassignment-through-if";
       source =
         "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
          fun main() => i32 {\n\
-        \  let f: (i32) -> i32 = add(1);\n\
-        \  if true { f = add(2); }\n\
+        \  let f: (i32) -> i32 = fn(value) { return add(1, value); };\n\
+        \  if true { f = fn(value) { return add(2, value); }; }\n\
         \  let result = f(40);\n\
         \  free f;\n\
         \  return result;\n\
@@ -247,10 +253,10 @@ let fixtures =
       source =
         "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
          fun main() => i32 {\n\
-        \  let f: (i32) -> i32 = add(1);\n\
+        \  let f: (i32) -> i32 = fn(value) { return add(1, value); };\n\
         \  let count = 0;\n\
         \  while count < 1 {\n\
-        \    f = add(2);\n\
+        \    f = fn(value) { return add(2, value); };\n\
         \    count += 1;\n\
         \  }\n\
         \  let result = f(40);\n\
@@ -264,137 +270,15 @@ let fixtures =
       source =
         "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
          fun select(use_two: bool) => i32 {\n\
-        \  let f: (i32) -> i32 = add(0);\n\
-        \  if use_two { f = add(2); } else { f = add(3); }\n\
+        \  let f: (i32) -> i32 = fn(value) { return add(0, value); };\n\
+        \  if use_two { f = fn(value) { return add(2, value); }; } else { f = \
+         fn(value) { return add(3, value); }; }\n\
         \  let result = f(40);\n\
         \  free f;\n\
         \  return result;\n\
          }\n\
          fun main() => i32 { return select(true) + select(false); }";
       expected_exit = 85;
-    };
-    {
-      name = "lambda-partial-application";
-      source =
-        "fun main() => i32 {\n\
-        \  let offset = 7;\n\
-        \  let add: (i32, i32, i32) -> i32 = fn[offset](a, b, c) {\n\
-        \    return offset + a + b + c;\n\
-        \  };\n\
-        \  let finish: (i32) -> i32 = add(10, 20);\n\
-        \  let result = finish(5);\n\
-        \  free finish;\n\
-        \  free add;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "method-partial-application";
-      source =
-        "class Calculator {\n\
-        \  let base: i32 = 0;\n\
-        \  fun add(left: i32, right: i32) => i32 {\n\
-        \    return base + left + right;\n\
-        \  }\n\
-         }\n\
-         fun main() => i32 {\n\
-        \  let calculator = new Calculator { base = 10 };\n\
-        \  let finish: (i32) -> i32 = calculator.add(20);\n\
-        \  let result = finish(12);\n\
-        \  free finish;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "returned-function-partial-application";
-      source =
-        "fun make_adder(offset: i32) => (i32, i32) -> i32 {\n\
-        \  return fn[offset](left, right) { return offset + left + right; };\n\
-         }\n\
-         fun main() => i32 {\n\
-        \  let add: (i32, i32) -> i32 = make_adder(10);\n\
-        \  let finish: (i32) -> i32 = add(20);\n\
-        \  let result = finish(12);\n\
-        \  free finish;\n\
-        \  free add;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "zero-argument-and-void-partial-application";
-      source =
-        "fun add(left: i32, right: i32) => i32 { return left + right; }\n\
-         fun consume(left: i32, right: i32) => void {}\n\
-         fun main() => i32 {\n\
-        \  let all: (i32, i32) -> i32 = add();\n\
-        \  let consume_right: (i32) -> void = consume(1);\n\
-        \  consume_right(2);\n\
-        \  let result = all(20, 22);\n\
-        \  free consume_right;\n\
-        \  free all;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "anonymous-void-partial-application";
-      source =
-        "class Box { let value: i32 = 0; }\n\
-         fun consume(box: Box, value: i32) => void { box.value = value; }\n\
-         fun main() => i32 {\n\
-        \  let box = new Box { value = 0 };\n\
-        \  consume(box)(42);\n\
-        \  return box.value;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "partial-bound-arguments-evaluate-once-in-order";
-      source =
-        "class Counter {\n\
-        \  let value: i32 = 0;\n\
-        \  fun next() => i32 { value += 1; return value; }\n\
-         }\n\
-         fun digits(first: i32, second: i32, third: i32) => i32 {\n\
-        \  return first * 100 + second * 10 + third;\n\
-         }\n\
-         fun main() => i32 {\n\
-        \  let counter = new Counter { value = 0 };\n\
-        \  let finish: (i32) -> i32 = digits(counter.next(), counter.next());\n\
-        \  let result = finish(counter.next());\n\
-        \  free finish;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 123;
-    };
-    {
-      name = "prototype-partial-application";
-      source =
-        "@C fun abs(value: i32) => i32;\n\
-         fun main() => i32 {\n\
-        \  let absolute: (i32) -> i32 = abs();\n\
-        \  let result = absolute(-42);\n\
-        \  free absolute;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
-    };
-    {
-      name = "function-argument-partial-application";
-      source =
-        "fun apply(f: (i32) -> i32, value: i32) => i32 { return f(value); }\n\
-         fun main() => i32 {\n\
-        \  let increment: (i32) -> i32 = fn(value) { return value + 1; };\n\
-        \  let apply_increment: (i32) -> i32 = apply(increment);\n\
-        \  let result = apply_increment(41);\n\
-        \  free apply_increment;\n\
-        \  free increment;\n\
-        \  return result;\n\
-         }";
-      expected_exit = 42;
     };
   ]
 
@@ -433,6 +317,28 @@ let test_fixture fixture test_context =
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
       Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
+
+let test_underapplication (name, source) test_context =
+  let compiler = Native_test_support.executable_path "../src/blink.exe" in
+  Native_test_support.in_temp_dir
+    ~prefix:("blink-arity-" ^ name ^ "-")
+    test_context
+    (fun () ->
+      Core.Out_channel.write_all "program.bl" ~data:source;
+      let command =
+        Printf.sprintf "%s program.bl > compiler.stdout 2> compiler.stderr"
+          (Filename.quote compiler)
+      in
+      Native_test_support.assert_exit_code 1 command;
+      let diagnostic = Core.In_channel.read_all "compiler.stderr" in
+      assert_bool
+        ("expected an arity diagnostic, got: " ^ diagnostic)
+        (Core.String.is_substring diagnostic
+           ~substring:"invalid number of arguments");
+      assert_bool "arity diagnostic identifies the source file"
+        (Core.String.is_substring diagnostic ~substring:"program.bl");
+      assert_bool "type errors must stop before LLVM emission"
+        (not (Sys.file_exists "new_output.ll")))
 
 let test_parse_failure_stops_at_parser _ =
   let source = "fun main( => i32 { return 1; }" in
@@ -551,6 +457,11 @@ let suite =
                 >:: test_conflicting_optimization_levels;
               ];
          "inline function" >:: test_inline_function;
+         "calls require all arguments"
+         >::: List.map
+                (fun ((name, _) as fixture) ->
+                  name >:: test_underapplication fixture)
+                Call_arity_fixtures.underapplication;
          "native execution" >::: executable_tests;
        ]
 

@@ -94,8 +94,8 @@ Per-file name resolution enforces exports and lexical scope before combining
 declarations for typing. Module-owned symbols and classes have stable internal
 identities; entry `main` and `@C` symbols retain exact names. Shared C signatures
 are reconciled by typing. No module data crosses the native FFI.
-See `docs/modules.md` for the twelve implemented steps, `examples/modules/` for
-a runnable example, and `stdlib/io.bl` for bootstrap `std.io` using libc.
+See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
+for a runnable example, and `runtime/stdlib/io.bl` for bootstrap `std.io` using libc.
 Module interfaces are inferred from `.ml`, without module `.mli` files.
 
 - `frontend/src/parsing/lexer.mll` defines keywords, literals, and tokens.

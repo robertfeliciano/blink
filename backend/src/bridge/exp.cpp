@@ -286,9 +286,6 @@ Exp convert_exp(value v) {
             result.val = ENull{.ty = std::move(null_ty)};
             break;
         }
-        case Constants::EXP_PartialApply: {
-            throw std::runtime_error("partial applications cannot get to backend!");
-        }
         case Constants::EXP_Conditional: { // Conditional of exp * (block * exp) * (block * exp) * ty
             auto  condition   = std::make_unique<Exp>(convert_exp(Field(v, 0)));
             value then_branch = Field(v, 1);

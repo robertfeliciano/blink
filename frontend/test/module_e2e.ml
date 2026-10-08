@@ -4,12 +4,12 @@ open Native_test_support
 
 let compiler = executable_path "../src/blink.exe"
 let wrapper = executable_path "../../../../compile"
-let supplied_main = executable_path "../../../../docs/module-fixtures/main.bl"
 
-let supplied_helper =
-  executable_path "../../../../docs/module-fixtures/helper.bl"
+let example_source name =
+  Core.In_channel.read_all
+    (executable_path ("../../../../examples/modules/" ^ name))
 
-let stdlib_source = executable_path "../../../../stdlib/io.bl"
+let stdlib_source = executable_path "../../../../runtime/stdlib/io.bl"
 
 let command ?(options = []) filename =
   String.concat " "
@@ -20,14 +20,14 @@ let verify_ir () =
   assert_success "LLVM verification"
     "llc --filetype=null new_output.ll -o /dev/null"
 
-let native name files =
+let native ?(options = []) name files =
   List.map
     (fun optimization ->
       name ^ optimization >:: fun context ->
       in_temp_dir ~prefix:"blink-module-native" context (fun () ->
           write_sources (Sys.getcwd ()) files;
           assert_success_silently "module compilation"
-            (command ~options:[ optimization ] "main.bl");
+            (command ~options:(optimization :: options) "main.bl");
           verify_ir ();
           compile_and_run ~expected_exit:42))
     [ "-O0"; "-O2" ]
@@ -46,10 +46,13 @@ let suite =
   "module native integration"
   >::: List.concat
          [
-           native "supplied acceptance fixture"
+           native
+             ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
+             "module example"
              [
-               ("main.bl", Core.In_channel.read_all supplied_main);
-               ("helper.bl", Core.In_channel.read_all supplied_helper);
+               ("main.bl", example_source "main.bl");
+               ("helper.bl", example_source "helper.bl");
+               ("geometry.bl", example_source "geometry.bl");
              ];
            native "nested aliases diamond private helpers"
              [
@@ -92,7 +95,7 @@ let suite =
                   shapes.Box; let result = b.read(); free b; return result; }"
                );
              ];
-           native "partial application statement calls and closures"
+           native "module function values statement calls and closures"
              [
                ( "math.bl",
                  "export fun add(a: i32, b: i32) => i32 { return a + b; } \
@@ -102,11 +105,12 @@ let suite =
                ( "main.bl",
                  "import math as m; fun add() => i32 { return 100; } fun \
                   main() => i32 { m.noop(); let add = 2; let finish: (i32) -> \
-                  i32 = m.add(add); let apply: (i32) -> i32 = \
-                  fn[finish](value) { return finish(value); }; let b = new \
-                  m.Calc {}; let method: (i32) -> i32 = b.add(20); let result \
-                  = true ? apply(method(10)) : 0; free finish, apply, method, \
-                  b; return result; }" );
+                  i32 = fn[add](value) { return m.add(add, value); }; let \
+                  apply: (i32) -> i32 = fn[finish](value) { return \
+                  finish(value); }; let b = new m.Calc {}; let method: (i32) \
+                  -> i32 = fn[b](value) { return b.add(20, value); }; let \
+                  result = true ? apply(method(10)) : 0; free finish, apply, \
+                  method, b; return result; }" );
              ];
            native "qualified types arrays casts typed lambdas"
              [
@@ -258,6 +262,43 @@ let suite =
                    ];
                  assert_success_silently "edited dependency" (command "main.bl");
                  compile_and_run ~expected_exit:43) );
+           "imported call arity"
+           >::: List.concat_map
+                  (fun (return_type, body) ->
+                    List.concat_map
+                      (fun (kind, declaration) ->
+                        List.concat_map
+                          (fun arguments ->
+                            List.map
+                              (fun context ->
+                                negative
+                                  (String.concat "-"
+                                     [
+                                       kind;
+                                       return_type;
+                                       (if arguments = "" then "zero" else "one");
+                                       (if context = "" then "statement"
+                                        else "expression");
+                                     ])
+                                  [
+                                    ("helper.bl", declaration);
+                                    ( "main.bl",
+                                      "import helper; fun main() => i32 { "
+                                      ^ context ^ "helper.target(" ^ arguments
+                                      ^ "); return 0; }" );
+                                  ]
+                                  "invalid number of arguments")
+                              [ ""; "let result = " ])
+                          [ ""; "1" ])
+                      [
+                        ( "function",
+                          "export fun target(left: i32, right: i32) => "
+                          ^ return_type ^ " { " ^ body ^ " }" );
+                        ( "prototype",
+                          "export @C fun target(left: i32, right: i32) => "
+                          ^ return_type ^ ";" );
+                      ])
+                  [ ("i32", "return left + right;"); ("void", "") ];
            negative "private import"
              [
                ("helper.bl", "fun secret() => i32 { return 42; }");

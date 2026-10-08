@@ -26,7 +26,7 @@ fun main() => i32 {
 
 ```sh
 make
-./compile -O0 -stdlib-root stdlib examples/modules/main.bl
+./compile -O0 -stdlib-root runtime/stdlib examples/modules/main.bl
 ./new_output.o
 ```
 
@@ -42,8 +42,8 @@ local bindings. Import cycles, private-member access and imported `main`
 declarations are errors. Imports are not re-exported, and there are no globals,
 wildcard imports, packages or runtime module initialization.
 
-The [module implementation guide](docs/modules.md) explains all twelve completed
-steps, compiler phase boundaries, tests and the future C++ runtime milestone.
+The [module implementation notes](frontend/src/modules/README.md) describe
+compiler phase boundaries, tests and the future C++ runtime milestone.
 
 ## Develop with Docker
 
@@ -205,9 +205,8 @@ Both branches must have compatible types. Blink applies its normal numeric
 promotion rules, and an assignment or explicit declaration type can provide
 the expected type for literals and other context-sensitive expressions.
 
-Functions support prefix partial application. Supplying fewer arguments than a
-function declares produces a closure over the supplied arguments; supplying the
-full arity invokes the function normally.
+Function and method calls must supply exactly the declared number of arguments.
+Use a lambda with explicit captures to bind arguments for a later call:
 
 ```blink
 fun add(left: i32, middle: i32, right: i32) => i32 {
@@ -215,14 +214,14 @@ fun add(left: i32, middle: i32, right: i32) => i32 {
 }
 
 fun main() => i32 {
-  let add_ten: (i32, i32) -> i32 = add(10);
+  let ten = 10;
+  let add_ten: (i32, i32) -> i32 = fn[ten](middle, right) {
+    return add(ten, middle, right);
+  };
   let result = add_ten(20, 12);
   free add_ten;
   return result;
 }
 ```
 
-Zero supplied arguments are also valid (`let copy = add();`), partial calls can
-be chained (`add(10)(20)(12)`), and bound arguments are evaluated once from left
-to right. As with lambda closures, named partial applications should be freed
-when they are no longer needed.
+Free lambda closures when they are no longer needed.
