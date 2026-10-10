@@ -1,5 +1,16 @@
 import std.math_native as native;
 
+// Double-precision mathematical constants. Angle constants are in radians.
+export const pi: f64 = 3.141592653589793;
+export const tau: f64 = 6.283185307179586; // 2*pi
+export const half_pi: f64 = 1.5707963267948966; // pi/2
+export const quarter_pi: f64 = 0.7853981633974483; // pi/4
+export const e: f64 = 2.718281828459045;
+export const sqrt2: f64 = 1.4142135623730951;
+export const sqrt3: f64 = 1.7320508075688772;
+export const ln2: f64 = 0.6931471805599453;
+export const ln10: f64 = 2.302585092994046;
+
 // Math functions use libm, linked by the compile helper with -lm.
 // Arguments and results use double precision. Angles are in radians.
 export @C fun sin(angle: f64) => f64;

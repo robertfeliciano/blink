@@ -43,6 +43,9 @@ Both options work with `blink` and `compile`, including from another directory.
 Trigonometric angles are in radians. `ln(x)` is the natural logarithm, and
 `log(x, base)` computes `ln(x) / ln(base)`. After `import std.math;`, call
 functions such as `math.sqrt(9.0)` or `math.log(8.0, 2.0)`.
+The module also exports immutable `f64` constants: `pi`, `tau` (2π), `half_pi`,
+`quarter_pi`, `e`, `sqrt2`, `sqrt3`, `ln2`, and `ln10`. Use them through the
+import alias, for example `math.sin(math.half_pi)`.
 The `compile` helper links libm automatically.
 
 Imports must precede declarations. Aliases cannot be reused by declarations or

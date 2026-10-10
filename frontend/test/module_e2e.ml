@@ -32,12 +32,12 @@ let native ?(options = []) name files =
           compile_and_run ~expected_exit:42))
     [ "-O0"; "-O2" ]
 
-let negative ?(also = []) name files expected =
+let negative ?(options = []) ?(also = []) name files expected =
   name >:: fun context ->
   in_temp_dir ~prefix:"blink-module-errors" context (fun () ->
       write_sources (Sys.getcwd ()) files;
       assert_exit_code 1
-        (command "main.bl" ^ " > compiler.stdout 2> compiler.stderr");
+        (command ~options "main.bl" ^ " > compiler.stdout 2> compiler.stderr");
       let stderr = Core.In_channel.read_all "compiler.stderr" in
       List.iter
         (fun substring -> assert_contains ~substring stderr)
@@ -159,16 +159,28 @@ fun main() => i32 {
                ( "main.bl",
                  {|import std.math;
 
+const full_turn: f64 = math.tau;
+
 fun near(actual: f64, expected: f64) => bool {
     let difference = actual - expected;
     return difference > -0.000000000001 and difference < 0.000000000001;
 }
 
 fun main() => i32 {
-    let quarter_pi: f64 = 0.7853981633974483;
-    let half_pi: f64 = 1.5707963267948966;
-    let two_pi: f64 = 6.283185307179586;
-    let diagonal: f64 = 0.7071067811865476;
+    let quarter_pi: f64 = math.quarter_pi;
+    let half_pi: f64 = math.half_pi;
+    let two_pi: f64 = full_turn;
+    let diagonal: f64 = math.sqrt2 / 2.0;
+
+    if (math.pi != 3.141592653589793
+        or math.tau != 6.283185307179586
+        or math.half_pi != 1.5707963267948966
+        or math.quarter_pi != 0.7853981633974483
+        or math.e != 2.718281828459045
+        or math.sqrt2 != 1.4142135623730951
+        or math.sqrt3 != 1.7320508075688772
+        or math.ln2 != 0.6931471805599453
+        or math.ln10 != 2.302585092994046) { return 13; }
 
     if (not near(math.sin(0.0), 0.0) or not near(math.cos(0.0), 1.0)
         or not near(math.tan(0.0), 0.0)) { return 1; }
@@ -224,8 +236,9 @@ fun main() => i32 {
         or not near(math.hypot(0.0, 0.0), 0.0)) { return 11; }
 
     if (not near(math.ln(1.0), 0.0)
-        or not near(math.ln(2.718281828459045), 1.0)
-        or not near(math.ln(0.5), -0.6931471805599453)
+        or not near(math.ln(math.e), 1.0)
+        or not near(math.ln(0.5), -math.ln2)
+        or not near(math.ln(10.0), math.ln10)
         or not near(math.log(8.0, 2.0), 3.0)
         or not near(math.log(1000.0, 10.0), 3.0)
         or not near(math.log(0.125, 2.0), -3.0)
@@ -235,6 +248,17 @@ fun main() => i32 {
 |}
                );
              ];
+           [
+             negative
+               ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
+               "stdlib math constant assignment"
+               [
+                 ( "main.bl",
+                   "import std.math; fun main() => i32 { math.pi = 3.0; return \
+                    0; }" );
+               ]
+               "Attempting to assign to a constant binding.";
+           ];
            native "nested aliases diamond private helpers"
              [
                ( "common.bl",
