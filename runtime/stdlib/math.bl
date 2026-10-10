@@ -1,0 +1,35 @@
+import std.math_native as native;
+
+// Math functions use libm, linked by the compile helper with -lm.
+// Arguments and results use double precision. Angles are in radians.
+export @C fun sin(angle: f64) => f64;
+export @C fun cos(angle: f64) => f64;
+export @C fun tan(angle: f64) => f64;
+
+// Inverse trigonometric functions return angles in radians.
+export @C fun asin(value: f64) => f64;
+export @C fun acos(value: f64) => f64;
+export @C fun atan(value: f64) => f64;
+export @C fun atan2(y: f64, x: f64) => f64;
+
+export @C fun sinh(value: f64) => f64;
+export @C fun cosh(value: f64) => f64;
+export @C fun tanh(value: f64) => f64;
+export @C fun asinh(value: f64) => f64;
+export @C fun acosh(value: f64) => f64;
+export @C fun atanh(value: f64) => f64;
+
+export @C fun sqrt(value: f64) => f64;
+export @C fun cbrt(value: f64) => f64;
+// Compute sqrt(x*x + y*y) without unnecessary intermediate overflow/underflow.
+export @C fun hypot(x: f64, y: f64) => f64;
+
+// Natural logarithm.
+export fun ln(value: f64) => f64 {
+    return native.log(value);
+}
+
+// Logarithm of value in the given base.
+export fun log(value: f64, base: f64) => f64 {
+    return ln(value) / ln(base);
+}

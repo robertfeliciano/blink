@@ -37,6 +37,13 @@ The project import root defaults to the entry file's directory. Pass
 `DIR/io.bl`. No standard-library path is hardcoded; specify it explicitly.
 Both options work with `blink` and `compile`, including from another directory.
 `std.io.println` uses libc `puts`, adds a newline, and returns its status.
+`std.math` provides `f64` math functions backed by libm: `sin`, `cos`, `tan`,
+`asin` (arcsine), `acos` (arccosine), `atan`, `atan2(y, x)`, `sinh`, `cosh`,
+`tanh`, `asinh`, `acosh`, `atanh`, `sqrt`, `cbrt`, and `hypot(x, y)`.
+Trigonometric angles are in radians. `ln(x)` is the natural logarithm, and
+`log(x, base)` computes `ln(x) / ln(base)`. After `import std.math;`, call
+functions such as `math.sqrt(9.0)` or `math.log(8.0, 2.0)`.
+The `compile` helper links libm automatically.
 
 Imports must precede declarations. Aliases cannot be reused by declarations or
 local bindings. Import cycles, private-member access and imported `main`

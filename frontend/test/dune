@@ -102,6 +102,8 @@
   ../src/blink.exe
   ../../compile
   ../../runtime/stdlib/io.bl
+  ../../runtime/stdlib/math.bl
+  ../../runtime/stdlib/math_native.bl
   ../../examples/modules/main.bl
   ../../examples/modules/helper.bl
   ../../examples/modules/geometry.bl

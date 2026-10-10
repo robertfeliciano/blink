@@ -1,0 +1,2 @@
+// Keep libm's natural log symbol separate from std.math.log(value, base).
+export @C fun log(value: f64) => f64;

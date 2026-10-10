@@ -152,6 +152,89 @@ fun main() => i32 {
                ("geometry.bl", example_source "geometry.bl");
                ("state.bl", example_source "state.bl");
              ];
+           native
+             ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
+             "stdlib math"
+             [
+               ( "main.bl",
+                 {|import std.math;
+
+fun near(actual: f64, expected: f64) => bool {
+    let difference = actual - expected;
+    return difference > -0.000000000001 and difference < 0.000000000001;
+}
+
+fun main() => i32 {
+    let quarter_pi: f64 = 0.7853981633974483;
+    let half_pi: f64 = 1.5707963267948966;
+    let two_pi: f64 = 6.283185307179586;
+    let diagonal: f64 = 0.7071067811865476;
+
+    if (not near(math.sin(0.0), 0.0) or not near(math.cos(0.0), 1.0)
+        or not near(math.tan(0.0), 0.0)) { return 1; }
+    if (not near(math.sin(quarter_pi), diagonal)
+        or not near(math.cos(quarter_pi), diagonal)
+        or not near(math.tan(quarter_pi), 1.0)) { return 2; }
+    if (not near(math.sin(-quarter_pi), -diagonal)
+        or not near(math.cos(-quarter_pi), diagonal)
+        or not near(math.tan(-quarter_pi), -1.0)) { return 3; }
+    if (not near(math.sin(half_pi), 1.0)
+        or not near(math.cos(half_pi), 0.0)) { return 4; }
+    if (not near(math.sin(two_pi + quarter_pi), diagonal)
+        or not near(math.cos(two_pi + quarter_pi), diagonal)
+        or not near(math.tan(two_pi + quarter_pi), 1.0)) { return 5; }
+
+    if (not near(math.asin(diagonal), quarter_pi)
+        or not near(math.acos(diagonal), quarter_pi)
+        or not near(math.atan(1.0), quarter_pi)
+        or not near(math.atan2(1.0, -1.0), 3.0 * quarter_pi)
+        or not near(math.atan2(-1.0, 1.0), -quarter_pi)) { return 6; }
+    if (not near(math.asin(-1.0), -half_pi)
+        or not near(math.acos(-1.0), 2.0 * half_pi)
+        or not near(math.atan(-1.0), -quarter_pi)) { return 7; }
+
+    let sinh_one: f64 = 1.1752011936438014;
+    let cosh_one: f64 = 1.5430806348152437;
+    let tanh_one: f64 = 0.7615941559557649;
+    if (not near(math.sinh(1.0), sinh_one)
+        or not near(math.cosh(1.0), cosh_one)
+        or not near(math.tanh(1.0), tanh_one)
+        or not near(math.sinh(-1.0), -sinh_one)
+        or not near(math.cosh(-1.0), cosh_one)
+        or not near(math.tanh(-1.0), -tanh_one)) { return 8; }
+    if (not near(math.asinh(sinh_one), 1.0)
+        or not near(math.acosh(cosh_one), 1.0)
+        or not near(math.atanh(tanh_one), 1.0)
+        or not near(math.asinh(-sinh_one), -1.0)
+        or not near(math.atanh(-tanh_one), -1.0)) { return 9; }
+    if (not near(math.sinh(0.0), 0.0)
+        or not near(math.cosh(0.0), 1.0)
+        or not near(math.tanh(0.0), 0.0)
+        or not near(math.asinh(0.0), 0.0)
+        or not near(math.acosh(1.0), 0.0)
+        or not near(math.atanh(0.0), 0.0)) { return 10; }
+
+    if (not near(math.sqrt(9.0), 3.0)
+        or not near(math.cbrt(27.0), 3.0)
+        or not near(math.cbrt(-8.0), -2.0)
+        or not near(math.hypot(3.0, 4.0), 5.0)
+        or not near(math.hypot(-3.0, 4.0), 5.0)
+        or not near(math.sqrt(0.0), 0.0)
+        or not near(math.cbrt(0.0), 0.0)
+        or not near(math.hypot(0.0, 0.0), 0.0)) { return 11; }
+
+    if (not near(math.ln(1.0), 0.0)
+        or not near(math.ln(2.718281828459045), 1.0)
+        or not near(math.ln(0.5), -0.6931471805599453)
+        or not near(math.log(8.0, 2.0), 3.0)
+        or not near(math.log(1000.0, 10.0), 3.0)
+        or not near(math.log(0.125, 2.0), -3.0)
+        or not near(math.log(4.0, 0.5), -2.0)) { return 12; }
+    return 42;
+}
+|}
+               );
+             ];
            native "nested aliases diamond private helpers"
              [
                ( "common.bl",
