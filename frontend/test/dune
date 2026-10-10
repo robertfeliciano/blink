@@ -104,5 +104,6 @@
   ../../runtime/stdlib/io.bl
   ../../examples/modules/main.bl
   ../../examples/modules/helper.bl
-  ../../examples/modules/geometry.bl)
+  ../../examples/modules/geometry.bl
+  ../../examples/modules/state.bl)
  (libraries module_test_support test_support ounit2 core core_unix))

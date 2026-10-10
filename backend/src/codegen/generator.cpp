@@ -6,12 +6,23 @@ Generator::Generator()
       mod(std::make_unique<llvm::Module>("Module", *ctxt)), expVisitor(*this), stmtVisitor(*this), typeGen(*this),
       declVisitor(*this), lvalueCreator(*this) {}
 
+std::optional<VariableStorage> Generator::findVariableStorage(const std::string& id) const {
+    if (auto it = varEnv.find(id); it != varEnv.end()) {
+        return VariableStorage{it->second, it->second->getAllocatedType()};
+    }
+    if (auto it = globalEnv.find(id); it != globalEnv.end()) {
+        return VariableStorage{it->second, it->second->getValueType()};
+    }
+    return std::nullopt;
+}
+
 void Generator::codegenProgram(const Program& p) {
     for (const auto& decl : p.classes) {
         codegenCDecl(decl);
     }
     codegenStdlib();
     codegenFunctionProtos(p);
+    declVisitor.codegenGlobals(p.globals);
     for (const auto& decl : p.functions) {
         codegenFDecl(decl);
     }

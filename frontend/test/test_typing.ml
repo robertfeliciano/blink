@@ -136,19 +136,19 @@ let test_integer_float_exactness _ =
     (Tu.int_is_exactly_representable_in_float_ty f32_boundary Tf32);
   assert_bool "2^24 + 1 should not be exactly representable in f32"
     (not
-       (Tu.int_is_exactly_representable_in_float_ty
-          (Z.succ f32_boundary) Tf32));
+       (Tu.int_is_exactly_representable_in_float_ty (Z.succ f32_boundary) Tf32));
   assert_bool "2^24 + 2 should be exactly representable in f32"
     (Tu.int_is_exactly_representable_in_float_ty
-       (Z.add f32_boundary (Z.of_int 2)) Tf32);
+       (Z.add f32_boundary (Z.of_int 2))
+       Tf32);
   let f64_boundary = Z.shift_left Z.one 53 in
   assert_bool "2^53 + 1 should not be exactly representable in f64"
     (not
-       (Tu.int_is_exactly_representable_in_float_ty
-          (Z.succ f64_boundary) Tf64));
+       (Tu.int_is_exactly_representable_in_float_ty (Z.succ f64_boundary) Tf64));
   assert_bool "2^53 + 2 should be exactly representable in f64"
     (Tu.int_is_exactly_representable_in_float_ty
-       (Z.add f64_boundary (Z.of_int 2)) Tf64)
+       (Z.add f64_boundary (Z.of_int 2))
+       Tf64)
 
 let test_unsigned_128_literal_inference _ =
   let value = Z.shift_left Z.one 127 in
@@ -164,8 +164,9 @@ let test_numeric_binary_expression _ =
 
 let assert_promoted_binary_type left_ty right_ty expected_ty =
   let tc =
-    Tc.empty |> fun tc -> Tc.add_local tc "left" (left_ty, false)
-    |> fun tc -> Tc.add_local tc "right" (right_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "left" (left_ty, false) |> fun tc ->
+    Tc.add_local tc "right" (right_ty, false)
   in
   let expression = Bop (Add, mk_node (Id "left"), mk_node (Id "right")) in
   match type_exp ~tc expression with
@@ -185,56 +186,44 @@ let assert_promoted_binary_type left_ty right_ty expected_ty =
 
 let test_signed_unsigned_integer_promotion _ =
   let open Typed in
-  assert_promoted_binary_type
-    (TInt (TSigned Ti16))
-    (TInt (TUnsigned Tu16))
+  assert_promoted_binary_type (TInt (TSigned Ti16)) (TInt (TUnsigned Tu16))
     (TInt (TSigned Ti32));
-  assert_promoted_binary_type
-    (TInt (TSigned Ti32))
-    (TInt (TUnsigned Tu32))
+  assert_promoted_binary_type (TInt (TSigned Ti32)) (TInt (TUnsigned Tu32))
     (TInt (TSigned Ti64));
-  assert_promoted_binary_type
-    (TInt (TSigned Ti64))
-    (TInt (TUnsigned Tu64))
+  assert_promoted_binary_type (TInt (TSigned Ti64)) (TInt (TUnsigned Tu64))
     (TInt (TSigned Ti128))
 
 let test_unrepresentable_integer_promotion _ =
   let open Typed in
   let tc =
-    Tc.empty
-    |> fun tc -> Tc.add_local tc "signed" (TInt (TSigned Ti128), false)
-    |> fun tc -> Tc.add_local tc "unsigned" (TInt (TUnsigned Tu128), false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "signed" (TInt (TSigned Ti128), false) |> fun tc ->
+    Tc.add_local tc "unsigned" (TInt (TUnsigned Tu128), false)
   in
   let expression =
-    Ast.Bop
-      (Ast.Add, mk_node (Ast.Id "signed"), mk_node (Ast.Id "unsigned"))
+    Ast.Bop (Ast.Add, mk_node (Ast.Id "signed"), mk_node (Ast.Id "unsigned"))
   in
   assert_type_error (fun () -> type_exp ~tc expression)
 
 let test_integer_float_promotion _ =
   let open Typed in
-  assert_promoted_binary_type
-    (TInt (TSigned Ti16))
-    (TFloat Tf32) (TFloat Tf32);
-  assert_promoted_binary_type
-    (TInt (TSigned Ti32))
-    (TFloat Tf32) (TFloat Tf64);
-  assert_promoted_binary_type
-    (TFloat Tf32) (TFloat Tf64) (TFloat Tf64)
+  assert_promoted_binary_type (TInt (TSigned Ti16)) (TFloat Tf32) (TFloat Tf32);
+  assert_promoted_binary_type (TInt (TSigned Ti32)) (TFloat Tf32) (TFloat Tf64);
+  assert_promoted_binary_type (TFloat Tf32) (TFloat Tf64) (TFloat Tf64)
 
 let test_numeric_comparison_promotion _ =
   let open Typed in
   let tc =
-    Tc.empty
-    |> fun tc -> Tc.add_local tc "left" (TInt (TSigned Ti16), false)
-    |> fun tc -> Tc.add_local tc "right" (TInt (TUnsigned Tu16), false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "left" (TInt (TSigned Ti16), false) |> fun tc ->
+    Tc.add_local tc "right" (TInt (TUnsigned Tu16), false)
   in
   let expression =
     Ast.Bop (Ast.Lt, mk_node (Ast.Id "left"), mk_node (Ast.Id "right"))
   in
   match type_exp ~tc expression with
-  | Typed.Bop (_, Typed.Cast (_, left_ty), Typed.Cast (_, right_ty), result_ty),
-    actual_ty ->
+  | ( Typed.Bop (_, Typed.Cast (_, left_ty), Typed.Cast (_, right_ty), result_ty),
+      actual_ty ) ->
       assert_ty (TInt (TSigned Ti32)) left_ty;
       assert_ty (TInt (TSigned Ti32)) right_ty;
       assert_ty TBool result_ty;
@@ -249,11 +238,11 @@ let test_binary_type_mismatch _ =
 
 let test_conditional_expected_type _ =
   assert_program_type_checks
-    "fun main() => i32 {
-    \  let value: u8 = 0;
-    \  value = true ? 255 : 0;
-    \  return value as i32;
-     }"
+    "fun main() => i32 {\n\
+    \      let value: u8 = 0;\n\
+    \      value = true ? 255 : 0;\n\
+    \      return value as i32;\n\
+    \     }"
 
 let test_conditional_numeric_promotion _ =
   let open Typed in
@@ -261,8 +250,9 @@ let test_conditional_numeric_promotion _ =
   let wide_ty = TInt (TUnsigned Tu16) in
   let promoted_ty = TInt (TSigned Ti32) in
   let tc =
-    Tc.empty |> fun tc -> Tc.add_local tc "narrow" (narrow_ty, false)
-    |> fun tc -> Tc.add_local tc "wide" (wide_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "narrow" (narrow_ty, false) |> fun tc ->
+    Tc.add_local tc "wide" (wide_ty, false)
   in
   let expression =
     Ast.Conditional
@@ -271,9 +261,8 @@ let test_conditional_numeric_promotion _ =
         mk_node (Ast.Id "wide") )
   in
   match type_exp ~tc expression with
-  | Conditional
-      (_, Cast (_, true_ty), Cast (_, false_ty), result_ty),
-    actual_ty ->
+  | Conditional (_, Cast (_, true_ty), Cast (_, false_ty), result_ty), actual_ty
+    ->
       assert_ty promoted_ty true_ty;
       assert_ty promoted_ty false_ty;
       assert_ty promoted_ty result_ty;
@@ -281,8 +270,7 @@ let test_conditional_numeric_promotion _ =
   | _ -> assert_failure "expected both conditional branches to be promoted"
 
 let test_conditional_rejects_non_bool_condition _ =
-  assert_program_type_error
-    "fun main() => i32 { return 1 ? 2 : 3; }"
+  assert_program_type_error "fun main() => i32 { return 1 ? 2 : 3; }"
 
 let test_conditional_rejects_incompatible_branches _ =
   assert_program_type_error
@@ -355,10 +343,10 @@ let test_function_call_overapplication _ =
 let test_void_function_call_wrong_arity _ =
   List.iter assert_program_type_error
     [
-      "fun consume(value: i32) => void { }
-       fun main() => i32 { consume(); return 0; }";
-      "fun consume(value: i32) => void { }
-       fun main() => i32 { consume(1, 2); return 0; }";
+      "fun consume(value: i32) => void { }\n\
+      \       fun main() => i32 { consume(); return 0; }";
+      "fun consume(value: i32) => void { }\n\
+      \       fun main() => i32 { consume(1, 2); return 0; }";
     ]
 
 let test_constant_arithmetic_failures_are_type_errors _ =
@@ -386,18 +374,18 @@ let test_constant_folding_honors_expected_integer_type _ =
   | _ -> assert_failure "expected a folded u8 integer expression");
   assert_type_error (fun () -> type_exp ~expected (expression 200 100));
   assert_program_type_checks
-    "fun accept(value: u8) => u8 { return value; }
-     fun main() => i32 { return accept(1 + 2) as i32; }"
+    "fun accept(value: u8) => u8 { return value; }\n\
+    \     fun main() => i32 { return accept(1 + 2) as i32; }"
 
 let test_wide_context_accepts_folded_integer_expression _ =
   assert_program_type_checks
-    "fun accept(value: i64) => i64 { return value; }
-     fun folded_return() => i64 { return 2147483647 + 1; }
-     fun main() => i32 {
-       let value: i64 = 2147483647 + 1;
-       let argument = accept(2147483647 + 1);
-       return 0;
-     }"
+    "fun accept(value: i64) => i64 { return value; }\n\
+    \     fun folded_return() => i64 { return 2147483647 + 1; }\n\
+    \     fun main() => i32 {\n\
+    \       let value: i64 = 2147483647 + 1;\n\
+    \       let argument = accept(2147483647 + 1);\n\
+    \       return 0;\n\
+    \     }"
 
 let test_function_call_promotes_numeric_argument _ =
   let open Typed in
@@ -405,14 +393,16 @@ let test_function_call_promotes_numeric_argument _ =
   let argument_ty = TInt (TSigned Ti16) in
   let fn_ty = TRef (RFun ([ parameter_ty ], RetVal TBool)) in
   let tc =
-    Tc.empty |> fun tc -> Tc.add_global tc "positive" (fn_ty, false)
-    |> fun tc -> Tc.add_local tc "value" (argument_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_global tc "positive" (fn_ty, false) |> fun tc ->
+    Tc.add_local tc "value" (argument_ty, false)
   in
   let call =
     Ast.Call (mk_node (Ast.Id "positive"), [ mk_node (Ast.Id "value") ])
   in
   match type_exp ~tc call with
-  | Typed.Call (_, [ Typed.Cast (_, cast_ty) ], [ recorded_ty ], TBool), TBool ->
+  | Typed.Call (_, [ Typed.Cast (_, cast_ty) ], [ recorded_ty ], TBool), TBool
+    ->
       assert_ty parameter_ty cast_ty;
       assert_ty parameter_ty recorded_ty
   | _ -> assert_failure "expected function argument to be promoted"
@@ -451,72 +441,72 @@ let test_const_assignment_rejected _ =
 let test_const_field_assignment_rejected _ =
   List.iter assert_program_type_error
     [
-      "class Box { const value: i32 = 0; }
-       fun main() => i32 {
-         let box = new Box {};
-         box.value = 1;
-         return 0;
-       }";
-      "class Box {
-         const value: i32 = 0;
-         fun change() => void { value = 1; }
-       }
-       fun main() => i32 { return 0; }";
-      "class Box { const value: i32 = 0; }
-       fun main() => i32 {
-         let box = new Box {};
-         box.value += 1;
-         return 0;
-       }";
-      "class Box { const values: [i32; 2] = [1, 2]; }
-       fun main() => i32 {
-         let box = new Box {};
-         box.values = [3, 4];
-         return 0;
-       }";
+      "class Box { const value: i32 = 0; }\n\
+      \       fun main() => i32 {\n\
+      \         let box = new Box {};\n\
+      \         box.value = 1;\n\
+      \         return 0;\n\
+      \       }";
+      "class Box {\n\
+      \         const value: i32 = 0;\n\
+      \         fun change() => void { value = 1; }\n\
+      \       }\n\
+      \       fun main() => i32 { return 0; }";
+      "class Box { const value: i32 = 0; }\n\
+      \       fun main() => i32 {\n\
+      \         let box = new Box {};\n\
+      \         box.value += 1;\n\
+      \         return 0;\n\
+      \       }";
+      "class Box { const values: [i32; 2] = [1, 2]; }\n\
+      \       fun main() => i32 {\n\
+      \         let box = new Box {};\n\
+      \         box.values = [3, 4];\n\
+      \         return 0;\n\
+      \       }";
     ]
 
 let test_const_references_are_shallow _ =
   List.iter assert_program_type_error
     [
-      "class Box { let value: i32 = 0; }
-       fun main() => i32 {
-         const box: Box = new Box {};
-         box = new Box {};
-         return 0;
-       }";
-      "fun main() => i32 {
-         const values: [i32; 2] = [1, 2];
-         values = [3, 4];
-         return 0;
-       }";
+      "class Box { let value: i32 = 0; }\n\
+      \       fun main() => i32 {\n\
+      \         const box: Box = new Box {};\n\
+      \         box = new Box {};\n\
+      \         return 0;\n\
+      \       }";
+      "fun main() => i32 {\n\
+      \         const values: [i32; 2] = [1, 2];\n\
+      \         values = [3, 4];\n\
+      \         return 0;\n\
+      \       }";
     ];
   List.iter assert_program_type_checks
     [
-      "class Box { let value: i32 = 0; }
-       fun main() => i32 {
-         const box: Box = new Box {};
-         box.value = 2;
-         return box.value;
-       }";
-      "fun main() => i32 {
-         const values: [i32; 2] = [1, 2];
-         values[0] = 3;
-         return values[0];
-       }";
-      "class Box { const values: [i32; 2] = [1, 2]; }
-       fun main() => i32 {
-         let box = new Box {};
-         box.values[0] = 3;
-         return box.values[0];
-       }";
-      "class Inner { let value: i32 = 0; }
-       class Outer { const inner: Inner = new Inner {}; }
-       fun main() => i32 {
-         let outer = new Outer {};
-         outer.inner.value = 2;
-         return outer.inner.value;
-       }";
+      "class Box { let value: i32 = 0; }\n\
+      \       fun main() => i32 {\n\
+      \         const box: Box = new Box {};\n\
+      \         box.value = 2;\n\
+      \         return box.value;\n\
+      \       }";
+      "fun main() => i32 {\n\
+      \         const values: [i32; 2] = [1, 2];\n\
+      \         values[0] = 3;\n\
+      \         return values[0];\n\
+      \       }";
+      "class Box { const values: [i32; 2] = [1, 2]; }\n\
+      \       fun main() => i32 {\n\
+      \         let box = new Box {};\n\
+      \         box.values[0] = 3;\n\
+      \         return box.values[0];\n\
+      \       }";
+      "class Inner { let value: i32 = 0; }\n\
+      \       class Outer { const inner: Inner = new Inner {}; }\n\
+      \       fun main() => i32 {\n\
+      \         let outer = new Outer {};\n\
+      \         outer.inner.value = 2;\n\
+      \         return outer.inner.value;\n\
+      \       }";
     ]
 
 let test_assignment_type_mismatch_rejected _ =
@@ -534,8 +524,9 @@ let test_assignment_promotes_numeric_value _ =
   let target_ty = TInt (TSigned Ti64) in
   let source_ty = TInt (TSigned Ti16) in
   let tc =
-    Tc.empty |> fun tc -> Tc.add_local tc "target" (target_ty, false)
-    |> fun tc -> Tc.add_local tc "source" (source_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "target" (target_ty, false) |> fun tc ->
+    Tc.add_local tc "source" (source_ty, false)
   in
   let statement =
     Ast.Assn (mk_node (Ast.Id "target"), Ast.Eq, mk_node (Ast.Id "source"))
@@ -548,9 +539,7 @@ let test_assignment_promotes_numeric_value _ =
 
 let test_compound_assignment_validates_operator _ =
   let tc = Tc.add_local Tc.empty "flag" (Typed.TBool, false) in
-  let statement =
-    Assn (mk_node (Id "flag"), PluEq, mk_node (Bool false))
-  in
+  let statement = Assn (mk_node (Id "flag"), PluEq, mk_node (Bool false)) in
   assert_type_error (fun () ->
       Ts.type_stmt None tc Typed.RetVoid (mk_node statement) false)
 
@@ -562,8 +551,9 @@ let test_loop_control_scope _ =
 let test_free_preserves_source_order _ =
   let ref_ty = Typed.TRef (Typed.RClass "Resource") in
   let tc =
-    Tc.empty |> fun tc -> Tc.add_local tc "first" (ref_ty, false)
-    |> fun tc -> Tc.add_local tc "second" (ref_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "first" (ref_ty, false) |> fun tc ->
+    Tc.add_local tc "second" (ref_ty, false)
   in
   let statement = Free [ mk_node (Id "first"); mk_node (Id "second") ] in
   match Ts.type_stmt None tc Typed.RetVoid (mk_node statement) false with
@@ -579,17 +569,17 @@ let test_float_loop_default_step_preserves_type _ =
         [] )
   in
   match Ts.type_stmt None Tc.empty Typed.RetVoid (mk_node statement) false with
-  | ( _,
-      Typed.For (_, _, _, _, Typed.Float (_, Typed.Tf64), step_ty, []),
-      false ) ->
+  | _, Typed.For (_, _, _, _, Typed.Float (_, Typed.Tf64), step_ty, []), false
+    ->
       assert_ty Typed.(TFloat Tf64) step_ty
   | _ -> assert_failure "expected an f64 default loop step"
 
 let test_integer_loop_default_step_preserves_width _ =
   let bound_ty = Typed.(TInt (TSigned Ti16)) in
   let tc =
-    Tc.empty |> fun tc -> Tc.add_local tc "start" (bound_ty, false)
-    |> fun tc -> Tc.add_local tc "finish" (bound_ty, false)
+    Tc.empty |> fun tc ->
+    Tc.add_local tc "start" (bound_ty, false) |> fun tc ->
+    Tc.add_local tc "finish" (bound_ty, false)
   in
   let statement =
     For
@@ -600,7 +590,8 @@ let test_integer_loop_default_step_preserves_width _ =
   in
   match Ts.type_stmt None tc Typed.RetVoid (mk_node statement) false with
   | ( _,
-      Typed.For (_, _, _, _, Typed.Int (_, Typed.TSigned Typed.Ti16), step_ty, []),
+      Typed.For
+        (_, _, _, _, Typed.Int (_, Typed.TSigned Typed.Ti16), step_ty, []),
       false ) ->
       assert_ty bound_ty step_ty
   | _ -> assert_failure "expected an i16 default loop step"
@@ -630,42 +621,40 @@ let test_function_body_return_completeness _ =
 
 let test_matching_prototype_and_definition _ =
   let source =
-    "fun identity(value: i32) => i32;
-     fun identity(value: i32) => i32 { return value; }
-     fun main() => i32 { return identity(7); }"
+    "fun identity(value: i32) => i32;\n\
+    \     fun identity(value: i32) => i32 { return value; }\n\
+    \     fun main() => i32 { return identity(7); }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, []) -> ()
+  | Typed.Prog (_, _, _, [], []) -> ()
   | _ -> assert_failure "resolved prototype should not be emitted"
 
 let test_matching_void_prototype_and_definition _ =
   assert_program_type_checks
-    "fun consume(value: i32) => void;
-     fun consume(value: i32) => void { }
-     fun main() => i32 { consume(7); return 0; }"
+    "fun consume(value: i32) => void;\n\
+    \     fun consume(value: i32) => void { }\n\
+    \     fun main() => i32 { consume(7); return 0; }"
 
 let test_mismatched_prototype_and_definition _ =
   assert_program_type_error
-    "fun identity(value: i32) => i32;
-     fun identity(value: i64) => i32 { return value as i32; }
-     fun main() => i32 { return 0; }";
+    "fun identity(value: i32) => i32;\n\
+    \     fun identity(value: i64) => i32 { return value as i32; }\n\
+    \     fun main() => i32 { return 0; }";
   assert_program_type_error
-    "fun identity(value: i32) => i32;
-     fun identity(value: i32) => i64 { return value; }
-     fun main() => i32 { return 0; }"
+    "fun identity(value: i32) => i32;\n\
+    \     fun identity(value: i32) => i64 { return value; }\n\
+    \     fun main() => i32 { return 0; }"
 
 let test_undefined_prototype_rejected _ =
   assert_program_type_error
-    "fun identity(value: i32) => i32;
-     fun main() => i32 { return 0; }"
+    "fun identity(value: i32) => i32;\n     fun main() => i32 { return 0; }"
 
 let test_external_prototype_is_defined _ =
   let source =
-    "@C fun external(value: i32) => void;
-     fun main() => i32 { return 0; }"
+    "@C fun external(value: i32) => void;\n     fun main() => i32 { return 0; }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [ _ ]) -> ()
+  | Typed.Prog (_, _, _, [ _ ], []) -> ()
   | _ -> assert_failure "external prototype should be emitted"
 
 let test_declared_source_types_are_validated _ =
@@ -673,34 +662,34 @@ let test_declared_source_types_are_validated _ =
     [
       "fun main() => i32 { let value: Missing = null; return 0; }";
       "fun main() => i32 { let value = 1 as Missing; return 0; }";
-      "class Box { let value: Missing = null; }
-       fun main() => i32 { return 0; }";
-      "class Box { fun value() => Missing { return null; } }
-       fun main() => i32 { return 0; }";
-      "fun invalid(value: Missing) => i32 { return 0; }
-       fun main() => i32 { return 0; }";
-      "fun main() => i32 {
-         let apply = fn[](value: Missing) -> i32 { return 0; };
-         return 0;
-       }";
+      "class Box { let value: Missing = null; }\n\
+      \       fun main() => i32 { return 0; }";
+      "class Box { fun value() => Missing { return null; } }\n\
+      \       fun main() => i32 { return 0; }";
+      "fun invalid(value: Missing) => i32 { return 0; }\n\
+      \       fun main() => i32 { return 0; }";
+      "fun main() => i32 {\n\
+      \         let apply = fn[](value: Missing) -> i32 { return 0; };\n\
+      \         return 0;\n\
+      \       }";
     ]
 
 let test_class_type_validation_supports_forward_references _ =
   assert_program_type_checks
-    "class Holder { let value: Value = null; }
-     class Value { }
-     class Node { let next: Node = null; }
-     fun main() => i32 { return 0; }"
+    "class Holder { let value: Value = null; }\n\
+    \     class Value { }\n\
+    \     class Node { let next: Node = null; }\n\
+    \     fun main() => i32 { return 0; }"
 
 let test_class_initializers_support_forward_layouts _ =
   assert_program_type_checks
-    "class Holder { let value: Value = new Value { x = 1 }; }
-     class Value { let x: i32; }
-     fun main() => i32 { return 0; }";
+    "class Holder { let value: Value = new Value { x = 1 }; }\n\
+    \     class Value { let x: i32; }\n\
+    \     fun main() => i32 { return 0; }";
   assert_program_type_error
-    "class Holder { let value: Value = new Value {}; }
-     class Value { let x: i32; }
-     fun main() => i32 { return 0; }"
+    "class Holder { let value: Value = new Value {}; }\n\
+    \     class Value { let x: i32; }\n\
+    \     fun main() => i32 { return 0; }"
 
 let test_array_length_must_fit_target_int _ =
   let huge_length = Z.shift_left Z.one 100 in
@@ -775,51 +764,193 @@ let test_lambda_reassignment_rejects_parameter_mismatch _ =
 let test_typed_lambda_signature_must_match_expected_type _ =
   List.iter assert_program_type_error
     [
-      "fun main() => i32 {
-       \  let apply: (i32) -> i32 =
-       \    fn[](value: bool) -> i32 { return 0; };
-       \  return 0;
-       }";
-      "fun main() => i32 {
-       \  let apply: (i32) -> i32 =
-       \    fn[](left: i32, right: i32) -> i32 { return left; };
-       \  return 0;
-       }";
+      "fun main() => i32 {\n\
+      \         let apply: (i32) -> i32 =\n\
+      \           fn[](value: bool) -> i32 { return 0; };\n\
+      \         return 0;\n\
+      \       }";
+      "fun main() => i32 {\n\
+      \         let apply: (i32) -> i32 =\n\
+      \           fn[](left: i32, right: i32) -> i32 { return left; };\n\
+      \         return 0;\n\
+      \       }";
     ]
 
 let test_nonvoid_lambda_requires_return _ =
   assert_program_type_error
-    "fun main() => i32 {
-    \  let apply: (i32) -> i32 = fn[](value) { let copy = value; };
-    \  return 0;
-     }";
+    "fun main() => i32 {\n\
+    \      let apply: (i32) -> i32 = fn[](value) { let copy = value; };\n\
+    \      return 0;\n\
+    \     }";
   assert_program_type_error
-    "fun main() => i32 {
-    \  let apply = fn[](value: i32) -> i32 { let copy = value; };
-    \  return 0;
-     }"
+    "fun main() => i32 {\n\
+    \      let apply = fn[](value: i32) -> i32 { let copy = value; };\n\
+    \      return 0;\n\
+    \     }"
 
 let test_nonvoid_lambda_accepts_complete_returns _ =
   assert_program_type_checks
-    "fun main() => i32 {
-    \  let apply: (i32) -> i32 = fn[](value) {
-    \    if value > 0 { return value; } else { return 0; }
-    \  };
-    \  return apply(1);
-     }"
+    "fun main() => i32 {\n\
+    \      let apply: (i32) -> i32 = fn[](value) {\n\
+    \        if value > 0 { return value; } else { return 0; }\n\
+    \      };\n\
+    \      return apply(1);\n\
+    \     }"
 
 let test_void_lambda_does_not_require_return _ =
   assert_program_type_checks
-    "fun main() => i32 {
-    \  let consume: (i32) -> void = fn[](value) { let copy = value; };
-    \  consume(1);
-    \  free consume;
-    \  return 0;
-     }"
+    "fun main() => i32 {\n\
+    \      let consume: (i32) -> void = fn[](value) { let copy = value; };\n\
+    \      consume(1);\n\
+    \      free consume;\n\
+    \      return 0;\n\
+    \     }"
+
+let test_global_types_and_constant_dependencies _ =
+  let source =
+    {|const result = base + 2;
+const base: i8 = 40;
+const minimum: i8 = -128;
+let copy = base;
+let ratio: f32 = -1.5;
+let ratio_copy = ratio_const;
+const ratio_const: f32 = 2.5;
+let enabled = true;
+let greeting = "hello";
+const greeting_alias = original_greeting;
+const original_greeting = "shared";
+const bits: u8 = 1;
+let inverted = ~bits;
+const negative: i8 = -1;
+const step: i8 = 1;
+let shifted = negative >> step;
+let count: i32;
+let empty: string;
+fun main() => i32 { count = result as i32; return count; }|}
+  in
+  match type_program_exn source with
+  | Typed.Prog (_, _, _, _, globals) -> (
+      let find name =
+        List.find (fun (g : Typed.gdecl) -> g.gname = name) globals
+      in
+      assert_ty Typed.(TInt (TSigned Ti8)) (find "copy").gtyp;
+      assert_ty Typed.(TFloat Tf32) (find "ratio_copy").gtyp;
+      assert_ty Typed.TBool (find "enabled").gtyp;
+      assert_ty Typed.(TRef RString) (find "greeting").gtyp;
+      assert_equal
+        Typed.(Id ("original_greeting", TRef RString))
+        (find "greeting_alias").ginit;
+      assert_equal
+        Typed.(Int (Z.of_int 254, TUnsigned Tu8))
+        (find "inverted").ginit;
+      assert_equal
+        Typed.(Int (Z.of_int 127, TSigned Ti8))
+        (find "shifted").ginit;
+      assert_bool "constness survives typing" (find "base").gconst;
+      assert_bool "let remains mutable" (not (find "copy").gconst);
+      match (find "count").ginit with
+      | Typed.Int (value, _) -> assert_equal Z.zero value
+      | _ ->
+          assert_failure
+            "an uninitialized integer global should default to zero")
+
+let test_global_initializer_rejections _ =
+  List.iter assert_program_type_error
+    [
+      "let missing; fun main() => i32 { return 0; }";
+      "let bad: u8 = 256; fun main() => i32 { return 0; }";
+      "let bad: i8 = -129; fun main() => i32 { return 0; }";
+      "let bad: u8 = -1; fun main() => i32 { return 0; }";
+      "let bad: i8 = 127 + 1; fun main() => i32 { return 0; }";
+      "const base: i8 = 1; let wrong: u8 = base; fun main() => i32 { return 0; \
+       }";
+      "const base: i64 = 42; let wrong: i32 = base; fun main() => i32 { return \
+       0; }";
+      "let source = 42; let copy = source; fun main() => i32 { return 0; }";
+      "let result = compute(); fun compute() => i32 { return 42; } fun main() \
+       => i32 { return 0; }";
+      "let values = [1, 2]; fun main() => i32 { return 0; }";
+      "class Box {} let box: Box = null; fun main() => i32 { return 0; }";
+      "let callback: () -> i32 = fn[]() { return 42; }; fun main() => i32 { \
+       return 0; }";
+      "let bad: f32 = 1e100; fun main() => i32 { return 0; }";
+      "const a = b; const b = a; fun main() => i32 { return 0; }";
+      "const self = self; fun main() => i32 { return 0; }";
+    ]
+
+let test_global_reads_writes_and_scopes _ =
+  assert_program_type_checks
+    {|let count = 40;
+class Box { let value: i32 = count; fun read() => i32 { return value + count; } }
+fun increment() => void { count += 1; }
+fun main() => i32 {
+  let direct: () -> i32 = fn[]() { return count; };
+  let snapshot: () -> i32 = fn[count]() { return count; };
+  increment();
+  let count = 2;
+  return direct() + count;
+}|};
+  List.iter assert_program_type_error
+    [
+      "const count = 40; fun main() => i32 { count = 41; return count; }";
+      "const count = 40; fun main() => i32 { count += 1; return count; }";
+      "let count: i64 = 42; fun main() => i32 { return count; }";
+      "let count = 42; fun main() => i32 { let invalid: string = count; return \
+       0; }";
+      "let same = 1; let same = 2; fun main() => i32 { return 0; }";
+      "let value = 1; fun value() => i32 { return 0; } fun main() => i32 { \
+       return 0; }";
+    ]
+
+let test_global_cycle_diagnostic _ =
+  match
+    Typing.Type.type_prog
+      (parse_exn "const first = second; const second = first;")
+  with
+  | Ok _ -> assert_failure "expected cyclic globals to fail"
+  | Error error ->
+      let message = Core.Error.to_string_hum error in
+      List.iter
+        (fun name ->
+          assert_bool
+            ("cycle diagnostic should identify " ^ name)
+            (Core.String.is_substring message ~substring:name))
+        [ "first"; "second" ]
+
+let test_global_initializer_error_range _ =
+  let lexbuf =
+    Lexing.from_string "const zero = 0;\nconst value = 10 /\n    zero;"
+  in
+  lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "global.bl" };
+  let ast =
+    match Parsing.Parse.parse_prog lexbuf with
+    | Ok program -> program
+    | Error error -> assert_failure (Core.Error.to_string_hum error)
+  in
+  match Typing.Type.type_prog ast with
+  | Ok _ -> assert_failure "expected division by a constant zero to fail"
+  | Error error ->
+      let message = Core.Error.to_string_hum error in
+      List.iter
+        (fun substring ->
+          assert_bool
+            ("expected initializer diagnostic to contain " ^ substring)
+            (Core.String.is_substring message ~substring))
+        [
+          "Error at global.bl:3:5:"; "Division by zero in constant expression.";
+        ]
 
 let suite =
   "Typing"
   >::: [
+         "global types and constant dependencies"
+         >:: test_global_types_and_constant_dependencies;
+         "global initializer rejections" >:: test_global_initializer_rejections;
+         "global reads writes and scopes"
+         >:: test_global_reads_writes_and_scopes;
+         "global cycle diagnostic" >:: test_global_cycle_diagnostic;
+         "global initializer diagnostic range"
+         >:: test_global_initializer_error_range;
          "literal types" >:: test_literal_types;
          "expected integer type" >:: test_expected_integer_type;
          "integer overflow" >:: test_integer_overflow;
@@ -868,7 +999,8 @@ let suite =
                   match Typing.Type.type_prog (parse_exn source) with
                   | Error error ->
                       let message = Core.Error.to_string_hum error in
-                      assert_bool ("expected an arity error, got: " ^ message)
+                      assert_bool
+                        ("expected an arity error, got: " ^ message)
                         (Core.String.is_substring message
                            ~substring:"invalid number of arguments")
                   | Ok _ -> assert_failure "underapplication was accepted")
@@ -889,7 +1021,8 @@ let suite =
          >:: test_integer_loop_default_step_preserves_width;
          "loop return is not guaranteed"
          >:: test_loop_body_return_does_not_guarantee_function_return;
-         "return after loop" >:: test_return_after_loop_satisfies_function_return;
+         "return after loop"
+         >:: test_return_after_loop_satisfies_function_return;
          "program errors" >:: test_program_errors;
          "function return completeness"
          >:: test_function_body_return_completeness;
@@ -922,7 +1055,8 @@ let suite =
          >:: test_lambda_reassignment_rejects_parameter_mismatch;
          "typed lambda signature"
          >:: test_typed_lambda_signature_must_match_expected_type;
-         "non-void lambda missing return" >:: test_nonvoid_lambda_requires_return;
+         "non-void lambda missing return"
+         >:: test_nonvoid_lambda_requires_return;
          "non-void lambda complete returns"
          >:: test_nonvoid_lambda_accepts_complete_returns;
          "void lambda return optional"

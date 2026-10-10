@@ -1,11 +1,11 @@
 open Ast
-(** Resolve files in their own lexical scope, then combine declarations. Only
-    ordinary names cross into typing/desugaring; the native FFI is unchanged. *)
+(** Resolve files in their own lexical scope, then combine declarations. Module
+    metadata stays in the frontend; subsequent phases receive resolved names. *)
 
 open Module_model
 module Names = Set.Make (String)
 
-type kind = Function_kind | Class_kind
+type kind = Function_kind | Class_kind | Global_kind
 type symbol = { identity : string; kind : kind; public : bool }
 
 type scope = {
@@ -23,6 +23,7 @@ let declaration_info = function
   | Function fn -> (fn.elt.fname, Function_kind, fn.elt.annotations)
   | Prototype pn -> (pn.elt.fname, Function_kind, pn.elt.annotations)
   | Class cn -> (cn.elt.cname, Class_kind, cn.elt.annotations)
+  | Global gn -> (gn.elt.gname, Global_kind, [])
 
 let make_scope entry source =
   let declarations = Hashtbl.create 16 in
@@ -42,7 +43,8 @@ let make_scope entry source =
         | _ -> false
       in
       if
-        name = "main" && (source.id <> entry || kind = Class_kind || is_external)
+        name = "main"
+        && (source.id <> entry || kind <> Function_kind || is_external)
       then
         fail item "Only the entry module may declare the Blink function main.";
       let identity =
@@ -316,6 +318,21 @@ let resolve graph : (program, diagnostic) result =
           let identity = (local_symbol node name).identity in
           let declaration =
             match node.elt.declaration with
+            | Global value ->
+                Global
+                  {
+                    value with
+                    elt =
+                      {
+                        value.elt with
+                        gname = identity;
+                        gtyp = Option.map ty value.elt.gtyp;
+                        ginit =
+                          Option.map
+                            (exp Names.empty Names.empty)
+                            value.elt.ginit;
+                      };
+                  }
             | Function value ->
                 Function (fn Names.empty Names.empty identity value)
             | Prototype value ->

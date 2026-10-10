@@ -12,11 +12,11 @@ Value* LValueCreator::codegenLValue(const Exp& e) {
             using T = std::decay_t<decltype(node)>;
 
             if constexpr (std::is_same_v<T, EId>) {
-                auto it = gen.varEnv.find(node.id);
-                if (it == gen.varEnv.end()) {
+                auto storage = gen.findVariableStorage(node.id);
+                if (!storage) {
                     throw std::runtime_error("Unknown variable (lvalue): " + node.id);
                 }
-                return it->second; // allocaInst*
+                return storage->address;
             }
 
             else if constexpr (std::is_same_v<T, EProj>) {

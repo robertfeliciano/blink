@@ -84,6 +84,8 @@ They are ignored and should not be committed.
 - `frontend/src/ast/ast.ml` defines the parser-facing AST.
 - AST nodes carry `Util.Range.t` source locations.
 - This tree preserves source-level constructs and optional annotations.
+- Top-level global variables use `gdecl` nodes and the `Global` declaration
+  variant, with the same export wrapper as functions and classes.
 - `frontend/src/ast/dune` exposes the AST library.
 
 ### Parsing
@@ -91,9 +93,10 @@ They are ignored and should not be committed.
 The module implementation lives in `frontend/src/modules/` as the standalone
 `blink.modules` library. DFS loads a dependency-first graph with cycle detection.
 Per-file name resolution enforces exports and lexical scope before combining
-declarations for typing. Module-owned symbols and classes have stable internal
-identities; entry `main` and `@C` symbols retain exact names. Shared C signatures
-are reconciled by typing. No module data crosses the native FFI.
+declarations for typing. Module-owned symbols, classes, and globals have stable
+internal identities; entry `main` and `@C` symbols retain exact names. Shared C
+signatures are reconciled by typing. Import/export metadata stays in the frontend;
+globals cross the native FFI as ordinary resolved declarations.
 See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
 for a runnable example, and `runtime/stdlib/io.bl` for bootstrap `std.io` using libc.
 Module interfaces are inferred from `.ml`, without module `.mli` files.
@@ -137,7 +140,11 @@ Classes track fields and method headers in a separate class context.
 
 Desugaring removes constructs the backend does not understand directly.
 For example, methods are extracted into functions and lambdas are lifted.
-The final program includes the selected optimization level.
+The final program includes the selected optimization level and global
+declarations. Globals support scalar and string storage with constant
+initializers; typing resolves constant dependencies and rejects cycles before
+lowering. Runtime global initialization and aggregate/function globals remain
+unsupported. The desugared program's fifth field is its `gdecl` list.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities
@@ -175,6 +182,10 @@ Exercise every changed constructor through a backend or end-to-end test.
 It also tracks local allocas, class/struct metadata, and loop branch targets.
 Program codegen declares classes first, then built-ins and function prototypes,
 then emits function bodies and runs the requested LLVM optimization pipeline.
+Global storage is declared before function bodies and kept separately from local
+allocas. Reads and assignments share local-first address lookup. Exported globals
+have one module-owned identity and storage location across every import; source
+exports do not require LLVM external linkage.
 The generated module targets the build host and uses position-independent code.
 
 ### Tests

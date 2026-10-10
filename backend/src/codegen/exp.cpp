@@ -4,6 +4,22 @@
 
 #include <util/debug.h>
 
+llvm::Constant* ExpToLLVisitor::codegenConstant(const Exp& e) {
+    return std::visit(
+        [&](const auto& node) -> llvm::Constant* {
+            using T = std::decay_t<decltype(node)>;
+            if constexpr (std::is_same_v<T, EBool> || std::is_same_v<T, EInt> || std::is_same_v<T, EFloat> ||
+                          std::is_same_v<T, EStr>) {
+                return llvm::cast<llvm::Constant>((*this)(node));
+            } else if constexpr (std::is_same_v<T, EId>) {
+                return gen.declVisitor.codegenGlobalInitializer(node.id);
+            } else {
+                throw std::runtime_error("Global initializer must be a literal or constant global reference");
+            }
+        },
+        e.val);
+}
+
 short getIntSize(const EInt& e) {
     if (e.int_ty->tag == IntTyTag::Unsigned) {
         switch (e.int_ty->uint) {
@@ -63,13 +79,10 @@ Value* ExpToLLVisitor::operator()(const EBool& e) {
 }
 
 Value* ExpToLLVisitor::operator()(const EId& e) {
-    // 1. Check local variable environment (alloca/pointers)
-    auto it = gen.varEnv.find(e.id);
-    if (it != gen.varEnv.end()) {
-        return gen.builder->CreateLoad(it->second->getAllocatedType(), it->second, e.id.c_str());
+    if (auto storage = gen.findVariableStorage(e.id)) {
+        return gen.builder->CreateLoad(storage->type, storage->address, e.id.c_str());
     }
 
-    // 2. Check for a global function in the module
     if (auto* func = gen.mod->getFunction(e.id)) {
         // In LLVM, functions are treated as constant pointers to the function code.
         // We return the function pointer directly without a 'load'.
@@ -271,12 +284,9 @@ Value* ExpToLLVisitor::operator()(const EStr& e) {
     llvm::GlobalVariable* globalStr =
         new llvm::GlobalVariable(*gen.mod, arrayTy, true, llvm::GlobalValue::PrivateLinkage, strConstant, varName);
 
-    llvm::Value* indices[] = {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0),
-                              llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
-
-    llvm::Value* strPtr = gen.builder->CreateInBoundsGEP(arrayTy, globalStr, indices, "str_ptr");
-
-    return strPtr;
+    llvm::Constant* indices[] = {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0),
+                                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
+    return llvm::ConstantExpr::getInBoundsGetElementPtr(arrayTy, globalStr, indices);
 }
 
 Value* ExpToLLVisitor::operator()(const ECall& e) {

@@ -24,9 +24,11 @@ let test_order_and_locations _ =
       assert_equal ~printer:string_of_int (index + 1) line)
     declarations;
   match declarations with
-  | [ { elt = { declaration = Prototype pn; _ }; loc = ploc };
-      { elt = { declaration = Class cn; _ }; loc = cloc };
-      { elt = { declaration = Function fn; _ }; loc = floc } ] ->
+  | [
+   { elt = { declaration = Prototype pn; _ }; loc = ploc };
+   { elt = { declaration = Class cn; _ }; loc = cloc };
+   { elt = { declaration = Function fn; _ }; loc = floc };
+  ] ->
       assert_equal ploc pn.loc;
       assert_equal cloc cn.loc;
       assert_equal floc fn.loc;
@@ -41,11 +43,14 @@ let test_partition_and_export _ =
   let export_loc = Util.Range.mk_range "module.bl" (1, 0) (1, 6) in
   let exported =
     List.map
-      (fun top -> { top with elt = { top.elt with export_loc = Some export_loc } })
+      (fun top ->
+        { top with elt = { top.elt with export_loc = Some export_loc } })
       declarations
   in
   let program = Prog (imports, exported) in
-  assert_equal (partition_declarations original) (partition_declarations program);
+  assert_equal
+    (partition_declarations original)
+    (partition_declarations program);
   List.iter
     (fun top ->
       assert_equal (Some export_loc) top.elt.export_loc;
@@ -56,15 +61,51 @@ let test_partition_and_export _ =
   | Error error -> assert_failure (Core.Error.to_string_hum error)
   | Ok _ -> ()
 
+let test_exported_global_location _ =
+  let program = parse "export const answer: i32 = 42;\nlet counter: i32;" in
+  match program with
+  | Prog
+      ( [],
+        [
+          {
+            elt = { declaration = Global answer; export_loc = Some export_loc };
+            _;
+          };
+          { elt = { declaration = Global counter; export_loc = None }; _ };
+        ] ) ->
+      assert_equal "answer" answer.elt.gname;
+      assert_bool "export survives printing"
+        (Core.String.is_substring (show_prog program) ~substring:"export ");
+      assert_equal ("module.bl", (1, 1), (1, 7)) export_loc;
+      let filename, (line, _), _ = answer.loc in
+      assert_equal "module.bl" filename;
+      assert_equal 1 line;
+      (match answer.elt.ginit with
+      | Some initial ->
+          let file, (line, column), _ = initial.loc in
+          assert_equal "module.bl" file;
+          assert_equal 1 line;
+          assert_equal 28 column
+      | None -> assert_failure "missing constant initializer range");
+      assert_equal None counter.elt.ginit
+  | _ -> assert_failure "exported globals should preserve source ranges"
+
 let located line first last value =
-  { elt = value; loc = Util.Range.mk_range "module.bl" (line, first) (line, last) }
+  {
+    elt = value;
+    loc = Util.Range.mk_range "module.bl" (line, first) (line, last);
+  }
 
 let test_located_import _ =
   let std = located 1 7 10 "std" in
   let io = located 1 11 13 "io" in
   let alias = located 1 17 24 "console" in
   let import : Modules.Module_model.import =
-    located 1 0 25 { path = located 1 7 13 { qualifiers = [ std ]; name = io }; alias = Some alias }
+    located 1 0 25
+      {
+        path = located 1 7 13 { qualifiers = [ std ]; name = io };
+        alias = Some alias;
+      }
   in
   assert_equal [ std; io ] (name_components import.elt.path);
   assert_equal (Some alias) import.elt.alias;
@@ -74,7 +115,8 @@ let test_located_import _ =
   let (Prog (_, declarations)) = parse declarations_source in
   let program = Prog ([ import ], declarations) in
   assert_bool "program printer must include imports"
-    (Core.String.is_substring (show_prog program) ~substring:"import std.io as console;");
+    (Core.String.is_substring (show_prog program)
+       ~substring:"import std.io as console;");
   match Typing.Type.type_prog program with
   | Ok _ -> assert_failure "unresolved imports must not be silently ignored"
   | Error error ->
@@ -86,8 +128,10 @@ let test_located_import _ =
 
 let () =
   run_test_tt_main
-    ("Module AST" >::: [
-       "source order and locations" >:: test_order_and_locations;
-       "exports and partition" >:: test_partition_and_export;
-       "located imports" >:: test_located_import;
-     ])
+    ("Module AST"
+    >::: [
+           "source order and locations" >:: test_order_and_locations;
+           "exports and partition" >:: test_partition_and_export;
+           "exported global locations" >:: test_exported_global_location;
+           "located imports" >:: test_located_import;
+         ])

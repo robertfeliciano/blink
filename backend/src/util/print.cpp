@@ -402,6 +402,9 @@ std::string cdeclToString(const CDecl& c) {
 
 std::string programToString(const Program& prog) {
     std::ostringstream oss;
+    for (const auto& g : prog.globals) {
+        oss << gdeclToString(g) << "\n\n";
+    }
     for (const auto& c : prog.classes) {
         oss << cdeclToString(c) << "\n\n";
     }
@@ -412,4 +415,9 @@ std::string programToString(const Program& prog) {
         oss << fdeclToString(f) << "\n\n";
     }
     return oss.str();
+}
+
+std::string gdeclToString(const GDecl& g) {
+    return std::string(g.gconst ? "const " : "let ") + g.gname + ": " + tyToString(g.gtyp) + " = " +
+           expToString(*g.ginit) + ";";
 }

@@ -32,20 +32,117 @@ let native ?(options = []) name files =
           compile_and_run ~expected_exit:42))
     [ "-O0"; "-O2" ]
 
-let negative name files expected =
+let negative ?(also = []) name files expected =
   name >:: fun context ->
   in_temp_dir ~prefix:"blink-module-errors" context (fun () ->
       write_sources (Sys.getcwd ()) files;
       assert_exit_code 1
         (command "main.bl" ^ " > compiler.stdout 2> compiler.stderr");
-      assert_contains ~substring:expected
-        (Core.In_channel.read_all "compiler.stderr");
+      let stderr = Core.In_channel.read_all "compiler.stderr" in
+      List.iter
+        (fun substring -> assert_contains ~substring stderr)
+        (expected :: also);
       assert_bool "no output on failure" (not (Sys.file_exists "new_output.ll")))
 
 let suite =
   "module native integration"
   >::: List.concat
          [
+           native "global imported string identity"
+             [
+               ("state.bl", "export const message = \"shared\";");
+               ( "main.bl",
+                 {|import state;
+const alias = state.message;
+let copy = alias;
+fun main() => i32 {
+  if alias != state.message or copy != state.message { return 1; }
+  return 42;
+}|}
+               );
+             ];
+           native "global diamond shared storage"
+             [
+               ( "state.bl",
+                 "export let count = 40; export const increment = 1; export \
+                  fun bump() => void { count += increment; }" );
+               ( "left.bl",
+                 "import state; export fun update() => void { state.bump(); }"
+               );
+               ( "right.bl",
+                 "import state; export fun read() => i32 { return state.count; \
+                  }" );
+               ( "main.bl",
+                 "import left; import right; import state as shared; fun \
+                  main() => i32 { left.update(); shared.count += \
+                  shared.increment; return right.read(); }" );
+             ];
+           native "global module isolation and constant imports"
+             [
+               ("left.bl", "export let value = 20; export const seed: i32 = 20;");
+               ("right.bl", "export let value = 21;");
+               ( "main.bl",
+                 "import left; import right; const seed = left.seed; fun \
+                  main() => i32 { left.value += 1; if right.value != 21 { \
+                  return 1; } right.value = seed + 1; return left.value + \
+                  right.value; }" );
+             ];
+           native "global imported strings and lambdas"
+             [
+               ( "state.bl",
+                 "export let message = \"hello\"; export let count = 20; \
+                  export fun bump() => void { count += 2; }" );
+               ( "main.bl",
+                 {|import state;
+@C fun strcmp(left: string, right: string) => i32;
+fun main() => i32 {
+  let direct: () -> i32 = fn[]() { return state.count; };
+  let snapshot: () -> i32 = fn[state.count]() { return state.count; };
+  state.bump();
+  if strcmp(state.message, "hello") != 0 { return 1; }
+  state.message = "world";
+  if strcmp(state.message, "world") != 0 { return 2; }
+  let result = direct() + snapshot();
+  free direct;
+  free snapshot;
+  return result;
+}|}
+               );
+             ];
+           [
+             negative
+               ~also:[ "main.bl:1:"; "first"; "second" ]
+               "global cycle diagnostic"
+               [
+                 ( "main.bl",
+                   "const first = second; const second = first; fun main() => \
+                    i32 { return 0; }" );
+               ]
+               "Cyclic global initializer dependency";
+             negative "global imported constant assignment"
+               [
+                 ("state.bl", "export const count = 42;");
+                 ( "main.bl",
+                   "import state; fun main() => i32 { state.count += 1; return \
+                    state.count; }" );
+               ]
+               "const";
+             negative "global imported private value"
+               [
+                 ("state.bl", "let secret = 42;");
+                 ( "main.bl",
+                   "import state; fun main() => i32 { return state.secret; }" );
+               ]
+               "private";
+             negative "global mutable initializer through import"
+               [
+                 ("state.bl", "export let count = 42;");
+                 ( "main.bl",
+                   "import state; let copy = state.count; fun main() => i32 { \
+                    return copy; }" );
+               ]
+               "mutable global";
+           ];
            native
              ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
              "module example"
@@ -53,6 +150,7 @@ let suite =
                ("main.bl", example_source "main.bl");
                ("helper.bl", example_source "helper.bl");
                ("geometry.bl", example_source "geometry.bl");
+               ("state.bl", example_source "state.bl");
              ];
            native "nested aliases diamond private helpers"
              [

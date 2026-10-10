@@ -339,7 +339,9 @@ let exact_nonnegative_int (node : 'a node) description value =
     type_error node (description ^ " is too large for this target")
   else Z.to_int value
 
-let rec eval_const_exp (e : exp node) : Z.t option =
+(* A typed operation supplies its width for bit-pattern operations. Untyped
+   source expressions retain the existing arbitrary-precision rules. *)
+let rec eval_const_exp ?int_ty (e : exp node) : Z.t option =
   match e.elt with
   | Int i -> Some i
   | Bop (Add, e1, e2) -> eval_const_binop e1 e2 Z.add
@@ -363,7 +365,10 @@ let rec eval_const_exp (e : exp node) : Z.t option =
           Z.shift_left v1 (exact_nonnegative_int e2 "Shift amount" v2))
   | Bop (Lshr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
-          Z.shift_right_trunc v1 (exact_nonnegative_int e2 "Shift amount" v2))
+          let shift = exact_nonnegative_int e2 "Shift amount" v2 in
+          match int_ty with
+          | Some ty -> Z.shift_right (Z.extract v1 0 (int_width ty)) shift
+          | None -> Z.shift_right_trunc v1 shift)
   | Bop (Ashr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
           Z.shift_right v1 (exact_nonnegative_int e2 "Shift amount" v2))
@@ -375,7 +380,15 @@ let rec eval_const_exp (e : exp node) : Z.t option =
   | Bop (BXor, e1, e2) -> eval_const_binop e1 e2 Z.logxor
   | Bop (BOr, e1, e2) -> eval_const_binop e1 e2 Z.logor
   | Uop (BNeg, e1) -> (
-      match eval_const_exp e1 with Some v1 -> Some Z.(lognot v1) | _ -> None)
+      match eval_const_exp e1 with
+      | Some v1 ->
+          let value = Z.lognot v1 in
+          Some
+            (match int_ty with
+            | Some (Typed_ast.TUnsigned _ as ty) ->
+                Z.extract value 0 (int_width ty)
+            | _ -> value)
+      | _ -> None)
   | _ -> None
 
 and eval_const_binop e1 e2 operator =

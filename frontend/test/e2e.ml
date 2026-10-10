@@ -5,6 +5,126 @@ type fixture = { name : string; source : string; expected_exit : int }
 let fixtures =
   [
     {
+      name = "globals-preserve-integer-bit-widths";
+      source =
+        {|const bits: u8 = 1;
+let inverted = ~bits;
+const negative: i8 = -1;
+const step: i8 = 1;
+let shifted = negative >> step;
+fun main() => i32 {
+  let runtime_bits = bits;
+  if inverted != ~runtime_bits { return 1; }
+  if shifted != (negative >> step) { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-preserve-string-reference-identity";
+      source =
+        {|const alias = original;
+const original = "shared";
+let copy = alias;
+fun main() => i32 {
+  let local = original;
+  if alias != original or copy != local { return 1; }
+  copy = "different";
+  if alias != original { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-preserve-f32-rounding-on-widening";
+      source =
+        {|const base: f32 = 0.1;
+let widened: f64 = base;
+const integer_base: f32 = 16777216;
+let integer_widened: f64 = integer_base;
+fun main() => i32 {
+  if widened != (base as f64) { return 1; }
+  if integer_widened != (integer_base as f64) { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-cross-functions-and-shadowing";
+      source =
+        {|let count = 20;
+fun add() => void { count += 2; }
+fun local() => i32 { let count = 20; return count; }
+fun main() => i32 { add(); return count + local(); }|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-lambda-access-and-capture";
+      source =
+        {|let count = 20;
+fun main() => i32 {
+  let direct: () -> i32 = fn[]() { return count; };
+  let snapshot: () -> i32 = fn[count]() { return count; };
+  count += 2;
+  let result = direct() + snapshot();
+  free direct;
+  free snapshot;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-class-defaults-and-methods";
+      source =
+        {|let count = 20;
+class Box { let value: i32 = count; fun read() => i32 { return value + count; } }
+fun main() => i32 {
+  let box = new Box {};
+  count = 22;
+  let result = box.read();
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-primitive-defaults-and-strings";
+      source =
+        {|@C fun strcmp(left: string, right: string) => i32;
+let enabled: bool;
+let ratio: f64;
+let number: i32;
+let greeting: string;
+const expected = "world";
+fun main() => i32 {
+  if enabled { return 1; }
+  if ratio != 0.0 { return 2; }
+  if number != 0 { return 3; }
+  if strcmp(greeting, "") != 0 { return 4; }
+  greeting = expected;
+  if strcmp(greeting, "world") != 0 { return 5; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-wide-and-narrow-constants";
+      source =
+        {|const signed: i128 = -170141183460469231731687303715884105728;
+const unsigned: u128 = 340282366920938463463374607431768211455;
+const half: f32 = -1.5;
+const answer: i32 = future + 2;
+const future: i8 = 40;
+let unsigned_copy = unsigned;
+fun main() => i32 {
+  if signed != -170141183460469231731687303715884105728 { return 1; }
+  if unsigned_copy != 340282366920938463463374607431768211455 { return 2; }
+  if half != -1.5 { return 3; }
+  return answer as i32;
+}|};
+      expected_exit = 42;
+    };
+    {
       name = "arithmetic";
       source = "fun main() => i32 { return 5 + 3 * 4; }";
       expected_exit = 17;

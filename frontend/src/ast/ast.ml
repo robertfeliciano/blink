@@ -131,7 +131,13 @@ and stmt =
 
 and block = stmt node list
 
-type gdecl = { name : id; init : exp node }
+type gdecl = {
+  gname : id;
+  gtyp : ty option;
+  ginit : exp node option;
+  gconst : bool;
+}
+
 type annotation = id node * exp node list option
 
 let has_annotation name annotations =
@@ -169,6 +175,7 @@ type top_level_decl =
   | Function of fdecl node
   | Class of cdecl node
   | Prototype of proto node
+  | Global of gdecl node
 
 type top_level = { declaration : top_level_decl; export_loc : Range.t option }
 type program = Prog of import node list * top_level node list
@@ -177,12 +184,14 @@ type program = Prog of import node list * top_level node list
    share this partition rather than duplicating the classification rule. *)
 let partition_declarations (Prog (_, declarations)) =
   List.fold_right
-    (fun { elt = { declaration; _ }; _ } (functions, classes, prototypes) ->
+    (fun { elt = { declaration; _ }; _ }
+         (functions, classes, prototypes, globals) ->
       match declaration with
-      | Function fn -> (fn :: functions, classes, prototypes)
-      | Class cn -> (functions, cn :: classes, prototypes)
-      | Prototype pn -> (functions, classes, pn :: prototypes))
-    declarations ([], [], [])
+      | Function fn -> (fn :: functions, classes, prototypes, globals)
+      | Class cn -> (functions, cn :: classes, prototypes, globals)
+      | Prototype pn -> (functions, classes, pn :: prototypes, globals)
+      | Global gn -> (functions, classes, prototypes, gn :: globals))
+    declarations ([], [], [], [])
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
@@ -507,6 +516,8 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Function fn -> show_decl ~lvl:1 fn
     | Class cn -> show_cdecl ~lvl:1 cn
     | Prototype pn -> show_proto ~lvl:1 pn
+    | Global { elt = { gname; gtyp; ginit; gconst }; _ } ->
+        show_vdecl ~lvl:1 (gname, gtyp, ginit, gconst)
   in
   prefix ^ declaration
 

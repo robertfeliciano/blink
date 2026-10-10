@@ -13,6 +13,66 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "global reads writes and imported constant initializer"
+           [
+             ([ "state" ], "export let count = 40; export const limit: i32 = 2;");
+             ( [ "main" ],
+               "import state as shared; const increment = shared.limit; fun \
+                main() => i32 { shared.count += increment; return \
+                shared.count; }" );
+           ];
+         types "global same spellings and local shadowing"
+           [
+             ([ "left" ], "export let value = 20;");
+             ([ "right" ], "export let value = 22;");
+             ( [ "main" ],
+               "import left; import right; let value = 9; fun read(value: i32) \
+                => i32 { return value; } fun main() => i32 { let value = 3; \
+                return left.value + right.value + read(value); }" );
+           ];
+         types "global lambda direct access and capture"
+           [
+             ([ "state" ], "export let count = 40;");
+             ( [ "main" ],
+               "import state; let count = 40; fun main() => i32 { let direct: \
+                () -> i32 = fn[]() { return state.count + count; }; let \
+                captured: () -> i32 = fn[count]() { return count; }; return \
+                direct() + captured(); }" );
+           ];
+         rejects "global private access" "private"
+           [
+             ([ "state" ], "let secret = 42;");
+             ( [ "main" ],
+               "import state; fun main() => i32 { return state.secret; }" );
+           ];
+         rejects "global initializer private access" "private"
+           [
+             ([ "state" ], "const secret = 42;");
+             ( [ "main" ],
+               "import state; let value = state.secret; fun main() => i32 { \
+                return value; }" );
+           ];
+         rejects "global alias collision" "conflicts with a declaration"
+           [
+             helper;
+             ( [ "main" ],
+               "import helper; let helper = 42; fun main() => i32 { return 0; }"
+             );
+           ];
+         rejects "duplicate global" "Duplicate declaration"
+           [
+             ( [ "main" ],
+               "let value = 20; const value = 22; fun main() => i32 { return \
+                0; }" );
+           ];
+         rejects "global function duplicate" "Duplicate declaration"
+           [
+             ( [ "main" ],
+               "let value = 20; fun value() => i32 { return 22; } fun main() \
+                => i32 { return 0; }" );
+           ];
+         rejects "global main is reserved" "main"
+           [ ([ "main" ], "let main = 42;") ];
          ( "symbol encoding" >:: fun _ ->
            let encode owner name =
              match Modules.Module_symbols.encode ~owner ~name with
@@ -35,7 +95,7 @@ let suite =
            assert_equal [] imports;
            assert_bool "exports consumed"
              (List.for_all (fun item -> item.elt.export_loc = None) items);
-           let functions, _, _ =
+           let functions, _, _, _ =
              partition_declarations (Prog (imports, items))
            in
            assert_equal

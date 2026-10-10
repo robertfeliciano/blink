@@ -4,7 +4,8 @@ and you'll miss it...
 ## Imports and modules
 
 Each `.bl` file is a module. Imports introduce a local alias; only functions,
-function prototypes and classes marked `export` are accessible through it.
+function prototypes, classes and global variables marked `export` are accessible
+through it.
 Private declarations remain usable inside their defining file.
 
 ```blink
@@ -39,11 +40,53 @@ Both options work with `blink` and `compile`, including from another directory.
 
 Imports must precede declarations. Aliases cannot be reused by declarations or
 local bindings. Import cycles, private-member access and imported `main`
-declarations are errors. Imports are not re-exported, and there are no globals,
+declarations are errors. Imports are not re-exported, and there are no
 wildcard imports, packages or runtime module initialization.
 
 The [module implementation notes](frontend/src/modules/README.md) describe
 compiler phase boundaries, tests and the future C++ runtime milestone.
+
+## Global variables
+
+Declare globals with `let` or `const` outside functions. Globals are private
+unless marked `export`; access exported globals through the imported module's
+alias, just like functions:
+
+```blink
+// state.bl
+export let count: i32 = 40;
+export const limit: i32 = 100;
+export fun increment() => void { count += 1; }
+
+// main.bl
+import state;
+fun main() => i32 {
+    state.increment();
+    state.count += 1;
+    return state.count; // 42
+}
+```
+
+Every import refers to the same variable, including when several modules import
+the same dependency. `let` globals can be reassigned through an import; `const`
+globals cannot. Locals and parameters can shadow globals. A lambda can access
+globals directly; explicitly capturing a global copies its current value using
+the existing capture rules.
+
+Globals support integer, floating-point, boolean and string types. Types may be
+inferred from initializers. Initializers must be literals (including negative
+numeric literals), integer constant expressions, or references to other constant
+globals. Forward references to constants are supported, including exported
+constants accessed through an import. Their declared or inferred types still
+apply; referring to a constant does not make it an untyped literal. Constant
+dependency cycles are errors.
+
+A typed `let` without an initializer uses the usual primitive default: zero,
+`false`, or the empty string. `const` requires an initializer. Runtime calls,
+reads of mutable globals during initialization, and array, class and function
+globals are unsupported. All globals are initialized before `main` and live for
+the duration of the program. String literals retain their existing static
+storage lifetime and must not be freed.
 
 ## Develop with Docker
 

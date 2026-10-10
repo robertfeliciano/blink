@@ -55,6 +55,7 @@ let valid_programs =
 
 let invalid_programs =
   [
+    ("global constant needs an initializer", "const missing: i32;");
     ("broken argument list", "fun main( => i32 { return 1; }");
     ("missing semicolon", "fun main() => i32 { return 1 }");
     ("unclosed block", "fun main() => i32 { return 1;");
@@ -72,10 +73,36 @@ let test_top_level_declarations _ =
      class Box { let value: i32 = 0; }\n\
      fun main() => i32 { return 0; }"
   in
-  let functions, classes, prototypes = partition_declarations (parse_exn source) in
+  let functions, classes, prototypes, globals =
+    partition_declarations (parse_exn source)
+  in
   assert_equal ~printer:string_of_int 1 (List.length functions);
   assert_equal ~printer:string_of_int 1 (List.length classes);
-  assert_equal ~printer:string_of_int 1 (List.length prototypes)
+  assert_equal ~printer:string_of_int 1 (List.length prototypes);
+  assert_equal [] globals
+
+let test_global_declarations _ =
+  let source =
+    "let count = 40;\n\
+     export const limit: i32 = 100;\n\
+     let enabled: bool;\n\
+     fun main() => i32 { return count; }"
+  in
+  match partition_declarations (parse_exn source) with
+  | [ _ ], [], [], [ count; limit; enabled ] ->
+      assert_equal "count" count.elt.gname;
+      assert_equal None count.elt.gtyp;
+      assert_bool "let is mutable" (not count.elt.gconst);
+      (match count.elt.ginit with
+      | Some { elt = Int value; _ } -> assert_equal (Z.of_int 40) value
+      | _ -> assert_failure "global initializer was lost");
+      assert_equal "limit" limit.elt.gname;
+      assert_equal (Some (TInt (TSigned Ti32))) limit.elt.gtyp;
+      assert_bool "const is immutable" limit.elt.gconst;
+      assert_equal None enabled.elt.ginit;
+      let _, (line, _), _ = limit.loc in
+      assert_equal 2 line
+  | _ -> assert_failure "expected global declarations in their own partition"
 
 let test_inline_modifier _ =
   let source =
@@ -84,7 +111,7 @@ let test_inline_modifier _ =
   in
   let program = parse_exn source in
   match partition_declarations program with
-  | [ inline_function; main ], [], [] ->
+  | [ inline_function; main ], [], [], [] ->
       assert_bool "inline function should retain its modifier"
         inline_function.elt.inline;
       assert_bool "ordinary function should not be inline" (not main.elt.inline)
@@ -96,7 +123,7 @@ let test_inline_modifier _ =
 let test_operator_precedence _ =
   let program = parse_exn "fun main() => i32 { return 2 + 3 * 4; }" in
   match partition_declarations program with
-  | [ function_ ], [], [] -> (
+  | [ function_ ], [], [], [] -> (
       match function_.elt.body with
       | [ { elt = Ret (Some expression); _ } ] -> (
           match expression.elt with
@@ -121,7 +148,7 @@ let test_operator_precedence _ =
 let returned_expression source =
   let program = parse_exn source in
   match partition_declarations program with
-  | [ function_ ], [], [] -> (
+  | [ function_ ], [], [], [] -> (
       match function_.elt.body with
       | [ { elt = Ret (Some expression); _ } ] -> expression.elt
       | _ -> assert_failure "expected a single return statement")
@@ -141,8 +168,7 @@ let test_conditional_expression_shape _ =
 
 let test_conditional_precedence _ =
   match
-    returned_expression
-      "fun main() => i32 { return 1 < 2 ? 3 + 4 : 5 * 6; }"
+    returned_expression "fun main() => i32 { return 1 < 2 ? 3 + 4 : 5 * 6; }"
   with
   | Conditional
       ( { elt = Bop (Lt, _, _); _ },
@@ -151,12 +177,12 @@ let test_conditional_precedence _ =
       ()
   | _ ->
       assert_failure
-        "binary operators should bind more tightly than the conditional operator"
+        "binary operators should bind more tightly than the conditional \
+         operator"
 
 let test_conditional_right_associativity _ =
   match
-    returned_expression
-      "fun main() => i32 { return true ? 1 : false ? 2 : 3; }"
+    returned_expression "fun main() => i32 { return true ? 1 : false ? 2 : 3; }"
   with
   | Conditional
       ( { elt = Bool true; _ },
@@ -175,15 +201,11 @@ let test_conditional_right_associativity _ =
   | _ -> assert_failure "conditional expressions should associate to the right"
 
 let test_numeric_separators _ =
-  let integer =
-    returned_expression "fun main() => i32 { return 1_000_000; }"
-  in
+  let integer = returned_expression "fun main() => i32 { return 1_000_000; }" in
   let two_digit_leading_group =
     returned_expression "fun main() => i32 { return 12_345; }"
   in
-  let decimal =
-    returned_expression "fun main() => f64 { return 1_000.25; }"
-  in
+  let decimal = returned_expression "fun main() => f64 { return 1_000.25; }" in
   let scientific =
     returned_expression "fun main() => f64 { return 1_000e-3; }"
   in
@@ -213,8 +235,8 @@ let test_invalid_numeric_separators _ =
     "1e1_000";
   ]
   |> List.iter (fun literal ->
-         assert_parse_error
-           (Printf.sprintf "fun main() => i32 { return %s; }" literal))
+      assert_parse_error
+        (Printf.sprintf "fun main() => i32 { return %s; }" literal))
 
 let test_error_has_source_position _ =
   match parse "fun main() => i32 {\n  let = 1;\n}" with
@@ -241,6 +263,7 @@ let suite =
          "valid programs" >::: valid_tests;
          "invalid programs" >::: invalid_tests;
          "top-level declarations" >:: test_top_level_declarations;
+         "global declarations" >:: test_global_declarations;
          "inline modifier" >:: test_inline_modifier;
          "operator precedence" >:: test_operator_precedence;
          "conditional expression shape" >:: test_conditional_expression_shape;

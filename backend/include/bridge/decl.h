@@ -17,6 +17,13 @@ struct FDecl {
     bool                                    isInline;
 };
 
+struct GDecl {
+    std::string          gname;
+    Ty                   gtyp;
+    std::unique_ptr<Exp> ginit;
+    bool                 gconst;
+};
+
 struct Field {
     std::vector<std::unique_ptr<Stmt>> prelude;
     std::string                        fieldName;
@@ -39,6 +46,7 @@ struct Proto {
 };
 
 FDecl convert_fdecl(value v);
+GDecl convert_gdecl(value v);
 Field convert_field(value v);
 CDecl convert_cdecl(value v);
 Proto convert_proto(value v);

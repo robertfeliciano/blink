@@ -61,25 +61,13 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
     Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
-  | Decl (_, None, None, _) ->
-      type_error stmt_n "Must provide type or initial value."
-  | Decl (i, Some ty, None, const) ->
+  | Decl (i, annotation, init, const) ->
       var_exists stmt_n i tc;
-      let e_ty = validate_and_convert_ty stmt_n tc ty in
-      let e = create_default_init stmt_n tc e_ty in
-      let tc' = Tctxt.add_local tc i (e_ty, const) in
-      (tc', Typed_ast.Decl (i, e_ty, e, const), false)
-  | Decl (i, None, Some en, const) ->
-      var_exists stmt_n i tc;
-      let te, e_ty = type_exp tc en enclosing_class in
-      let tc', resolved_ty = (Tctxt.add_local tc i (e_ty, const), e_ty) in
-      (tc', Typed_ast.Decl (i, resolved_ty, te, const), false)
-  | Decl (i, Some given_ty_ast, Some en, const) ->
-      var_exists stmt_n i tc;
-      let given_ty = validate_and_convert_ty stmt_n tc given_ty_ast in
-      let te, _ = type_exp_as given_ty tc en enclosing_class in
-      let tc' = Tctxt.add_local tc i (given_ty, const) in
-      (tc', Typed_ast.Decl (i, given_ty, te, const), false)
+      let te, ty =
+        type_variable_initializer stmt_n tc annotation init enclosing_class
+      in
+      let tc' = Tctxt.add_local tc i (ty, const) in
+      (tc', Typed_ast.Decl (i, ty, te, const), false)
   | Assn (lhs, op, rhs) ->
       let tlhs, lhsty = type_lvalue tc lhs enclosing_class in
       validate_assignment_operator stmt_n op lhsty;
@@ -300,10 +288,14 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           (Typed_ast.Id (i, t), t)
       | None -> (
           match Tctxt.lookup_global_option i tc with
-          | Some (t, _) -> handle_global_or_field i t tc e enclosing_class
+          | Some (t, _) ->
+              check_expected_ty expected t e;
+              handle_global_or_field i t tc e enclosing_class
           | None -> (
               match Tctxt.lookup_proto_option i tc with
-              | Some (t, _) -> (Id (i, t), t)
+              | Some (t, _) ->
+                  check_expected_ty expected t e;
+                  (Id (i, t), t)
               | None -> type_error e ("variable " ^ i ^ " is not defined"))))
   | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
       match type_method_app (Proj (obj, mth)) args true tc enclosing_class with
@@ -387,8 +379,22 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       | _ ->
           check_expected_ty expected res_ty e;
           (Typed_ast.Bop (convert_binop binop, te1', te2', res_ty), res_ty))
+  | Uop _ when Option.is_some (eval_const_exp e) ->
+      let value = Option.get (eval_const_exp e) in
+      let int_ty =
+        match expected with
+        | Some (Typed_ast.TInt int_ty) -> int_ty
+        | Some target -> unexpected_ty target e "integer"
+        | None -> infer_integer_ty value e
+      in
+      type_integer_constant e value int_ty
   | Uop (unop, e1) ->
-      let te1, ety = type_exp tc e1 enclosing_class in
+      let te1, ety =
+        match (unop, e1.elt, expected) with
+        | Neg, Float _, Some (Typed_ast.TFloat _) ->
+            type_exp ?expected tc e1 enclosing_class
+        | _ -> type_exp tc e1 enclosing_class
+      in
       let unop' = convert_unop unop in
       let res_ty =
         match (unop, ety) with
@@ -619,10 +625,11 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
           ("Integer literal " ^ Z.to_string n
          ^ " cannot be represented exactly as " ^ Printer.show_ty expected ^ "."
           )
-  | Bop _, Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
+  | (Bop _ | Uop _), Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
       type_exp ~expected tc e enclosing_class
   | ( ( Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _
-      | Conditional _ ),
+      | Conditional _
+      | Uop (Neg, { elt = Float _; _ }) ),
       _ ) ->
       type_exp ~expected tc e enclosing_class
   | _ ->
@@ -806,3 +813,15 @@ and type_lambda_scope (tc : Tctxt.t) (scope : exp node list) =
       ([], []) scope
   in
   (locals', scope')
+
+and type_variable_initializer stmt_n tc annotation init enclosing_class =
+  match (annotation, init) with
+  | None, None -> type_error stmt_n "Must provide type or initial value."
+  | Some ty, None ->
+      let ty = validate_and_convert_ty stmt_n tc ty in
+      (create_default_init stmt_n tc ty, ty)
+  | None, Some en -> type_exp tc en enclosing_class
+  | Some ty, Some en ->
+      let ty = validate_and_convert_ty stmt_n tc ty in
+      let te, _ = type_exp_as ty tc en enclosing_class in
+      (te, ty)

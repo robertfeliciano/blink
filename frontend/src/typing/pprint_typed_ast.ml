@@ -331,12 +331,23 @@ let show_cdecl ?(lvl = 0) { annotations; cname; impls; fields; methods } =
     methods_s
     (indent (lvl + 1))
 
-let show_typed_program (Prog (optimization_level, fns, cns, pns)) =
+let show_typed_program (Prog (optimization_level, fns, cns, pns, gds)) =
+  let globals_s =
+    String.concat "\n"
+      (List.map
+         (fun { gname; gtyp; ginit; gconst } ->
+           Printf.sprintf "global %s: %s = %s (const=%b)" gname (show_ty gtyp)
+             (show_exp ginit) gconst)
+         gds)
+  in
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
   Printf.sprintf
     "Program{optimization=%s;\n\
+     Globals{\n\
+     %s\n\
+     }\n\
      Classes{\n\
      %s\n\
      }\n\
@@ -347,4 +358,4 @@ let show_typed_program (Prog (optimization_level, fns, cns, pns)) =
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    cns_s pn_s fns_s
+    globals_s cns_s pn_s fns_s

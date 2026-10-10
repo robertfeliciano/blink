@@ -114,6 +114,49 @@ void DeclToLLVisitor::codegenFDecl(const FDecl& f) {
     llvm::verifyFunction(*llFun);
 }
 
+void DeclToLLVisitor::codegenGDecl(const GDecl& d) {
+    if (gen.globalEnv.find(d.gname) != gen.globalEnv.end()) {
+        return;
+    }
+    if (!initializingGlobals.insert(d.gname).second) {
+        throw std::runtime_error("Cyclic global initializer: " + d.gname);
+    }
+    llvm::Type*     type        = gen.codegenType(d.gtyp);
+    llvm::Constant* initializer = gen.expVisitor.codegenConstant(*d.ginit);
+    if (initializer->getType() != type) {
+        throw std::runtime_error("Global initializer type mismatch: " + d.gname);
+    }
+    auto* global =
+        new llvm::GlobalVariable(*gen.mod, type, d.gconst, llvm::GlobalValue::InternalLinkage, initializer, d.gname);
+    gen.globalEnv.emplace(d.gname, global);
+    initializingGlobals.erase(d.gname);
+}
+
+void DeclToLLVisitor::codegenGlobals(const std::vector<GDecl>& globals) {
+    globalDeclarations.clear();
+    initializingGlobals.clear();
+    for (const auto& decl : globals) {
+        globalDeclarations.emplace(decl.gname, &decl);
+    }
+    for (const auto& decl : globals) {
+        codegenGDecl(decl);
+    }
+    globalDeclarations.clear();
+}
+
+llvm::Constant* DeclToLLVisitor::codegenGlobalInitializer(const std::string& id) {
+    auto decl = globalDeclarations.find(id);
+    if (decl == globalDeclarations.end()) {
+        throw std::runtime_error("Unknown global in constant initializer: " + id);
+    }
+    if (!decl->second->gconst) {
+        throw std::runtime_error("Mutable global in constant initializer: " + id);
+    }
+    codegenGDecl(*decl->second);
+    // Reuse the static value, including the exact backing pointer of string constants.
+    return gen.globalEnv.at(id)->getInitializer();
+}
+
 void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
     std::vector<llvm::Type*> llvmFields;
     llvmFields.reserve(cd.fields.size());

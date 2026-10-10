@@ -93,9 +93,15 @@ type proto = {
 
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
 type cdecl = { cname : id; fields : field list; annotations : id list }
+type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
 
 type program =
-  | Prog of Util.Optimization_level.t * fdecl list * cdecl list * proto list
+  | Prog of
+      Util.Optimization_level.t
+      * fdecl list
+      * cdecl list
+      * proto list
+      * gdecl list
 [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"

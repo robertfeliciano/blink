@@ -24,7 +24,13 @@
 #include <codegen/stmt.h>
 #include <codegen/types.h>
 #include <map>
+#include <optional>
 #include <stdlib.h>
+
+struct VariableStorage {
+    llvm::Value* address;
+    llvm::Type*  type;
+};
 
 struct Generator {
     std::unique_ptr<llvm::LLVMContext>   ctxt;
@@ -32,9 +38,10 @@ struct Generator {
     std::unique_ptr<llvm::Module>        mod;
     std::unique_ptr<llvm::TargetMachine> targetMachine;
 
-    std::unordered_map<std::string, llvm::AllocaInst*> varEnv;
-    std::unordered_map<std::string, llvm::StructType*> structTypes;
-    std::unordered_map<std::string, const CDecl*>      classEnv;
+    std::unordered_map<std::string, llvm::AllocaInst*>     varEnv;
+    std::unordered_map<std::string, llvm::GlobalVariable*> globalEnv;
+    std::unordered_map<std::string, llvm::StructType*>     structTypes;
+    std::unordered_map<std::string, const CDecl*>          classEnv;
 
     ExpToLLVisitor    expVisitor;
     StmtToLLVisitor   stmtVisitor;
@@ -49,6 +56,8 @@ struct Generator {
     void configureTarget();
     void optimize(BlinkOptimizationLevel optimizationLevel);
     Generator();
+
+    std::optional<VariableStorage> findVariableStorage(const std::string& id) const;
 
     llvm::Value* codegenExp(const Exp& e) { return std::visit(expVisitor, e.val); }
 
@@ -65,6 +74,8 @@ struct Generator {
     void codegenFDecl(const FDecl& d) { return declVisitor.codegenFDecl(d); }
 
     void codegenCDecl(const CDecl& d) { return declVisitor.codegenCDecl(d); }
+
+    void codegenGDecl(const GDecl& d) { return declVisitor.codegenGDecl(d); }
 
     const Ty& getExpTy(const Exp& e) { return expVisitor.getExpTy(e); }
 

@@ -139,5 +139,12 @@ type proto = {
   args : ty list;
 }
 
+type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
+
 type program =
-  | Prog of Util.Optimization_level.t * fdecl list * cdecl list * proto list
+  | Prog of
+      Util.Optimization_level.t
+      * fdecl list
+      * cdecl list
+      * proto list
+      * gdecl list

@@ -60,5 +60,11 @@ Program convert_program(value prog) {
     program.classes   = std::move(cls);
     program.protos    = std::move(protos);
 
+    value gdecls = Field(prog, 4);
+    while (gdecls != Val_emptylist) {
+        program.globals.push_back(convert_gdecl(Field(gdecls, 0)));
+        gdecls = Field(gdecls, 1);
+    }
+
     return program;
 }

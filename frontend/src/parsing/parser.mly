@@ -161,6 +161,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
    ----------------------- *)
 
 tdecl_body:
+  | g=gdecl { { elt = { declaration = Global g; export_loc = None }; loc = g.loc } }
   | f=fdecl { { elt = { declaration = Function f; export_loc = None }; loc = f.loc } }
   | c=cdecl { { elt = { declaration = Class c; export_loc = None }; loc = c.loc } }
   | p=pdecl { { elt = { declaration = Prototype p; export_loc = None }; loc = p.loc } }
@@ -428,6 +429,11 @@ lhs:
 (* -----------------------
    variable decls / vdecl
    ----------------------- *)
+gdecl:
+  | v=vdecl SEMI
+      { let gname, gtyp, ginit, gconst = v in
+        loc $startpos $endpos { gname; gtyp; ginit; gconst } }
+
 vdecl:
   | LET id=IDENT t=ty_spec? EQUAL init=exp
       { (id, t, Some init, false) }

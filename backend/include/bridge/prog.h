@@ -12,6 +12,7 @@ struct Program {
     std::vector<FDecl> functions;
     std::vector<CDecl> classes;
     std::vector<Proto> protos;
+    std::vector<GDecl> globals;
 };
 
 Program convert_program(value v);

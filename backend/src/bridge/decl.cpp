@@ -80,6 +80,15 @@ Proto convert_proto(value v) { // record proto = { annotations; frtyp; fname; ar
     return out;
 }
 
+GDecl convert_gdecl(value v) { // record gdecl = { gname; gtyp; ginit; gconst }
+    GDecl out;
+    out.gname  = std::string(String_val(Field(v, 0)));
+    out.gtyp   = convert_ty(Field(v, 1));
+    out.ginit  = std::make_unique<Exp>(convert_exp(Field(v, 2)));
+    out.gconst = Bool_val(Field(v, 3));
+    return out;
+}
+
 Field convert_field(value v) { // record field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
     Field out;
     out.fieldName = std::string(String_val(Field(v, 1)));
