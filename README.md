@@ -278,3 +278,54 @@ fun main() => i32 {
 ```
 
 Free lambda closures when they are no longer needed.
+
+## Generic functions
+
+Functions can declare type parameters using angle brackets. Calls infer their
+concrete types from arguments and expected result types:
+
+```blink
+fun identity<T>(value: T) => T {
+    return value;
+}
+
+fun main() => i32 {
+    let value = identity(42);
+    let f: (i32) -> i32 = identity;
+    let result = f(value);
+    free f;
+    return result;
+}
+```
+
+Type parameters work in argument and return types, fixed-size arrays, function
+signatures, local annotations, and lambda signatures. A generic function passed
+as a callback is specialized from the receiving parameter's function type. An
+unresolved use, such as `let f = identity;`, requires an ordinary type annotation;
+there is no explicit type-argument syntax at call sites. Concrete arguments must
+agree on repeated type parameters. Context-dependent literals use inferred types
+before existing default literal types, and ordinary conversions apply after
+inference. Expected result types fill type parameters that arguments have not
+already determined.
+
+The frontend generates one concrete function per distinct combination of type
+arguments within each compilation. Recursive calls reuse registered signatures.
+Instances are shared across imports, and templates retain their defining module's
+private bindings. Generic prototypes require matching definitions; parameter names
+may differ between the prototype and definition.
+
+Bodies are type-checked for each requested instance. For example, `value + value`
+works when the inferred type supports addition and otherwise reports an error at
+the template body, with the requesting call locations. Unused templates are parsed
+and resolved, but their dependent bodies are not type-checked. Inference uses
+signatures and use-site context rather than guessing types from template bodies.
+Each compilation permits at most 4096 instances and an instantiation chain of 128;
+expanding recursion reports a specialization-limit diagnostic.
+
+Only top-level functions are generic in this release. Generic classes, methods,
+`main`, external `@C` functions, constraints, and compile-time value parameters are
+unsupported. Function values have concrete signatures; higher-rank polymorphic
+values and inference from later statements are unsupported. Existing restrictions
+on global initialization still apply. Specialization preserves the current calling
+and memory behavior, but additional instances can increase compile time and binary
+size. See `examples/generic_functions.bl` for functions, arrays, and callbacks.

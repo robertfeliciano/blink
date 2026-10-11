@@ -105,8 +105,15 @@ let resolved_class_name name =
   | None ->
       type_error name "Qualified class names must be resolved before typing."
 
+let validate_array_length node sz =
+  if Z.lt sz (Z.of_int 0) then type_error node "negative length specified"
+  else if not (Z.fits_int sz) then
+    type_error node "array length is too large for this target"
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
+  | TParam name ->
+      type_error name ("Unresolved type parameter " ^ name.elt ^ ".")
   | TInt _ | TFloat _ | TBool -> ()
   | TRef r -> typecheck_rty l tc r
 
@@ -114,17 +121,15 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
   | RArray (t, sz) ->
-      if Z.lt sz (Z.of_int 0) then type_error l "negative length specified"
-      else if not (Z.fits_int sz) then
-        type_error l "array length is too large for this target"
-      else typecheck_ty l tc t
+      validate_array_length l sz;
+      typecheck_ty l tc t
   | RClass c ->
       if None = Tctxt.lookup_class_option (resolved_class_name c) tc then
         type_error c "class undefined"
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt
-  | RGeneric _ -> type_error l "Generic types are not supported."
+  | RGeneric _ -> type_error l "Generic class types are not supported."
 
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t

@@ -24,7 +24,10 @@ let type_annotations (tc : Tctxt.t) =
 
 let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     Typed_ast.fdecl =
-  let { elt = { annotations; frtyp; fname; args; body; inline }; loc = _ } =
+  let {
+    elt = { annotations; frtyp; fname; args; body; inline; type_params = _ };
+    loc = _;
+  } =
     fn
   in
   let args', frtyp' = validate_and_convert_signature fn tc args frtyp in
@@ -47,7 +50,9 @@ let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
   }
 
 let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
-  let { elt = { annotations; frtyp; fname; args }; loc = _ } = pn in
+  let { elt = { annotations; frtyp; fname; args; type_params = _ }; loc = _ } =
+    pn
+  in
   let typed_args, frtyp' = validate_and_convert_signature pn tc args frtyp in
   let args' = List.map fst typed_args in
   let annotations' = type_annotations tc annotations in
@@ -176,6 +181,8 @@ let create_class_name_ctxt (tc : Tctxt.t) (cns : cdecl node list) : Tctxt.t =
 
 let get_method_header (tc : Tctxt.t) (method_node : fdecl node) : method_header
     =
+  if method_node.elt.type_params <> [] then
+    type_error method_node "Generic methods are not supported.";
   let ({ fname; frtyp; args; _ } : fdecl) = method_node.elt in
   let typed_args, typed_ret =
     validate_and_convert_signature method_node tc args frtyp
@@ -297,6 +304,7 @@ let type_globals tc declarations =
         Hashtbl.mem pending name
         || Option.is_some (lookup_option name tc)
         || Option.is_some (lookup_class_option name tc)
+        || Option.is_some (lookup_generic_option name tc)
       then type_error node ("Duplicate declaration " ^ name ^ ".");
       Option.iter
         (fun ty -> supported node (validate_and_convert_ty node tc ty))
@@ -446,6 +454,95 @@ let type_globals tc declarations =
   let globals = List.map (resolve []) declarations in
   (!context, globals)
 
+let create_generic_ctxt tc fns pns =
+  let seen = Hashtbl.create (List.length fns) in
+  let rec validate_ty node = function
+    | TParam _ -> ()
+    | TRef (RArray (ty, sz)) ->
+        validate_array_length node sz;
+        validate_ty node ty
+    | TRef (RFun (args, ret)) ->
+        List.iter (validate_ty node) args;
+        validate_ret node ret
+    | ty -> typecheck_ty node tc ty
+  and validate_ret node = function
+    | RetVoid -> ()
+    | RetVal ty -> validate_ty node ty
+  in
+  let validate node params args ret annotations =
+    Generics.validate_params node params args ret annotations;
+    List.iter (fun (ty, _) -> validate_ty node ty) args;
+    validate_ret node ret
+  in
+  List.iter
+    (fun (fn : fdecl node) ->
+      if Hashtbl.mem seen fn.elt.fname then
+        type_error fn ("Function " ^ fn.elt.fname ^ " already defined.");
+      Hashtbl.add seen fn.elt.fname fn;
+      if fn.elt.type_params <> [] then (
+        if fn.elt.fname = "main" then type_error fn "main cannot be generic.";
+        validate fn fn.elt.type_params fn.elt.args fn.elt.frtyp
+          fn.elt.annotations))
+    fns;
+  let seen_protos = Hashtbl.create (List.length pns) in
+  List.iter
+    (fun (pn : proto node) ->
+      if pn.elt.type_params <> [] then (
+        if Hashtbl.mem seen_protos pn.elt.fname then
+          type_error pn "Duplicate generic prototype.";
+        Hashtbl.add seen_protos pn.elt.fname ();
+        validate pn pn.elt.type_params pn.elt.args pn.elt.frtyp
+          pn.elt.annotations);
+      match Hashtbl.find_opt seen pn.elt.fname with
+      | Some fn when pn.elt.type_params <> [] || fn.elt.type_params <> [] ->
+          if not (Generics.prototype_matches pn fn) then
+            type_error pn
+              ("Generic prototype does not match definition of " ^ pn.elt.fname
+             ^ ".")
+      | None when pn.elt.type_params <> [] ->
+          type_error pn ("Undefined generic function " ^ pn.elt.fname ^ ".")
+      | _ -> ())
+    pns;
+  let templates =
+    List.filter_map
+      (fun (fn : fdecl node) ->
+        if fn.elt.type_params = [] then None else Some (fn.elt.fname, fn))
+      fns
+  in
+  { tc with generics = Some (Generics.create templates) }
+
+let generic_error_message loc msg =
+  try type_error { elt = (); loc } msg with TypeError msg -> msg
+
+let type_generic_instances tc =
+  let state = Option.get tc.generics in
+  let rec aux typed_funs =
+    if Queue.is_empty state.pending then List.rev typed_funs
+    else
+      let instance = Queue.take state.pending in
+      state.origins := instance.origins;
+      let failure msg =
+        let trace =
+          List.map
+            (fun (origin : Generics.origin) ->
+              "  " ^ origin.name ^ " requested at "
+              ^ Util.Range.string_of_range origin.loc)
+            instance.origins
+        in
+        raise
+          (TypeError (msg ^ "\nWhile specializing:\n" ^ String.concat "\n" trace))
+      in
+      let fn =
+        try type_fn tc instance.fn with
+        | TypeError msg -> failure msg
+        | Generics.GenericError (loc, msg) | Generics.CannotInfer (loc, msg) ->
+            failure (generic_error_message loc msg)
+      in
+      state.origins := [];
+      aux (fn :: typed_funs)
+  in
+  aux []
+
 let type_program ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
@@ -454,7 +551,16 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   | import :: _ -> type_error import "Imports must be resolved before typing."
   | [] -> ());
   let fns, cns, pns, gds = Ast.partition_declarations prog in
+  let fns = List.map Ast.bind_fdecl_params fns in
+  let pns = List.map Ast.bind_proto_params pns in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
+  let class_names = create_generic_ctxt class_names fns pns in
+  let fns =
+    List.filter (fun (fn : fdecl node) -> fn.elt.type_params = []) fns
+  in
+  let pns =
+    List.filter (fun (pn : proto node) -> pn.elt.type_params = []) pns
+  in
   let class_headers = create_class_header_ctxt class_names cns in
   let pns = reconcile_external_prototypes class_headers pns in
   let pc = create_proto_ctxt class_headers pns in
@@ -478,12 +584,16 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
       pns
   in
   let typed_funs = List.map (type_fn fc) fns in
+  let typed_funs = typed_funs @ type_generic_instances fc in
   Prog
     (optimization_level, typed_funs, typed_classes, typed_protos, typed_globals)
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
   try Ok (type_program ~optimization_level prog) with
+  | Generics.GenericError (loc, msg) | Generics.CannotInfer (loc, msg) ->
+      let err = Fmt.str "Type Error: %s" (generic_error_message loc msg) in
+      Error (Core.Error.of_string err)
   | TypeError msg ->
       let err = Fmt.str "Type Error: %s" msg in
       Error (Core.Error.of_string err)

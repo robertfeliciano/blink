@@ -345,6 +345,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         fname = identity;
+                        type_params = value.elt.type_params;
                         annotations = annotations value.elt.annotations;
                         args = args value.elt.args;
                         frtyp = ret_ty value.elt.frtyp;

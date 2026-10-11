@@ -43,3 +43,10 @@ exports `println` over private libc `puts`; a custom C++ runtime is a follow-up.
 AST/loader/resolver suites run independently without libbackend.a. The native
 module suite tests multi-file calls/classes/closures/globals, O0/O2, C symbols,
 stdlib output, failures, and the wrapper from outside the project directory.
+
+Generic function type parameters are bound in the source AST before resolution.
+The resolver preserves those bindings while resolving template bodies in their
+defining module, including private helper references. Exported generic functions
+use the same module identities and visibility rules as ordinary functions.
+Typing later specializes the resolved templates and shares each instance across
+all importers in the combined program; generic metadata stays in the frontend.

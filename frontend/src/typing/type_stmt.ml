@@ -90,32 +90,12 @@ let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
         | None, RetVoid -> None
       in
       (tc, Typed_ast.Ret te_opt, true)
-  | SCall ({ elt = Proj (obj, mth); loc = _ }, args) -> (
-      match type_method_app (Proj (obj, mth)) args false tc enclosing_class with
-      | Error msg -> type_error stmt_n msg
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVoid) ->
-          ( tc,
-            Typed_ast.(
-              SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, RetVoid)),
-            false )
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, ret_ty) ->
-          type_warning stmt_n "Ignoring non-void function";
-          ( tc,
-            Typed_ast.(
-              SCall (Proj (tobj, mth, cname, t), typed_args, arg_types, ret_ty)),
-            false )
-      | _ -> type_error stmt_n "Unreachable state.")
   | SCall (f, args) ->
-      let typed_callee, typ = type_exp tc f enclosing_class in
-      let arg_types, typed_args, ret =
-        match type_func_app args typ false tc enclosing_class with
-        | Error msg -> type_error stmt_n msg
-        | Ok (arg_types, typed_args, RetVoid) ->
-            (arg_types, typed_args, Typed_ast.RetVoid)
-        | Ok (arg_types, typed_args, t) ->
-            type_warning stmt_n "Ignoring non-void function";
-            (arg_types, typed_args, t)
+      let typed_callee, arg_types, typed_args, ret =
+        type_call tc { stmt_n with elt = () } f args false enclosing_class
       in
+      if ret <> Typed_ast.RetVoid then
+        type_warning stmt_n "Ignoring non-void function";
       (tc, Typed_ast.SCall (typed_callee, typed_args, arg_types, ret), false)
   | If (cond, then_branch, else_branch) ->
       let tcond, _ = type_exp_as Typed_ast.TBool tc cond enclosing_class in
@@ -263,6 +243,18 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
   | Str s ->
       check_expected_ty expected (TRef RString) e;
       Typed_ast.(Str s, TRef RString)
+  | Id i when Option.is_some (Tctxt.lookup_generic_option i tc) ->
+      let fn = Option.get (Tctxt.lookup_generic_option i tc) in
+      let bindings = ref [] in
+      (match expected with
+      | Some (Typed_ast.TRef (RFun _) as ty) ->
+          Generics.match_ty e bindings
+            (TRef (RFun (List.map fst fn.elt.args, fn.elt.frtyp)))
+            ty
+      | _ -> ());
+      let instance = request_generic tc { e with elt = () } fn !bindings in
+      check_expected_ty expected instance.ty e;
+      (Typed_ast.Id (instance.fn.elt.fname, instance.ty), instance.ty)
   | Id i -> (
       let handle_global_or_field i t tc e enclosing_class =
         match enclosing_class with
@@ -297,22 +289,15 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
                   check_expected_ty expected t e;
                   (Id (i, t), t)
               | None -> type_error e ("variable " ^ i ^ " is not defined"))))
-  | Call ({ elt = Proj (obj, mth); loc = _ }, args) -> (
-      match type_method_app (Proj (obj, mth)) args true tc enclosing_class with
-      | Ok (Proj (tobj, _, cname, t), arg_types, typed_args, RetVal rt) ->
-          check_expected_ty expected rt e;
-          Typed_ast.
-            (Call (Proj (tobj, mth, cname, t), typed_args, arg_types, rt), rt)
-      | Error msg -> type_error e msg
-      | _ -> type_error e "Unreachable state.")
   | Call (f, args) -> (
-      let typed_callee, typ = type_exp tc f enclosing_class in
-      match type_func_app args typ true tc enclosing_class with
-      | Error msg -> type_error e msg
-      | Ok (arg_types, typed_args, RetVal rt) ->
+      let typed_callee, arg_types, typed_args, ret =
+        type_call ?expected tc { e with elt = () } f args true enclosing_class
+      in
+      match ret with
+      | RetVal rt ->
           check_expected_ty expected rt e;
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
-      | _ -> type_error e "Unreachable state.?")
+      | _ -> type_error e "A void call cannot be used as an expression.")
   | Bop (binop, e1, e2) -> (
       let te1, lty = type_exp tc e1 enclosing_class in
       let te2, rty = type_exp tc e2 enclosing_class in
@@ -616,6 +601,18 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
          ^ Printer.show_ty actual ^ ".")
   in
   match (e.elt, expected) with
+  | Id i, _ when Option.is_some (Tctxt.lookup_generic_option i tc) ->
+      type_exp ~expected tc e enclosing_class
+  | Call (f, args), _ -> (
+      let typed_callee, arg_types, typed_args, ret =
+        type_call ~expected tc { e with elt = () } f args true enclosing_class
+      in
+      match ret with
+      | RetVal actual ->
+          promote
+            (Typed_ast.Call (typed_callee, typed_args, arg_types, actual))
+            actual
+      | RetVoid -> type_error e "A void call cannot be used as an expression.")
   | Int n, Typed_ast.TFloat float_ty ->
       let te, _actual = type_exp tc e enclosing_class in
       if int_is_exactly_representable_in_float_ty n float_ty then
@@ -635,6 +632,113 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
   | _ ->
       let te, actual = type_exp tc e enclosing_class in
       promote te actual
+
+and request_generic tc node fn bindings : Generics.instance =
+  let state = Option.get tc.Tctxt.generics in
+  try Generics.request state node fn bindings
+  with Generics.CannotInfer (_, message) ->
+    raise (Generics.CannotInfer (node.loc, message))
+
+and type_call ?expected tc node f args from_exp enclosing_class =
+  match f.elt with
+  | Proj (obj, mth) -> (
+      match
+        type_method_app (Proj (obj, mth)) args from_exp tc enclosing_class
+      with
+      | Ok result -> result
+      | Error message -> type_error node message)
+  | Id i when Option.is_some (Tctxt.lookup_generic_option i tc) ->
+      let fn = Option.get (Tctxt.lookup_generic_option i tc) in
+      type_generic_app expected tc node fn args from_exp enclosing_class
+  | _ -> (
+      let typed_callee, ty = type_exp tc f enclosing_class in
+      match type_func_app args ty from_exp tc enclosing_class with
+      | Ok (arg_types, typed_args, ret) ->
+          (typed_callee, arg_types, typed_args, ret)
+      | Error message -> type_error node message)
+
+and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
+    enclosing_class =
+  if List.length args <> List.length fn.elt.args then
+    type_error node "Invalid number of arguments supplied to generic function.";
+  let bindings = ref [] in
+  let rec needs_context en =
+    match en.elt with
+    | Int _ | Float _ | Null | Lambda _ -> true
+    | (Bop _ | Uop _) when Option.is_some (eval_const_exp en) -> true
+    | Id i -> Option.is_some (Tctxt.lookup_generic_option i tc)
+    | Array es -> List.for_all needs_context es
+    | Conditional (_, yes, no) -> needs_context yes && needs_context no
+    | Call ({ elt = Id i; _ }, es)
+      when Option.is_some (Tctxt.lookup_generic_option i tc) ->
+        List.for_all needs_context es
+    | _ -> false
+  in
+  let rec infer_actual en =
+    match en.elt with
+    | Array es -> (
+        match List.find_opt (fun e -> not (needs_context e)) es with
+        | Some e ->
+            let elt_ty = infer_actual e in
+            let ty = Typed_ast.TRef (RArray (elt_ty, List.length es)) in
+            type_exp_as ty tc en enclosing_class |> snd
+        | None -> type_exp tc en enclosing_class |> snd)
+    | _ -> type_exp tc en enclosing_class |> snd
+  in
+  let rec infer default ty en =
+    match (ty, en.elt) with
+    | TRef (RArray (elt_ty, _)), Array es -> List.iter (infer default elt_ty) es
+    | _, Conditional (_, yes, no) ->
+        infer default ty yes;
+        infer default ty no
+    | _, (Null | Lambda _) -> ()
+    | _, Id i when Option.is_some (Tctxt.lookup_generic_option i tc) ->
+        if default then
+          let callback = Option.get (Tctxt.lookup_generic_option i tc) in
+          let callback_ty =
+            TRef (RFun (List.map fst callback.elt.args, callback.elt.frtyp))
+          in
+          Generics.match_patterns en bindings ty callback_ty
+    | _ when (not default) && needs_context en -> ()
+    | _ ->
+        if (not default) || Generics.unresolved !bindings ty then
+          let result =
+            try
+              let expected_ty =
+                if Generics.unresolved !bindings ty then None
+                else Some (convert_ty (Generics.subst_ty !bindings ty))
+              in
+              let actual =
+                match expected_ty with
+                | Some ty when default ->
+                    type_exp_as ty tc en enclosing_class |> snd
+                | _ -> infer_actual en
+              in
+              Some actual
+            with Generics.CannotInfer _ -> None
+          in
+          Option.iter (Generics.match_ty en bindings ty) result
+  in
+  List.iter2 (fun (ty, _) en -> infer false ty en) fn.elt.args args;
+  Option.iter
+    (fun ty ->
+      Generics.match_ret_ty ~fill:true node bindings fn.elt.frtyp
+        (Typed_ast.RetVal ty))
+    expected;
+  let rec infer_pending () =
+    let previous = List.length !bindings in
+    List.iter2 (fun (ty, _) en -> infer true ty en) fn.elt.args args;
+    if List.length !bindings > previous then infer_pending ()
+  in
+  infer_pending ();
+  let instance = request_generic tc node fn !bindings in
+  match type_func_app args instance.ty from_exp tc enclosing_class with
+  | Ok (arg_types, typed_args, ret) ->
+      ( Typed_ast.Id (instance.fn.elt.fname, instance.ty),
+        arg_types,
+        typed_args,
+        ret )
+  | Error message -> type_error node message
 
 and type_func_app (args : exp node list) (ftyp : Typed_ast.ty) (from_exp : bool)
     (tc : Tctxt.t) (enclosing_class : id option) :

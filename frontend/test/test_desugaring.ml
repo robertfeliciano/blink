@@ -455,6 +455,34 @@ fun main() => i32 { count += 1; return count; }|}
           assert_failure "global reads and writes should lower as identifiers")
   | _ -> assert_failure "expected lowered globals beside functions"
 
+let test_generic_function_lowering _ =
+  let source =
+    "fun identity<T>(value: T) => T { return value; } fun main() => i32 { let \
+     a = identity(20); let f: (i32) -> i32 = identity; return a + f(22); }"
+  in
+  let ast =
+    match Parsing.Parse.parse_prog (Lexing.from_string source) with
+    | Ok ast -> ast
+    | Error e -> assert_failure (Core.Error.to_string_hum e)
+  in
+  let typed =
+    match Typing.Type.type_prog ast with
+    | Ok typed -> typed
+    | Error e -> assert_failure (Core.Error.to_string_hum e)
+  in
+  let (DA.Prog (_, fns, classes, _, _)) = desugar_exn typed in
+  let instances =
+    List.filter
+      (fun (fn : DA.fdecl) -> Core.String.is_prefix fn.fname ~prefix:"_BLG")
+      fns
+  in
+  assert_equal 1 (List.length instances);
+  assert_bool "function value uses existing closure representation"
+    (classes <> []);
+  let fn = List.hd instances in
+  assert_equal [ (DA.TInt (DA.TSigned DA.Ti32), "value") ] fn.args;
+  assert_equal (DA.RetVal (DA.TInt (DA.TSigned DA.Ti32))) fn.frtyp
+
 let suite =
   let pipeline_tests =
     List.map
@@ -463,6 +491,7 @@ let suite =
   in
   "Desugaring"
   >::: [
+         "generic function lowering" >:: test_generic_function_lowering;
          "global lowering" >:: test_global_lowering;
          "compound assignment" >:: test_compound_assignment;
          "projected call" >:: test_projected_call;
