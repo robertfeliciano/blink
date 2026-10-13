@@ -214,14 +214,21 @@ fdecl_list:
   | hd=fdecl tl=fdecl_list { hd :: tl }
 
 fdecl:
-  | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args; body; inline = false }) }
-  | annotations=list(annotation) INLINE FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
-      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args; body; inline = true }) }
+  | annotations=list(annotation) FUN fname=IDENT type_params=type_params LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
+      { bind_fdecl_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args; body; inline = false }) }
+  | annotations=list(annotation) INLINE FUN fname=IDENT type_params=type_params LPAREN args=arg_list RPAREN frtyp=ret_ty_spec body=block
+      { bind_fdecl_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args; body; inline = true }) }
+
+type_param:
+  | i=IDENT { loc $startpos $endpos i }
+
+type_params:
+  | { [] }
+  | LT params=separated_nonempty_list(COMMA, type_param) GT { params }
 
 pdecl:
-  | annotations=list(annotation) FUN fname=IDENT LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
-      { (loc $symbolstartpos $endpos { annotations; frtyp; fname; args }) }
+  | annotations=list(annotation) FUN fname=IDENT type_params=type_params LPAREN args=arg_list RPAREN frtyp=ret_ty_spec SEMI
+      { bind_proto_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args }) }
 
 cdecl:
   | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE

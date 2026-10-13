@@ -13,6 +13,42 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "generic definition-site bindings and parameter scope"
+           [
+             ( [ "helper" ],
+               "fun secret() => i32 { return 42; } export fun answer<T>(value: \
+                T) => i32 { let copy: T = value; return secret(); }" );
+             ( [ "main" ],
+               "import helper; class T {} fun secret() => i32 { return 1; } \
+                fun main() => i32 { return helper.answer(0); }" );
+           ];
+         types "generic type parameter shadows class"
+           [
+             ( [ "main" ],
+               "class T {} fun identity<T>(value: T) => T { return value; } \
+                fun main() => i32 { return identity(42); }" );
+           ];
+         types "generic imported function value"
+           [
+             ( [ "helper" ],
+               "export fun identity<T>(value: T) => T { return value; }" );
+             ( [ "main" ],
+               "import helper; fun main() => i32 { let f: (i32) -> i32 = \
+                helper.identity; return f(42); }" );
+           ];
+         rejects "generic private export" "private"
+           [
+             ([ "helper" ], "fun identity<T>(value: T) => T { return value; }");
+             ( [ "main" ],
+               "import helper; fun main() => i32 { return helper.identity(42); \
+                }" );
+           ];
+         rejects "generic parameter does not leak" "Unknown name"
+           [
+             ( [ "main" ],
+               "fun identity<T>(value: T) => T { return value; } fun \
+                bad(value: T) {}" );
+           ];
          types "global reads writes and imported constant initializer"
            [
              ([ "state" ], "export let count = 40; export const limit: i32 = 2;");

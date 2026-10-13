@@ -13,6 +13,7 @@ class TypeToLLGenerator {
     explicit TypeToLLGenerator(Generator& g) : gen(g) {}
 
     llvm::Type* codegenTy(const Ty& ty);
+    llvm::Type* codegenValueTy(const Ty& ty);
     llvm::Type* codegenRetTy(const RetTy& ty);
     llvm::Type* codegenRefTy(const RefTy& rt);
 

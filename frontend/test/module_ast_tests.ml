@@ -126,10 +126,21 @@ let test_located_import _ =
       assert_bool "diagnostic must identify the importing source"
         (Core.String.is_substring message ~substring:"module.bl")
 
+let test_exported_generic _ =
+  let source =
+    parse "export fun identity<T>(value: T) => T { return value; }"
+  in
+  let functions, _, _, _ = partition_declarations source in
+  assert_equal [ "T" ]
+    (List.map (fun p -> p.elt) (List.hd functions).elt.type_params);
+  assert_bool "generic AST printer succeeds"
+    (Core.String.is_substring (show_prog source) ~substring:"identity<T>")
+
 let () =
   run_test_tt_main
     ("Module AST"
     >::: [
+           "exported generic" >:: test_exported_generic;
            "source order and locations" >:: test_order_and_locations;
            "exports and partition" >:: test_partition_and_export;
            "exported global locations" >:: test_exported_global_location;

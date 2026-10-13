@@ -4,16 +4,8 @@ let i32 = DA.TInt (DA.TSigned DA.Ti32)
 let int value = DA.Int (string_of_int value, DA.TSigned DA.Ti32)
 let optimization_level = Util.Optimization_level.O0
 
-let function_ ?(args = []) name body =
-  DA.
-    {
-      annotations = [];
-      frtyp = RetVal i32;
-      fname = name;
-      args;
-      body;
-      inline = false;
-    }
+let function_ ?(args = []) ?(frtyp = DA.RetVal i32) name body =
+  DA.{ annotations = []; frtyp; fname = name; args; body; inline = false }
 
 let arithmetic () =
   let result = DA.Bop (DA.Add, int 20, int 22, i32) in
@@ -46,6 +38,101 @@ let array_index () =
     ]
   in
   DA.Prog (optimization_level, [ function_ "main" body ], [], [], [])
+
+let identity ty name =
+  function_
+    ~args:[ (ty, "values") ]
+    ~frtyp:(DA.RetVal ty) name
+    [ DA.Ret (Some (DA.Id ("values", ty))) ]
+
+let array_call () =
+  let array_ty = DA.TRef (DA.RArray (i32, 2)) in
+  let matrix_ty = DA.TRef (DA.RArray (array_ty, 2)) in
+  let body =
+    [
+      DA.Decl ("values", array_ty, DA.Array ([ int 20; int 22 ], array_ty), true);
+      DA.Decl
+        ( "direct",
+          array_ty,
+          DA.Call ("array_identity", [ DA.Id ("values", array_ty) ], array_ty),
+          true );
+      DA.Decl
+        ( "matrix",
+          matrix_ty,
+          DA.Array
+            ( [ DA.Id ("direct", array_ty); DA.Id ("values", array_ty) ],
+              matrix_ty ),
+          true );
+      DA.Decl
+        ( "nested",
+          matrix_ty,
+          DA.Call ("matrix_identity", [ DA.Id ("matrix", matrix_ty) ], matrix_ty),
+          true );
+      DA.Ret
+        (Some
+           (DA.Bop
+              ( DA.Add,
+                DA.Index (DA.Id ("direct", array_ty), int 0, i32),
+                DA.Index
+                  ( DA.Index (DA.Id ("nested", matrix_ty), int 1, array_ty),
+                    int 1,
+                    i32 ),
+                i32 )));
+    ]
+  in
+  DA.Prog
+    ( optimization_level,
+      [
+        identity array_ty "array_identity";
+        identity matrix_ty "matrix_identity";
+        function_ "main" body;
+      ],
+      [],
+      [],
+      [] )
+
+let array_callback () =
+  let array_ty = DA.TRef (DA.RArray (i32, 2)) in
+  let pointer_ty =
+    DA.TRef (DA.RPtr (DA.TRef (DA.RFun ([ array_ty ], DA.RetVal array_ty))))
+  in
+  let apply =
+    function_
+      ~args:[ (pointer_ty, "callback"); (array_ty, "values") ]
+      ~frtyp:(DA.RetVal array_ty) "apply"
+      [
+        DA.Ret
+          (Some (DA.Call ("callback", [ DA.Id ("values", array_ty) ], array_ty)));
+      ]
+  in
+  let body =
+    [
+      DA.Decl ("values", array_ty, DA.Array ([ int 20; int 22 ], array_ty), true);
+      DA.Decl
+        ( "result",
+          array_ty,
+          DA.Call
+            ( "apply",
+              [
+                DA.Id ("array_identity", pointer_ty); DA.Id ("values", array_ty);
+              ],
+              array_ty ),
+          true );
+      DA.Ret
+        (Some
+           (DA.Bop
+              ( DA.Add,
+                DA.Index (DA.Id ("result", array_ty), int 0, i32),
+                DA.Index (DA.Id ("result", array_ty), int 1, i32),
+                i32 )));
+    ]
+  in
+  DA.Prog
+    ( optimization_level,
+      [ identity array_ty "array_identity"; apply; function_ "main" body ],
+      [],
+      [],
+      [] )
 
 let object_field () =
   let field name =
@@ -258,17 +345,29 @@ let fixtures =
     ("arithmetic", arithmetic);
     ("function-call", function_call);
     ("array-index", array_index);
+    ("array-call", array_call);
+    ("array-callback", array_callback);
     ("object-field", object_field);
     ("conditional", conditional);
     ("literal-values", literal_values);
   ]
 
 let () =
-  if Array.length Sys.argv <> 2 then (
-    Printf.eprintf "usage: %s FIXTURE\n" Sys.argv.(0);
+  if Array.length Sys.argv <> 2 && Array.length Sys.argv <> 3 then (
+    Printf.eprintf "usage: %s FIXTURE [-O0|-O2]\n" Sys.argv.(0);
     exit 2);
   match List.assoc_opt Sys.argv.(1) fixtures with
-  | Some build -> DA.convert_caml_ast (build ())
+  | Some build ->
+      let level =
+        if Array.length Sys.argv = 2 then optimization_level
+        else
+          match Sys.argv.(2) with
+          | "-O0" -> Util.Optimization_level.O0
+          | "-O2" -> Util.Optimization_level.O2
+          | option -> invalid_arg ("unknown optimization level: " ^ option)
+      in
+      let (DA.Prog (_, fs, cs, ps, gs)) = build () in
+      DA.convert_caml_ast (DA.Prog (level, fs, cs, ps, gs))
   | None ->
       Printf.eprintf "unknown backend fixture: %s\n" Sys.argv.(1);
       exit 2

@@ -303,7 +303,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         args.push_back(val);
 
         const Ty& argTy = gen.getExpTy(*arg);
-        argTys.push_back(gen.codegenType(argTy));
+        argTys.push_back(gen.codegenValueType(argTy));
     }
 
     const std::string& calleeId = e.callee;
@@ -325,7 +325,7 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
                 calleeSlot,
                 calleeId + "_load");
 
-        llvm::Type* retTy = gen.codegenType(e.ty);
+        llvm::Type* retTy = gen.codegenValueType(e.ty);
 
         // get function type
         llvm::FunctionType* fnTy =
@@ -459,13 +459,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
 Value* ExpToLLVisitor::operator()(const EProj& e) {
     Value* fieldPtr = gen.lvalueCreator.getStructFieldPtr(e);
 
-    llvm::Type* fieldTy;
-    if (is_obj_ty(e.ty)) {
-        // load a pointer for obj (struct/array) types
-        fieldTy = llvm::PointerType::getUnqual(*gen.ctxt);
-    } else {
-        fieldTy = gen.codegenType(e.ty);
-    }
+    llvm::Type* fieldTy = gen.codegenValueType(e.ty);
 
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
@@ -508,12 +502,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     for (unsigned idx = 0; idx < classDecl.fields.size(); ++idx) {
         const Field& fd = classDecl.fields[idx];
 
-        llvm::Type* storageTy;
-        if (is_obj_ty(fd.ftyp)) {
-            storageTy = llvm::PointerType::getUnqual(*gen.ctxt);
-        } else {
-            storageTy = gen.codegenType(fd.ftyp);
-        }
+        llvm::Type* storageTy = gen.codegenValueType(fd.ftyp);
 
         for (auto& stmtPtr : fd.prelude) {
             // TODO think this goes with codegen exp of fields...
@@ -538,15 +527,8 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     return objPtr;
 }
 
-static llvm::Type* codegenExpResultType(Generator& gen, const Ty& ty) {
-    llvm::Type* result_type = gen.codegenType(ty);
-    if (result_type->isAggregateType())
-        return llvm::PointerType::getUnqual(*gen.ctxt);
-    return result_type;
-}
-
 Value* ExpToLLVisitor::operator()(const ENull& e) {
-    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+    llvm::Type* result_type = gen.codegenValueType(e.ty);
     auto*       pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
     if (!pointer_type)
         throw std::runtime_error("Null expression must have a reference type");
@@ -595,7 +577,7 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
     gen.builder->CreateBr(merge_block);
 
     gen.builder->SetInsertPoint(merge_block);
-    llvm::Type* result_type = codegenExpResultType(gen, e.ty);
+    llvm::Type* result_type = gen.codegenValueType(e.ty);
 
     if (then_value->getType() != result_type || else_value->getType() != result_type)
         throw std::runtime_error("Conditional expression branch value does not match its declared type");

@@ -48,6 +48,86 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "generic imports private helpers and callbacks"
+             [
+               ( "helper.bl",
+                 "fun secret() => i32 { return 42; } export fun \
+                  identity<T>(value: T) => T { return value; } export fun \
+                  answer<T>(value: T) => i32 { return secret(); }" );
+               ( "main.bl",
+                 "import helper; fun secret() => i32 { return 1; } fun \
+                  apply<T>(f: (T) -> T, value: T) => T { return f(value); } \
+                  fun main() => i32 { let f: (i32) -> i32 = helper.identity; \
+                  let result = apply(f, helper.answer(0)); free f; return \
+                  result; }" );
+             ];
+           native "generic shared import specialization"
+             [
+               ( "common.bl",
+                 "export fun identity<T>(value: T) => T { return value; }" );
+               ( "left.bl",
+                 "import common; export fun answer() => i32 { return \
+                  common.identity(20); }" );
+               ( "right.bl",
+                 "import common; export fun answer() => i32 { return \
+                  common.identity(22); }" );
+               ( "main.bl",
+                 "import left; import right; fun main() => i32 { return \
+                  left.answer() + right.answer(); }" );
+             ];
+           native "generic imported nominal argument types"
+             [
+               ( "helper.bl",
+                 "export class Box { let value: i32; } export fun \
+                  identity<T>(value: T) => T { return value; }" );
+               ( "main.bl",
+                 "import helper; fun main() => i32 { let box = new helper.Box \
+                  { value = 42 }; let result = helper.identity(box).value; \
+                  free box; return result; }" );
+             ];
+           [
+             negative "generic specialization diagnostics"
+               [
+                 ( "helper.bl",
+                   "export fun twice<T>(value: T) => T { return value + value; \
+                    }" );
+                 ( "main.bl",
+                   "import helper; fun main() { helper.twice(\"hello\"); }" );
+               ]
+               "While specializing"
+               ~also:[ "helper.bl"; "main.bl"; "helper.twice<string>" ];
+           ];
+           [
+             ( "generic shared instance IR" >:: fun context ->
+               in_temp_dir ~prefix:"blink-generic-ir" context (fun () ->
+                   write_sources (Sys.getcwd ())
+                     [
+                       ( "helper.bl",
+                         "export fun identity<T>(value: T) => T { return \
+                          value; }" );
+                       ( "left.bl",
+                         "import helper; export fun answer() => i32 { return \
+                          helper.identity(20); }" );
+                       ( "right.bl",
+                         "import helper; export fun answer() => i32 { return \
+                          helper.identity(22); }" );
+                       ( "main.bl",
+                         "import left; import right; fun main() => i32 { \
+                          return left.answer() + right.answer(); }" );
+                     ];
+                   assert_success_silently "generic compilation"
+                     (command ~options:[ "-O0" ] "main.bl");
+                   let ir = Core.In_channel.read_all "new_output.ll" in
+                   let definitions =
+                     String.split_on_char '\n' ir
+                     |> List.filter (fun line ->
+                         Core.String.is_prefix line ~prefix:"define"
+                         && Core.String.is_substring line ~substring:"_BLG")
+                   in
+                   assert_equal 1 (List.length definitions);
+                   verify_ir ();
+                   compile_and_run ~expected_exit:42) );
+           ];
            native "global imported string identity"
              [
                ("state.bl", "export const message = \"shared\";");

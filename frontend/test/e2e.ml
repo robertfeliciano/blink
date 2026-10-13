@@ -402,6 +402,124 @@ fun main() => i32 {
     };
   ]
 
+let generic_fixtures =
+  [
+    {
+      name = "generic-functions-and-values";
+      source =
+        {|fun identity<T>(value: T) => T { return value; }
+fun apply<T,U>(f: (T) -> U, value: T) => U { return f(value); }
+fun main() => i32 {
+  let f: (i32) -> i32 = identity;
+  let x: i64 = identity(42);
+  let s = identity("hello");
+  let result = f(apply(identity, x as i32));
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-return-context-and-recursion";
+      source =
+        {|fun zero<T>() => T { return 0; }
+fun left<T>(value: T, n: i32) => T {
+  if n == 0 { return value; }
+  return right(value, n - 1);
+}
+fun right<U>(value: U, n: i32) => U { return left(value, n); }
+fun main() => i32 { let x: i64 = zero(); return left(42, 4) + (x as i32); }
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-aggregate-signatures";
+      source =
+        {|class Box { let value: i32; }
+fun identity<T>(value: T) => T { return value; }
+fun first<T>(values: [T; 2]) => T { return values[0]; }
+fun main() => i32 {
+  let box = new Box { value = 42 };
+  let boxes = [box, box];
+  let result = identity(first(boxes)).value;
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-array-values-and-callbacks";
+      source =
+        {|fun identity<T>(value: T) => T { return value; }
+fun apply<T>(f: (T) -> T, value: T) => T { return f(value); }
+fun first<T>(values: [T; 2]) => T { return values[0]; }
+fun capture<T>(value: T) => () -> T {
+  let copy: T = value;
+  return fn[copy]() { return copy; };
+}
+fun main() => i32 {
+  let values = [20, 22];
+  let f: ([i32; 2]) -> [i32; 2] = identity;
+  let direct = identity(values);
+  let indirect = f(direct);
+  let callback = apply(identity, indirect);
+  let matrix = [[20, 22], [22, 20]];
+  let nested = apply(identity, matrix);
+  let closure = capture(callback);
+  let captured = closure();
+  let result = first(captured) + first(nested[1]);
+  free closure;
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-values-and-callbacks";
+      source =
+        {|class Box { let value: i32; }
+fun identity<T>(value: T) => T { return value; }
+fun apply<T>(f: (T) -> T, value: T) => T { return f(value); }
+fun main() => i32 {
+  let box = new Box { value = 42 };
+  let f: (Box) -> Box = identity;
+  let result = apply(identity, f(box)).value;
+  free f;
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-lambda-types-and-side-effects";
+      source =
+        {|let count = 0;
+fun next() => i32 { count += 1; return 40; }
+fun identity<T>(value: T) => T { return value; }
+fun capture<T>(value: T) => () -> T {
+  let copy: T = value;
+  return fn[copy]() { return copy; };
+}
+fun main() => i32 {
+  let f = capture(identity(next()));
+  let result = f() + count + count;
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-void-and-inline";
+      source =
+        {|let count = 0;
+inline fun identity<T>(value: T) => T { return value; }
+fun consume<T>(value: T) { count += 1; }
+fun main() => i32 { consume(1); consume("hello"); return identity(40) + count; }
+|};
+      expected_exit = 42;
+    };
+  ]
+
 let stage_failure fixture stage error =
   assert_failure
     (Printf.sprintf "%s failed during %s: %s" fixture.name stage
@@ -422,7 +540,7 @@ let check_frontend_stages fixture =
   | Ok _ -> ()
   | Error error -> stage_failure fixture "desugaring" error
 
-let test_fixture fixture test_context =
+let test_fixture ?(optimization = "-O0") fixture test_context =
   check_frontend_stages fixture;
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
   Native_test_support.in_temp_dir
@@ -431,11 +549,13 @@ let test_fixture fixture test_context =
     (fun () ->
       Core.Out_channel.write_all "program.bl" ~data:fixture.source;
       let compile_command =
-        Printf.sprintf "%s %s" (Filename.quote compiler)
+        Printf.sprintf "%s %s %s" (Filename.quote compiler) optimization
           (Filename.quote "program.bl")
       in
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
+      Native_test_support.assert_success "LLVM verification"
+        "llc --filetype=null new_output.ll -o /dev/null";
       Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
 
 let test_underapplication (name, source) test_context =
@@ -582,6 +702,15 @@ let suite =
                 (fun ((name, _) as fixture) ->
                   name >:: test_underapplication fixture)
                 Call_arity_fixtures.underapplication;
+         "generic native execution"
+         >::: List.concat_map
+                (fun fixture ->
+                  List.map
+                    (fun optimization ->
+                      fixture.name ^ optimization
+                      >:: test_fixture ~optimization fixture)
+                    [ "-O0"; "-O2" ])
+                generic_fixtures;
          "native execution" >::: executable_tests;
        ]
 

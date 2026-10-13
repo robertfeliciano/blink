@@ -247,6 +247,39 @@ let test_error_has_source_position _ =
         (Printf.sprintf "expected source position in error, got: %s" message)
         (Core.String.is_substring message ~substring:"line 2")
 
+let test_generic_declarations _ =
+  let fns, _, pns, _ =
+    partition_declarations
+      (parse_exn
+         "fun identity<T>(value: T) => T; inline fun identity<U>(value: U) => \
+          U { let copy: U = value; return copy; }")
+  in
+  match (fns, pns) with
+  | [ fn ], [ pn ] -> (
+      assert_equal [ "U" ] (List.map (fun p -> p.elt) fn.elt.type_params);
+      assert_equal [ "T" ] (List.map (fun p -> p.elt) pn.elt.type_params);
+      match (fn.elt.args, fn.elt.body) with
+      | [ (TParam p, _) ], { elt = Decl (_, Some (TParam local), _, _); _ } :: _
+        ->
+          assert_equal "U" p.elt;
+          assert_equal "U" local.elt;
+          assert_bool "parameter range preserved" (p.loc <> Util.Range.norange)
+      | _ -> assert_failure "type parameters were not bound")
+  | _ -> assert_failure "generic declarations missing"
+
+let test_generic_parser_boundaries _ =
+  List.iter assert_parse_error
+    [
+      "fun f<>(value: i32) {}";
+      "fun f<T,>(value: T) {}";
+      "class Box<T> {}";
+      "fun main() { identity<i32>(42); }";
+    ];
+  ignore
+    (parse_exn
+       "fun f<T>(value: T) => T { return value; } fun main() => i32 { if 1 < 2 \
+        and 3 > 2 { return 8 >> 1; } return 1 << 2; }")
+
 let suite =
   let valid_tests =
     List.map
@@ -262,6 +295,8 @@ let suite =
   >::: [
          "valid programs" >::: valid_tests;
          "invalid programs" >::: invalid_tests;
+         "generic declarations" >:: test_generic_declarations;
+         "generic parser boundaries" >:: test_generic_parser_boundaries;
          "top-level declarations" >:: test_top_level_declarations;
          "global declarations" >:: test_global_declarations;
          "inline modifier" >:: test_inline_modifier;

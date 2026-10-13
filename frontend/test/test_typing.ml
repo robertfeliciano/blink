@@ -940,9 +940,194 @@ let test_global_initializer_error_range _ =
           "Error at global.bl:3:5:"; "Division by zero in constant expression.";
         ]
 
+let generic_identity = "fun identity<T>(value: T) => T { return value; } "
+
+let test_concrete_type_conversion_round_trips _ =
+  let open Typed in
+  let scalars =
+    TBool :: TRef RString
+    :: List.map (fun ty -> TInt (TSigned ty)) [ Ti8; Ti16; Ti32; Ti64; Ti128 ]
+    @ List.map (fun ty -> TInt (TUnsigned ty)) [ Tu8; Tu16; Tu32; Tu64; Tu128 ]
+    @ List.map (fun ty -> TFloat ty) [ Tf32; Tf64 ]
+  in
+  let i32 = TInt (TSigned Ti32) in
+  let class_ty = TRef (RClass "__module_a_Box") in
+  let array_ty = TRef (RArray (class_ty, 2)) in
+  let void_function = TRef (RFun ([ array_ty; i32 ], RetVoid)) in
+  let types =
+    scalars
+    @ [
+        class_ty;
+        array_ty;
+        TRef (RArray (array_ty, 3));
+        TRef (RArray (i32, 0));
+        void_function;
+        TRef (RFun ([ void_function; array_ty ], RetVal array_ty));
+        TRef (RFun ([], RetVal (TRef (RFun ([ i32 ], RetVal i32)))));
+      ]
+  in
+  List.iter
+    (fun ty ->
+      assert_ty ty
+        (Typing.Conversions.convert_ty
+           (Typing.Conversions.convert_source_ty ty)))
+    types
+
+let test_generic_inference _ =
+  List.iter assert_program_type_checks
+    [
+      generic_identity
+      ^ "fun apply<T,U>(f: (T) -> U, value: T) => U { return f(value); } fun \
+         main() => i32 { let x = apply(identity, 42); return x; }";
+      generic_identity
+      ^ "fun apply<T,U>(value: T, f: (T) -> U) => U { return f(value); } fun \
+         main() => i32 { let x = apply(42, identity); return x; }";
+      generic_identity
+      ^ "fun apply<T,U>(f: (T) -> U, value: T) => U { return f(value); } fun \
+         main() => i32 { let x: i64 = apply(identity, 42); return x as i32; }";
+      generic_identity ^ "fun main() => i32 { return identity(42); }";
+      generic_identity
+      ^ "fun main() => i32 { let f: (i32) -> i32 = identity(identity); return \
+         f(42); }";
+      "fun wrap<T>(value: T) => () -> T { let copy: T = value; return \
+       fn[copy]() { return copy; }; } fun main() => i32 { let f = wrap(42); \
+       return f(); }";
+      "fun nullable<T>() => T { return null; } class Box { let value: i32; } \
+       fun main() => i32 { let box: Box = nullable(); return 42; }";
+      "fun same<T>(left: T, right: T) => T { return right; } fun main() => i32 \
+       { let value: i64 = 42; return same(1, value) as i32; }";
+      "fun same<T>(left: T, right: T) => T { return left; } fun main() => i32 \
+       { let value: i64 = 42; return same(value, 1) as i32; }";
+      generic_identity
+      ^ "fun main() => i32 { let a: i64 = 42; let b = identity(a); let s = \
+         identity(\"hello\"); let f: (i32) -> i32 = identity; return f(42); }";
+      generic_identity
+      ^ "fun apply<T>(f: (T) -> T, value: T) => T { return f(value); } fun \
+         main() => i32 { return apply(identity, 42); }";
+      generic_identity
+      ^ "fun apply<T>(value: T, f: (T) -> T) => T { return f(value); } fun \
+         main() => i32 { return apply(42, identity); }";
+      "fun zero<T>() => T { return 0; } fun main() => i32 { let x: i64 = \
+       zero(); return x as i32; }";
+      "fun first<T>(xs: [T; 2]) => T { return xs[0]; } fun main() => i32 { let \
+       x: i64 = 42; return first([1, x]) as i32; }";
+      generic_identity
+      ^ "fun main() => i32 { let x = identity(identity(42)); return x; }";
+      generic_identity
+      ^ "fun main() => i32 { let x: i64 = 42; let xs = identity([1, x]); \
+         return xs[1] as i32; }";
+      generic_identity
+      ^ "fun main() => i32 { let f: (i32) -> i32 = true ? identity : identity; \
+         return f(42); }";
+      "fun recur<T>(value: T, n: i32) => T { if n == 0 { return value; } \
+       return recur(value, n - 1); } fun main() => i32 { return recur(42, 3); \
+       }";
+      "fun left<T>(value: T, n: i32) => T { if n == 0 { return value; } return \
+       right(value, n - 1); } fun right<U>(value: U, n: i32) => U { return \
+       left(value, n); } fun main() => i32 { return left(42, 2); }";
+      "fun identity<T>(value: T) => T; fun identity<U>(value: U) => U { return \
+       value; } fun main() => i32 { return identity(42); }";
+      generic_identity
+      ^ "fun main() => i32 { let identity: (i32) -> i32 = fn(value) { return \
+         value; }; return identity(42); }";
+    ]
+
+let test_generic_errors _ =
+  List.iter assert_program_type_error
+    [
+      "fun f<T, T>(value: T) => T { return value; }";
+      "fun f<T>() {}";
+      "fun main<T>(value: T) => T { return value; }";
+      "@C fun f<T>(value: T) => T;";
+      "class Box { fun f<T>(value: T) => T { return value; } }";
+      generic_identity ^ "fun main() { let f = identity; }";
+      "fun zero<T>() => T { return 0; } fun main() { let x = zero(); }";
+      "fun same<T>(left: T, right: T) => T { return left; } fun main() { let \
+       a: i32 = 1; let b: i64 = 2; same(a, b); }";
+      "fun same<T>(left: T, right: T) => T { return left; } fun main() { \
+       same(1, \"hello\"); }";
+      "fun f<T>(value: T) => T; fun f<U>(value: U) => i32 { return 1; }";
+      "fun f<T>(value: T) => T;";
+      "fun f<T>(value: T) => Missing { return value; }";
+      "fun f<T>(value: [T; 999999999999999999999999999999999]) => T { return \
+       value[0]; }";
+      "fun first<T>(values: [T; 2]) => T { return values[0]; } fun main() { \
+       first([1, 2, 3]); }";
+      "fun apply<T>(f: ([T; 2]) -> T, values: [T; 2]) => T { return f(values); \
+       } fun wrong(values: [i32; 3]) => i32 { return values[0]; } fun main() { \
+       apply(wrong, [1, 2]); }";
+      "fun apply<T>(f: (T) -> T, value: T) => T { return f(value); } fun \
+       wrong(left: i32, right: i32) => i32 { return left + right; } fun main() \
+       { apply(wrong, 1); }";
+      "fun apply<T>(f: (T) -> T, value: T) => T { return f(value); } fun \
+       wrong(value: i32) {} fun main() { apply(wrong, 1); }";
+      generic_identity ^ "let identity = 1;";
+      "fun f<T>(value: T) => T { return value + value; } fun main() { \
+       f(\"hello\"); }";
+      generic_identity ^ "fun main() { identity(); }";
+      generic_identity
+      ^ "fun same<T>(left: T, right: T) => T { return left; } fun main() { let \
+         a: i32 = 1; let b: i64 = 2; same(identity(a), b); }";
+    ]
+
+let test_generic_instances _ =
+  let source =
+    generic_identity
+    ^ "fun main() => i32 { let a = identity(20); let b = identity(22); let c: \
+       i64 = identity(1); return a + b; }"
+  in
+  let instances program =
+    let (Typed.Prog (_, fns, _, _, _)) = program in
+    List.filter
+      (fun (fn : Typed.fdecl) -> string_starts_with ~prefix:"_BLG" fn.fname)
+      fns
+  in
+  let fns = instances (type_program_exn source) in
+  assert_equal 2 (List.length fns);
+  assert_equal
+    (List.map (fun (fn : Typed.fdecl) -> fn.fname) fns)
+    (List.map
+       (fun (fn : Typed.fdecl) -> fn.fname)
+       (instances (type_program_exn source)));
+  assert_equal 0 (List.length (instances (type_program_exn generic_identity)))
+
+let test_generic_expansion_limit _ =
+  let source =
+    "fun grow<T>(value: T) { grow([value, value]); } fun main() { grow(1); }"
+  in
+  match Typing.Type.type_prog (parse_exn source) with
+  | Error error ->
+      assert_bool "expanding recursion reports its limit"
+        (Core.String.is_substring
+           (Core.Error.to_string_hum error)
+           ~substring:"specialization limit")
+  | Ok _ -> assert_failure "unbounded specialization should be rejected"
+
+let test_generic_diagnostic _ =
+  match
+    Typing.Type.type_prog
+      (parse_exn
+         "fun twice<T>(value: T) => T { return value + value; } fun main() { \
+          twice(\"hello\"); }")
+  with
+  | Error error ->
+      let msg = Core.Error.to_string_hum error in
+      List.iter
+        (fun substring ->
+          assert_bool msg (Core.String.is_substring msg ~substring))
+        [ "While specializing"; "twice<string>"; "requested at" ]
+  | Ok _ -> assert_failure "expected invalid specialization"
+
 let suite =
   "Typing"
   >::: [
+         "concrete type conversion round trips"
+         >:: test_concrete_type_conversion_round_trips;
+         "generic inference" >:: test_generic_inference;
+         "generic errors" >:: test_generic_errors;
+         "generic instance cache" >:: test_generic_instances;
+         "generic expansion limit" >:: test_generic_expansion_limit;
+         "generic diagnostic" >:: test_generic_diagnostic;
          "global types and constant dependencies"
          >:: test_global_types_and_constant_dependencies;
          "global initializer rejections" >:: test_global_initializer_rejections;

@@ -116,7 +116,10 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
-- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, and prototypes.
+- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, prototypes, and
+  compilation-local generic state.
+- `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
+  specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
 - `frontend/src/typing/dune` exposes the typing library.
@@ -125,6 +128,16 @@ Type failures are reported with source locations through `type_error` helpers.
 Keep constness and class context intact when extending context operations.
 Function prototypes and definitions are collected before bodies are checked.
 Classes track fields and method headers in a separate class context.
+Generic top-level functions use `fun identity<T>(value: T) => T` syntax. The source
+AST binds located `TParam` types before module resolution. Calls and function
+values infer concrete type arguments from arguments and expected signatures;
+there is no explicit call-site specialization syntax. Typing registers concrete
+headers before checking queued instance bodies, including recursive instances.
+The final typed program contains only concrete functions; the desugared AST and
+native bridge contract are unchanged. Instances are cached per compilation, with
+limits of 4096 instances and 128 entries in a requesting chain. Generic prototypes
+require matching definitions; generic methods, classes, main and @C declarations
+are unsupported. Dependent bodies are checked only when instantiated.
 
 ### Desugaring
 
@@ -404,7 +417,8 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
-Generics and several prospective language features remain unsupported.
+Generic classes, generic methods, interface constraints, and several prospective
+language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 
 ## Where to start

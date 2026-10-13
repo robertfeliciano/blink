@@ -10,12 +10,14 @@ let fixtures =
     { name = "arithmetic"; expected_exit = 42 };
     { name = "function-call"; expected_exit = 42 };
     { name = "array-index"; expected_exit = 15 };
+    { name = "array-call"; expected_exit = 42 };
+    { name = "array-callback"; expected_exit = 42 };
     { name = "object-field"; expected_exit = 44 };
     { name = "conditional"; expected_exit = 42 };
     { name = "literal-values"; expected_exit = 42 };
   ]
 
-let test_fixture fixture test_context =
+let test_fixture ?(optimization = "-O0") fixture test_context =
   let compiler =
     Native_test_support.executable_path "backend_fixture_compiler.exe"
   in
@@ -24,8 +26,9 @@ let test_fixture fixture test_context =
     test_context
     (fun () ->
       let command =
-        Printf.sprintf "%s %s" (Filename.quote compiler)
+        Printf.sprintf "%s %s %s" (Filename.quote compiler)
           (Filename.quote fixture.name)
+          optimization
       in
       Native_test_support.assert_success_silently "backend AST compiler" command;
       Native_test_support.assert_success "LLVM verification"
@@ -44,6 +47,18 @@ let test_fixture fixture test_context =
 
 let suite =
   "Backend bridge and codegen"
-  >::: List.map (fun fixture -> fixture.name >:: test_fixture fixture) fixtures
+  >::: List.concat_map
+         (fun fixture ->
+           let levels =
+             if fixture.name = "array-call" || fixture.name = "array-callback"
+             then [ "-O0"; "-O2" ]
+             else [ "-O0" ]
+           in
+           List.map
+             (fun optimization ->
+               fixture.name ^ optimization
+               >:: test_fixture ~optimization fixture)
+             levels)
+         fixtures
 
 let () = run_test_tt_main suite
