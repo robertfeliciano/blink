@@ -343,6 +343,147 @@ let test_underapplication (name, source) test_context =
 let interface_fixtures =
   [
     {
+      name = "interface-overridden-field-defaults";
+      source =
+        {|@C fun srand(seed: u32) => void;
+@C fun rand() => i32;
+interface I { fun echo(other: I) => I; fun value() => i32; }
+class C impl I {
+  let n: i32 = 0;
+  fun echo(other: I) => I { return other; }
+  fun value() => i32 { return n; }
+}
+fun make() => I { rand(); return new C { n = 20 }; }
+class Holder { let item: I = make().echo(new C { n = 22 }); }
+class ScalarHolder { let value: i32 = make().value(); }
+fun main() => i32 {
+  srand(123); let first = rand(); let second = rand(); srand(123);
+  let c = new C { n = 42 };
+  let holder = new Holder { item = c };
+  let scalar = new ScalarHolder { value = 42 };
+  if rand() != first { return 91; }
+  if holder.item.value() != 42 or scalar.value != 42 { return 92; }
+  srand(123); let default_holder = new Holder {};
+  if rand() != second or default_holder.item.value() != 22 { return 93; }
+  srand(123); let default_scalar = new ScalarHolder {};
+  if rand() != second or default_scalar.value != 20 { return 94; }
+  free default_holder.item;
+  free c, holder, scalar, default_holder, default_scalar;
+  return 42;
+}
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "concrete-method-statements";
+      source =
+        {|class Box {
+  let value: i32 = 0;
+  fun set(first: i32, second: i32) => void { value = first + second; }
+  fun add(amount: i32) => i32 { value += amount; return value; }
+}
+fun main() => i32 {
+  let box = new Box {};
+  box.set(10, 20);
+  box.add(12);
+  let result = box.value; free box; return result;
+}
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-while-changing-argument";
+      source =
+        {|interface Test { fun below(value: i32) => bool; }
+class Limit impl Test {
+  let maximum: i32 = 3; let checks: i32 = 0;
+  fun below(value: i32) => bool { checks += 1; return value < maximum; }
+}
+fun main() => i32 {
+  let limit = new Limit {}; let test: Test = limit; let value = 0;
+  while test.below(value) {
+    value += 1;
+    if value > 5 { return 91; }
+  }
+  let valid = value == 3 and limit.checks == 4;
+  free limit;
+  if valid { return 42; } return 92;
+}
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-while-changing-receiver";
+      source =
+        {|interface Test { fun below(value: i32) => bool; }
+class Limit impl Test {
+  let maximum: i32 = 0; let checks: i32 = 0;
+  fun below(value: i32) => bool { checks += 1; return value < maximum; }
+}
+fun main() => i32 {
+  let yes = new Limit { maximum = 10 }; let no = new Limit {};
+  let test: Test = yes; let value = 0;
+  while test.below(0) {
+    value += 1; test = no;
+    if value > 3 { return 91; }
+  }
+  let valid = value == 1 and yes.checks == 1 and no.checks == 1;
+  free yes, no;
+  if valid { return 42; } return 92;
+}
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-while-nested-continue";
+      source =
+        {|interface Test { fun below(value: i32) => bool; }
+class Limit impl Test {
+  let maximum: i32 = 0; let checks: i32 = 0;
+  fun below(value: i32) => bool { checks += 1; return value < maximum; }
+}
+fun main() => i32 {
+  let outer_limit = new Limit { maximum = 2 };
+  let inner_limit = new Limit { maximum = 3 };
+  let outer_test: Test = outer_limit; let inner_test: Test = inner_limit;
+  let outer = 0; let total = 0;
+  while outer_test.below(outer) {
+    outer += 1; let inner = 0;
+    if outer > 4 { return 91; }
+    while inner_test.below(inner) {
+      inner += 1;
+      if inner > 5 { return 92; }
+      if inner == 2 { continue; }
+      total += inner;
+    }
+    continue;
+  }
+  let valid = outer == 2 and total == 8 and outer_limit.checks == 3 and inner_limit.checks == 8;
+  free outer_limit, inner_limit;
+  if valid { return 42; } return 93;
+}
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "while-lambda-condition-captures-current-value";
+      source =
+        {|fun evaluate(test: () -> bool) => bool {
+  let result = test(); free test; return result;
+}
+fun main() => i32 {
+  let value = 0;
+  while evaluate(fn[value]() -> bool { return value < 3; }) {
+    value += 1;
+    if value > 5 { return 91; }
+    continue;
+  }
+  if value == 3 { return 42; } return 92;
+}
+|};
+      expected_exit = 42;
+    };
+    {
       name = "interface-arguments-evaluated-left-to-right";
       source =
         {|interface I { fun apply(first: i32, callback: (i32) -> i32) => i32; }

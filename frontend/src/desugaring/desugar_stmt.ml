@@ -146,18 +146,17 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | While (cond, body) ->
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
-      cstmts @ [ While (cond', body') ]
+      [ lower_while cstmts cond' body' ]
   | SCall (InterfaceMethod (receiver, slot, _), args, types, ret) ->
       let setup, receiver, args =
         desugar_interface_application receiver args types
       in
       setup @ [ D.InterfaceSCall (receiver, slot, args, convert_ret_ty ret) ]
   | SCall (Proj (inst, pname, cname, _t), args, types, ret) ->
-      let istmts, inst' = desugar_exp inst in
-      let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
-      let args_stmts, args' = List.map desugar_exp args |> flatten in
-      let mangled = mangle_name ~enclosing_class:cname pname dtypes dret in
-      istmts @ args_stmts @ [ SCall (mangled, inst' :: args') ]
+      let setup, name, args =
+        desugar_method_application inst pname cname args types ret
+      in
+      setup @ [ D.SCall (name, args) ]
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
@@ -251,17 +250,12 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
           ([], []) fields
       in
       (List.flatten stmts, D.ObjInit (cn, fields'))
-  | Call (Proj (inst, pname, cname, t), args, tys, ty) ->
+  | Call (Proj (inst, pname, cname, _t), args, tys, ty) ->
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
-      let si, inst' = desugar_exp inst in
-      let sa, args' = List.map desugar_exp args |> flatten in
-      let _t' = convert_ty t in
-      let dtys, dty = (List.map convert_ty tys, convert_ty ty) in
-      let first_ty = D.TRef (RClass cname) in
-      let mangled_name =
-        mangle_name ~enclosing_class:cname pname (first_ty :: dtys) (RetVal dty)
+      let setup, name, args =
+        desugar_method_application inst pname cname args tys (RetVal ty)
       in
-      (si @ sa, D.Call (mangled_name, inst' :: args', convert_ty ty))
+      (setup, D.Call (name, args, convert_ty ty))
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
@@ -340,6 +334,16 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             (true_stmts, when_true'),
             (false_stmts, when_false'),
             convert_ty ty ) )
+
+and desugar_method_application receiver name cname args types ret =
+  let receiver_setup, receiver = desugar_exp receiver in
+  let argument_setup, args = List.map desugar_exp args |> flatten in
+  let name =
+    mangle_name ~enclosing_class:cname name
+      (D.TRef (RClass cname) :: List.map convert_ty types)
+      (convert_ret_ty ret)
+  in
+  (receiver_setup @ argument_setup, name, receiver :: args)
 
 and desugar_interface_application receiver args types =
   (* Freeze each value before closure conversion can hoist a later argument's

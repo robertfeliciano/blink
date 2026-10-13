@@ -154,6 +154,85 @@ let parse_and_type_exn source =
         (Printf.sprintf "test fixture did not type-check: %s"
            (Core.Error.to_string_hum error))
 
+let test_concrete_method_call_targets _ =
+  let source =
+    {|class Box {
+  let value: i32 = 0;
+  fun set(first: i32, second: i32) => void { value = first + second; }
+  fun add(amount: i32) => i32 { value += amount; return value; }
+}
+fun main() => i32 {
+  let box = new Box {}; box.set(10, 20); box.add(10); return box.add(2);
+}|}
+  in
+  let (DA.Prog (_, functions, _, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
+  let void_method =
+    List.find (fun (fn : DA.fdecl) -> fn.frtyp = DA.RetVoid) functions
+  in
+  let value_method =
+    List.find
+      (fun (fn : DA.fdecl) -> fn.fname <> "main" && fn.frtyp <> DA.RetVoid)
+      functions
+  in
+  match main.body with
+  | [
+   DA.Decl _;
+   DA.SCall (void_name, [ DA.Id ("box", _); _; _ ]);
+   DA.SCall (discarded_name, [ DA.Id ("box", _); _ ]);
+   DA.Ret (Some (DA.Call (expression_name, [ DA.Id ("box", _); _ ], _)));
+  ] ->
+      assert_equal ~msg:"void statement targets the extracted definition"
+        void_method.fname void_name;
+      assert_equal ~msg:"discarded-result statement targets the definition"
+        value_method.fname discarded_name;
+      assert_equal ~msg:"expression and statement use the same method target"
+        expression_name discarded_name
+  | body ->
+      assert_failure
+        (Printf.sprintf "unexpected concrete method lowering:\n%s"
+           (Printer.show_block body))
+
+let test_while_condition_setup source _ =
+  let (DA.Prog (_, functions, _, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let check = List.find (fun (fn : DA.fdecl) -> fn.fname = "check") functions in
+  match check.body with
+  | [ DA.Decl ("value", _, _, _); DA.While (DA.Bool true, loop_body); DA.Ret _ ]
+    ->
+      let rec split_setup setup = function
+        | DA.If (DA.Uop (DA.Not, _, DA.TBool), [ DA.Break ], []) :: body ->
+            (List.rev setup, body)
+        | statement :: rest -> split_setup (statement :: setup) rest
+        | [] -> assert_failure "condition must be checked before the loop body"
+      in
+      let setup, body = split_setup [] loop_body in
+      assert_bool "condition bindings are created inside the loop"
+        (List.exists (function DA.Decl _ -> true | _ -> false) setup);
+      assert_bool "original body follows the condition guard"
+        (match body with [ DA.Assn _ ] -> true | _ -> false)
+  | body ->
+      assert_failure
+        (Printf.sprintf "condition setup escaped its loop:\n%s"
+           (Printer.show_block body))
+
+let interface_while_source =
+  {|interface Test { fun below(value: i32) => bool; }
+fun check(test: Test) => i32 {
+  let value = 0; while test.below(value) { value += 1; } return value;
+}|}
+
+let lambda_while_source =
+  {|fun evaluate(test: () -> bool) => bool { return test(); }
+fun check() => i32 {
+  let value = 0;
+  while evaluate(fn[value]() -> bool { return value < 3; }) { value += 1; }
+  return value;
+}|}
+
 let test_optimization_level_propagation _ =
   let source = "fun main() => i32 { return 0; }" in
   let ast =
@@ -441,6 +520,12 @@ let suite =
   >::: [
          "compound assignment" >:: test_compound_assignment;
          "projected call" >:: test_projected_call;
+         "concrete expression and statement method targets"
+         >:: test_concrete_method_call_targets;
+         "interface while condition setup remains inside the loop"
+         >:: test_while_condition_setup interface_while_source;
+         "lambda while condition setup remains inside the loop"
+         >:: test_while_condition_setup lambda_while_source;
          "for loop" >:: test_for_loop;
          "array foreach" >:: test_array_foreach;
          "class method extraction" >:: test_class_method_extraction;

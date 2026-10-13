@@ -10,6 +10,15 @@ let flatten pairs =
   let stmts, exps = List.split pairs in
   (List.flatten stmts, exps)
 
+let lower_while setup condition body =
+  match setup with
+  | [] -> D.While (condition, body)
+  | _ ->
+      (* Condition setup belongs to every check, including checks reached by
+         continue. Use the existing loop and break constructs to preserve it. *)
+      let stop = D.If (D.Uop (D.Not, condition, D.TBool), [ D.Break ], []) in
+      D.While (D.Bool true, setup @ (stop :: body))
+
 let counter = ref 0
 
 let gensym sfx =

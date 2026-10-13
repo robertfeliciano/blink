@@ -583,7 +583,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       in
       let cs' = add_cdecls ecs cs in
       let bcs, bfs, b' = lift_lambda_from_block cs' lctxt b in
-      (add_cdecls bcs cs', efs @ bfs @ fs, lctxt, ess @ [ While (e', b') ])
+      (add_cdecls bcs cs', efs @ bfs @ fs, lctxt, [ lower_while ess e' b' ])
   | Free es ->
       let final_cs, final_fs, all_setup_stmts, desugared_exps =
         List.fold_left

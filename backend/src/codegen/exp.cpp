@@ -503,19 +503,15 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
         llvm::Type* storageTy = gen.typeGen.codegenValueTy(fd.ftyp);
 
-        for (auto& stmtPtr : fd.prelude) {
-            // TODO think this goes with codegen exp of fields...
-            gen.codegenStmt(*stmtPtr);
-        }
-
         Value* storedVal = nullptr;
 
-        if (userInitMap.find(fd.fieldName) != userInitMap.end()) {
-            storedVal = userInitMap[fd.fieldName];
-        } else if (fd.init) {
-            storedVal = gen.codegenExp(*fd.init);
+        if (auto userInit = userInitMap.find(fd.fieldName); userInit != userInitMap.end()) {
+            storedVal = userInit->second;
         } else {
-            storedVal = llvm::Constant::getNullValue(storageTy);
+            for (auto& stmtPtr : fd.prelude) {
+                gen.codegenStmt(*stmtPtr);
+            }
+            storedVal = fd.init ? gen.codegenExp(*fd.init) : llvm::Constant::getNullValue(storageTy);
         }
 
         Value* fieldPtr = gen.builder->CreateStructGEP(structTy, objPtr, idx, fd.fieldName + "_ptr");
