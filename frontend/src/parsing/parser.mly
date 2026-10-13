@@ -61,8 +61,6 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTE       /* <= */
 %token GT        /* > */
 %token GTE       /* >= */
-%token LT_TYPE   /* < */
-%token GT_TYPE   /* > */
 // %token OPT_TYPE  /* ? */
 %token NEQ       /* != */
 %token EQEQ      /* == */
@@ -106,9 +104,10 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token WHERE     /* where */
 %token IMPORT EXPORT
 // %token ENABLE    /* enable */
+%token INTERFACE
 %token CLASS     /* class */
 %token FREE       /* free */
-%token IMPLS     /* impls */
+%token IMPLS     /* impl */
 // %token GLOBAL    /* global */
 %token QMARK     /* ? */
 %token AS        /* as */
@@ -165,6 +164,7 @@ tdecl_body:
   | f=fdecl { { elt = { declaration = Function f; export_loc = None }; loc = f.loc } }
   | c=cdecl { { elt = { declaration = Class c; export_loc = None }; loc = c.loc } }
   | p=pdecl { { elt = { declaration = Prototype p; export_loc = None }; loc = p.loc } }
+  | i=idecl { { elt = { declaration = Interface i; export_loc = None }; loc = i.loc } }
 
 tdecl:
   | d=tdecl_body { d }
@@ -231,16 +231,16 @@ pdecl:
       { bind_proto_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args }) }
 
 cdecl:
-  | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
-      { (loc $symbolstartpos $endpos { annotations; cname; impls; fields; methods }) }
+  | annotations=list(annotation) CLASS cname=IDENT type_params=type_params impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
+      { bind_cdecl_params (loc $symbolstartpos $endpos { type_params; annotations; cname; impls; fields; methods }) }
+
+idecl:
+  | INTERFACE iname=IDENT type_params=type_params LBRACE protos=list(pdecl) RBRACE
+      { bind_idecl_params (loc $startpos $endpos { type_params; iname; protos }) }
 
 impls_spec:
-  | IMPLS ids=id_ne_list { ids }
+  | IMPLS ids=separated_nonempty_list(COMMA, nominal_ty) { ids }
   | { [] }
-
-id_ne_list:
-  | id=IDENT { [id] }
-  | id=IDENT COMMA rest=id_ne_list { id :: rest }
 
 field_list:
   | /* empty */ { [] }
@@ -304,10 +304,15 @@ ret_ty_spec:
 
 ref_ty:
   | TSTRING { RString }
-  | cname=qualified_name { RClass cname }
+  | t=nominal_ty { match t with TRef r -> r | _ -> assert false }
+  | LBRACKET t=ty RBRACKET { RDArray t }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
-  | gname=IDENT LT_TYPE params=separated_list(COMMA, ty) GT_TYPE
-    { RGeneric (gname, params) }
+
+
+nominal_ty:
+  | cname=qualified_name %prec QUALIFIED_NAME_END { TRef (RClass cname) }
+  | cname=qualified_name LT params=separated_nonempty_list(COMMA, ty) GT
+    { TRef (RGeneric (cname, params)) }
 
 %inline bop:
   | PLUS  { Add }
@@ -367,6 +372,10 @@ ref_ty:
    ----------------------- *)
 
 exp:
+  | e1=exp GT GT e2=exp %prec GTGT
+      { loc $startpos $endpos @@ Bop (Lshr, e1, e2) }
+  | e1=exp GT GT GT e2=exp %prec GTGTGT
+      { loc $startpos $endpos @@ Bop (Ashr, e1, e2) }
   | cond=exp QMARK when_true=exp COLON when_false=exp
       { loc $startpos $endpos @@ Conditional (cond, when_true, when_false) }
   | e1=exp b=bop e2=exp
@@ -392,6 +401,10 @@ primary:
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array elems }
   | LPAREN e=exp RPAREN             { e }
+  | NEW LBRACKET t=ty RBRACKET LPAREN size=exp RPAREN
+      { loc $startpos $endpos @@ ArrayAlloc (t, size) }
+  | NEW cname=qualified_name LT ts=separated_nonempty_list(COMMA, ty) GT LBRACE fields=separated_list(COMMA, field_init) RBRACE
+      { loc $startpos $endpos @@ ObjInitGeneric (cname, ts, fields) }
   | NEW cid=qualified_name LBRACE fields=separated_list(COMMA, field_init) RBRACE
       { 
         loc $startpos $endpos @@ ObjInit (cid, fields)

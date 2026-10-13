@@ -121,6 +121,15 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
         return ty.int_ty->tag == IntTyTag::Unsigned;
     };
 
+    if (e.op == BinOp::Eqeq || e.op == BinOp::Neq) {
+        const Ty& lhsTy = getExpTy(*e.left);
+        const Ty& rhsTy = getExpTy(*e.right);
+        if (lhsTy.tag == TyTag::TRef && lhsTy.ref_ty->tag == RefTyTag::RInterface)
+            lhs = gen.interfaceObject(lhs);
+        if (rhsTy.tag == TyTag::TRef && rhsTy.ref_ty->tag == RefTyTag::RInterface)
+            rhs = gen.interfaceObject(rhs);
+    }
+
     bool lhsUnsigned = isUnsignedIntTy(getExpTy(*e.left));
     bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
 
@@ -341,9 +350,11 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
 
-    llvm::Type* resultTy = gen.codegenType(e.ty);
+    llvm::Type* resultTy = gen.codegenValueType(e.ty);
+    const Ty& arrayTy = gen.getExpTy(*e.collection);
 
-    if (resultTy->isAggregateType()) {
+    if (arrayTy.tag == TyTag::TRef && arrayTy.ref_ty->tag == RefTyTag::RArray &&
+        e.ty.tag == TyTag::TRef && e.ty.ref_ty->tag == RefTyTag::RArray) {
         // some kind of collection, like an array
         return elemPtr;
     } else {
@@ -355,11 +366,16 @@ Value* ExpToLLVisitor::operator()(const EIndex& e) {
 Value* ExpToLLVisitor::operator()(const EArray& e) {
     llvm::Type* arrTy = gen.codegenType(e.ty);
 
-    Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
-    Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
+    Value* count = gen.builder->getInt64(1);
+    Value* arrPtr = gen.codegenHeapArray(arrTy, count, false);
+    codegenArrayElements(e, arrPtr, arrTy);
+    return arrPtr;
+}
 
-    llvm::Type* innerTy     = arrTy->getArrayElementType();
-    bool        isAggregate = innerTy->isAggregateType();
+void ExpToLLVisitor::codegenArrayElements(const EArray& e, Value* arrPtr, llvm::Type* arrTy) {
+    Value* zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
+    llvm::Type* innerTy = arrTy->getArrayElementType();
+    bool isAggregate = e.ty.ref_ty->inner->tag == TyTag::TRef && e.ty.ref_ty->inner->ref_ty->tag == RefTyTag::RArray;
 
     llvm::DataLayout dl         = gen.mod->getDataLayout();
     Value*           size       = nullptr;
@@ -374,11 +390,17 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     }
 
     for (size_t i = 0; i < e.elements.size(); i++) {
-        Value* val = gen.codegenExp(*e.elements[i]);
         Value* idx = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), i);
 
         Value* elemPtr = gen.builder->CreateInBoundsGEP(arrTy, arrPtr, {zero, idx}, "elem_ptr");
+        if (isAggregate) {
+            if (const auto* nested = std::get_if<EArray>(&e.elements[i]->val)) {
+                codegenArrayElements(*nested, elemPtr, innerTy);
+                continue;
+            }
+        }
 
+        Value* val = gen.codegenExp(*e.elements[i]);
         if (isAggregate) {
             Value* dest = gen.builder->CreateBitCast(elemPtr, llvm::Type::getInt8PtrTy(*gen.ctxt), "DestI8Ptr");
             Value* src  = gen.builder->CreateBitCast(val, llvm::Type::getInt8PtrTy(*gen.ctxt), "SrcI8Ptr");
@@ -388,8 +410,6 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
             gen.builder->CreateStore(val, elemPtr);
         }
     }
-
-    return arrPtr;
 }
 
 Value* ExpToLLVisitor::operator()(const ECast& e) {
@@ -399,7 +419,7 @@ Value* ExpToLLVisitor::operator()(const ECast& e) {
     }
 
     llvm::Type* sourceTy = source->getType();
-    llvm::Type* destTy   = gen.codegenType(e.ty);
+    llvm::Type* destTy   = gen.codegenValueType(e.ty);
 
     if (sourceTy == destTy) {
         return source;
@@ -529,6 +549,8 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
 Value* ExpToLLVisitor::operator()(const ENull& e) {
     llvm::Type* result_type = gen.codegenValueType(e.ty);
+    if (e.ty.tag == TyTag::TRef && e.ty.ref_ty->tag == RefTyTag::RInterface)
+        return llvm::Constant::getNullValue(result_type);
     auto*       pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
     if (!pointer_type)
         throw std::runtime_error("Null expression must have a reference type");
@@ -586,4 +608,29 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
     result->addIncoming(then_value, then_end);
     result->addIncoming(else_value, else_end);
     return result;
+}
+
+Value* ExpToLLVisitor::operator()(const EInterfaceCast& e) {
+    Value* object = gen.codegenExp(*e.expr);
+    auto table = gen.interfaceTables.find({e.cname, e.iname});
+    if (table == gen.interfaceTables.end())
+        throw std::runtime_error("Missing interface implementation: " + e.cname + " impl " + e.iname);
+    Value* value = llvm::UndefValue::get(gen.typeGen.getInterfaceType());
+    value = gen.builder->CreateInsertValue(value, object, {0}, "interface_object");
+    return gen.builder->CreateInsertValue(value, table->second, {1}, "interface_value");
+}
+
+Value* ExpToLLVisitor::operator()(const EInterfaceCall& e) {
+    return gen.codegenInterfaceCall(*e.receiver, e.slot, e.args);
+}
+
+Value* ExpToLLVisitor::operator()(const EArrayAlloc& e) {
+    if (e.ty.tag != TyTag::TRef || e.ty.ref_ty->tag != RefTyTag::RDArray || !e.ty.ref_ty->inner)
+        throw std::runtime_error("Array allocation must have a dynamic array type");
+    const Ty& capacityTy = gen.getExpTy(*e.capacity);
+    if (capacityTy.tag != TyTag::TInt)
+        throw std::runtime_error("Array capacity must have an integer type");
+    Value* count = gen.codegenExp(*e.capacity);
+    llvm::Type* elementTy = gen.codegenValueType(*e.ty.ref_ty->inner);
+    return gen.codegenHeapArray(elementTy, count, capacityTy.int_ty->tag == IntTyTag::Signed);
 }

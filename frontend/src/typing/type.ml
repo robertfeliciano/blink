@@ -63,7 +63,15 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
   let fieldName, fty_opt, en_opt, _const = vd in
   let stmt_n = { elt = Decl vd; loc } in
   match (fty_opt, en_opt) with
-  | Some (TRef (RFun _)), _ ->
+  | Some ty, None ->
+      let ftyp = validate_and_convert_ty stmt_n tc ty in
+      let init =
+        match ftyp with
+        | Typed_ast.TRef ty -> Typed_ast.Null ty
+        | ty -> create_default_init stmt_n tc ty
+      in
+      { fieldName; ftyp; init }
+  | Some (TRef (RFun _)), Some en when en.elt <> Null ->
       type_error stmt_n
         "Lambdas not allowed at class field level - please use function \
          instead."
@@ -116,7 +124,12 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
   {
     annotations = annotations';
     cname;
-    impls;
+    impls =
+      List.map
+        (function
+          | TRef (RClass cn) -> resolved_class_name cn
+          | _ -> type_error cn "Unresolved implemented interface.")
+        impls;
     fields = tfields;
     methods = tmethods;
   }
@@ -454,10 +467,19 @@ let type_globals tc declarations =
   let globals = List.map (resolve []) declarations in
   (!context, globals)
 
-let create_generic_ctxt tc fns pns =
+let create_generic_ctxt ?(nominal_templates = []) tc fns pns =
   let seen = Hashtbl.create (List.length fns) in
   let rec validate_ty node = function
     | TParam _ -> ()
+    | TRef (RDArray ty) -> validate_ty node ty
+    | TRef (RGeneric (cn, ts)) -> (
+        match List.assoc_opt (resolved_class_name cn) nominal_templates with
+        | Some template
+          when List.length (Generics.nominal_params template) = List.length ts
+          ->
+            List.iter (validate_ty node) ts
+        | Some _ -> type_error cn "Wrong number of nominal type arguments."
+        | None -> type_error cn "Unknown generic class or interface.")
     | TRef (RArray (ty, sz)) ->
         validate_array_length node sz;
         validate_ty node ty
@@ -509,7 +531,7 @@ let create_generic_ctxt tc fns pns =
         if fn.elt.type_params = [] then None else Some (fn.elt.fname, fn))
       fns
   in
-  { tc with generics = Some (Generics.create templates) }
+  { tc with generics = Some (Generics.create ~nominal_templates templates) }
 
 let generic_error_message loc msg =
   try type_error { elt = (); loc } msg with TypeError msg -> msg
@@ -543,6 +565,247 @@ let type_generic_instances tc =
   in
   aux []
 
+let create_interface_name_ctxt tc declarations =
+  List.fold_left
+    (fun tc (i : idecl node) ->
+      if
+        Option.is_some (lookup_interface_option i.elt.iname tc)
+        || Option.is_some (lookup_class_option i.elt.iname tc)
+      then type_error i ("Duplicate interface or class " ^ i.elt.iname ^ ".");
+      { tc with interfaces = (i.elt.iname, []) :: tc.interfaces })
+    tc declarations
+
+let create_interface_ctxt ?(register_names = true) tc declarations =
+  let tc =
+    if register_names then create_interface_name_ctxt tc declarations else tc
+  in
+  List.fold_left
+    (fun tc (i : idecl node) ->
+      let seen = Hashtbl.create 8 in
+      let methods =
+        List.map
+          (fun (p : proto node) ->
+            if Hashtbl.mem seen p.elt.fname then
+              type_error p ("Duplicate interface method " ^ p.elt.fname ^ ".");
+            Hashtbl.add seen p.elt.fname ();
+            if p.elt.annotations <> [] then
+              type_error p "Interface prototypes cannot have annotations.";
+            let args, ret =
+              validate_and_convert_signature p tc p.elt.args p.elt.frtyp
+            in
+            (p.elt.fname, ret, args))
+          i.elt.protos
+      in
+      {
+        tc with
+        interfaces =
+          (i.elt.iname, methods) :: List.remove_assoc i.elt.iname tc.interfaces;
+      })
+    tc declarations
+
+let validate_implementations tc classes =
+  List.fold_left
+    (fun tc (c : cdecl node) ->
+      let seen = Hashtbl.create 8 in
+      let method_names = Hashtbl.create 8 in
+      List.iter
+        (fun (m : fdecl node) ->
+          if Hashtbl.mem method_names m.elt.fname then
+            type_error m ("Duplicate class method " ^ m.elt.fname ^ ".");
+          Hashtbl.add method_names m.elt.fname ())
+        c.elt.methods;
+      let names =
+        List.map
+          (fun name ->
+            let iname =
+              match name with
+              | TRef (RClass name) -> resolved_class_name name
+              | _ -> type_error c "Unresolved implemented interface."
+            in
+            if Hashtbl.mem seen iname then
+              type_error c ("Duplicate implemented interface " ^ iname ^ ".");
+            Hashtbl.add seen iname ();
+            let required =
+              match lookup_interface_option iname tc with
+              | Some methods -> methods
+              | None -> type_error c ("Unknown interface " ^ iname ^ ".")
+            in
+            List.iter
+              (fun (method_name, ret, args) ->
+                match
+                  List.find_opt
+                    (fun (m : fdecl node) ->
+                      m.elt.fname = method_name && m.elt.fname <> c.elt.cname)
+                    c.elt.methods
+                with
+                | None ->
+                    type_error c
+                      ("Class " ^ c.elt.cname ^ " is missing interface method "
+                     ^ method_name ^ " from " ^ iname ^ ".")
+                | Some method_node ->
+                    let actual_args, actual_ret =
+                      validate_and_convert_signature method_node tc
+                        method_node.elt.args method_node.elt.frtyp
+                    in
+                    if
+                      not
+                        (lists_equal_exact equal_ty (List.map fst args)
+                           (List.map fst actual_args)
+                        && equal_ret_ty ret actual_ret)
+                    then
+                      type_error method_node
+                        ("Interface method " ^ method_name
+                       ^ " signature does not match " ^ iname ^ "."))
+              required;
+            iname)
+          c.elt.impls
+      in
+      { tc with implementations = (c.elt.cname, names) :: tc.implementations })
+    tc classes
+
+let create_nominal_ctxt tc =
+  let state = Option.get tc.generics in
+  let concrete_ty ty = resolve_interface_ty tc (Conversions.convert_ty ty) in
+  let rec resolve_ty = function
+    | TRef (RDArray ty) -> TRef (RDArray (resolve_ty ty))
+    | TRef (RArray (ty, sz)) -> TRef (RArray (resolve_ty ty, sz))
+    | TRef (RFun (args, ret)) ->
+        TRef (RFun (List.map resolve_ty args, resolve_ret ret))
+    | TRef (RClass cn) as ty -> (
+        match
+          List.assoc_opt (resolved_class_name cn) state.nominal_templates
+        with
+        | Some _ ->
+            type_error cn "Generic class or interface requires type arguments."
+        | None -> ty)
+    | TRef (RGeneric (cn, args)) ->
+        let origin = resolved_class_name cn in
+        let template =
+          match List.assoc_opt origin state.nominal_templates with
+          | Some template -> template
+          | None ->
+              type_error cn
+                ("Unknown generic class or interface " ^ origin ^ ".")
+        in
+        let params = Generics.nominal_params template in
+        if List.length params <> List.length args then
+          type_error cn "Wrong number of nominal type arguments.";
+        let args = List.map resolve_ty args in
+        let tys = List.map concrete_ty args in
+        let name = Generics.nominal_name origin tys in
+        let nominal_ty =
+          TRef (RClass (unqualified_name { cn.elt.name with elt = name }))
+        in
+        (match Generics.lookup_nominal state name with
+        | Some _ -> ()
+        | None ->
+            let previous = !(state.nominal_origins) in
+            let display =
+              origin ^ "<"
+              ^ String.concat ", " (List.map Printer.show_ty tys)
+              ^ ">"
+            in
+            let origins = previous @ [ display ] in
+            if
+              List.length origins > 128
+              || List.length !(state.nominal_instances) >= 4096
+            then
+              type_error cn
+                ("Generic nominal specialization limit exceeded: "
+                ^ String.concat " -> " origins
+                ^ ".");
+            state.nominal_origins := origins;
+            state.nominal_instances :=
+              (name, (origin, tys)) :: !(state.nominal_instances);
+            let bindings = List.map2 (fun p ty -> (p.elt, ty)) params tys in
+            let ty ty = resolve_ty (Generics.subst_ty bindings ty) in
+            (match template with
+            | Generics.ClassTemplate source ->
+                state.class_headers :=
+                  (name, ([], [])) :: !(state.class_headers);
+                let instance = Ast.map_cdecl_types ty source in
+                let methods =
+                  List.map
+                    (fun (fn : fdecl node) ->
+                      if fn.elt.fname = origin then
+                        { fn with elt = { fn.elt with fname = name } }
+                      else fn)
+                    instance.elt.methods
+                in
+                let instance =
+                  {
+                    instance with
+                    elt =
+                      {
+                        instance.elt with
+                        type_params = [];
+                        cname = name;
+                        methods;
+                      };
+                  }
+                in
+                let headers = create_class_header_ctxt tc [ instance ] in
+                let header = Option.get (List.assoc_opt name headers.classes) in
+                state.class_headers :=
+                  (name, header)
+                  :: List.remove_assoc name !(state.class_headers);
+                let implementations =
+                  validate_implementations tc [ instance ]
+                in
+                let impls =
+                  Option.value
+                    (List.assoc_opt name implementations.implementations)
+                    ~default:[]
+                in
+                state.implementations :=
+                  (name, impls) :: !(state.implementations);
+                state.nominal_classes := instance :: !(state.nominal_classes)
+            | Generics.InterfaceTemplate source ->
+                state.interface_headers :=
+                  (name, []) :: !(state.interface_headers);
+                let instance = Ast.map_idecl_types ty source in
+                let instance =
+                  {
+                    instance with
+                    elt = { instance.elt with type_params = []; iname = name };
+                  }
+                in
+                let seen = Hashtbl.create 8 in
+                let methods =
+                  List.map
+                    (fun (p : proto node) ->
+                      if p.elt.type_params <> [] then
+                        type_error p
+                          "Generic interface methods are not supported.";
+                      if p.elt.annotations <> [] then
+                        type_error p
+                          "Interface prototypes cannot have annotations.";
+                      if Hashtbl.mem seen p.elt.fname then
+                        type_error p "Duplicate interface method.";
+                      Hashtbl.add seen p.elt.fname ();
+                      let args, ret =
+                        validate_and_convert_signature p tc p.elt.args
+                          p.elt.frtyp
+                      in
+                      (p.elt.fname, ret, args))
+                    instance.elt.protos
+                in
+                state.interface_headers :=
+                  (name, methods)
+                  :: List.remove_assoc name !(state.interface_headers);
+                state.nominal_interfaces :=
+                  instance :: !(state.nominal_interfaces));
+            state.nominal_origins := previous);
+        nominal_ty
+    | ty -> ty
+  and resolve_ret = function
+    | RetVoid -> RetVoid
+    | RetVal ty -> RetVal (resolve_ty ty)
+  in
+  state.resolve_ty <- resolve_ty;
+  state.convert_ty <- (fun ty -> concrete_ty (resolve_ty ty));
+  tc
+
 let type_program ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : Typed_ast.program =
   (* create global var ctxt *)
@@ -553,27 +816,85 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   let fns, cns, pns, gds = Ast.partition_declarations prog in
   let fns = List.map Ast.bind_fdecl_params fns in
   let pns = List.map Ast.bind_proto_params pns in
+  let cns = List.map Ast.bind_cdecl_params cns in
+  let interfaces =
+    List.map Ast.bind_idecl_params (Ast.interface_declarations prog)
+  in
+  let nominal_templates =
+    List.filter_map
+      (fun (cn : cdecl node) ->
+        if cn.elt.type_params = [] then None
+        else Some (cn.elt.cname, Generics.ClassTemplate cn))
+      cns
+    @ List.filter_map
+        (fun (i : idecl node) ->
+          if i.elt.type_params = [] then None
+          else Some (i.elt.iname, Generics.InterfaceTemplate i))
+        interfaces
+  in
+  let names = Hashtbl.create 16 in
+  let bind_name node name =
+    if Hashtbl.mem names name then
+      type_error node ("Duplicate interface or class " ^ name ^ ".");
+    Hashtbl.add names name ()
+  in
+  List.iter
+    (fun (cn : cdecl node) ->
+      bind_name cn cn.elt.cname;
+      Generics.validate_param_names cn.elt.type_params;
+      List.iter
+        (fun (fn : fdecl node) ->
+          if fn.elt.type_params <> [] then
+            type_error fn "Generic methods are not supported.")
+        cn.elt.methods)
+    cns;
+  List.iter
+    (fun (i : idecl node) ->
+      bind_name i i.elt.iname;
+      Generics.validate_param_names i.elt.type_params;
+      List.iter
+        (fun (p : proto node) ->
+          if p.elt.type_params <> [] then
+            type_error p "Generic interface methods are not supported.")
+        i.elt.protos)
+    interfaces;
+  let cns =
+    List.filter (fun (cn : cdecl node) -> cn.elt.type_params = []) cns
+  in
+  let interfaces =
+    List.filter (fun (i : idecl node) -> i.elt.type_params = []) interfaces
+  in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
-  let class_names = create_generic_ctxt class_names fns pns in
+  let class_names = create_interface_name_ctxt class_names interfaces in
+  let class_names =
+    create_generic_ctxt ~nominal_templates class_names fns pns
+  in
+  let class_names = create_nominal_ctxt class_names in
   let fns =
     List.filter (fun (fn : fdecl node) -> fn.elt.type_params = []) fns
   in
   let pns =
     List.filter (fun (pn : proto node) -> pn.elt.type_params = []) pns
   in
+  let interface_ctxt =
+    create_interface_ctxt ~register_names:false class_names interfaces
+  in
+  let state = Option.get interface_ctxt.generics in
+  let class_names = interface_ctxt in
+  ignore (create_nominal_ctxt class_names);
+  let cns = List.map (Ast.map_cdecl_types state.resolve_ty) cns in
   let class_headers = create_class_header_ctxt class_names cns in
+  let class_headers = validate_implementations class_headers cns in
+  state.implementations :=
+    class_headers.implementations @ !(state.implementations);
   let pns = reconcile_external_prototypes class_headers pns in
   let pc = create_proto_ctxt class_headers pns in
   let fc = create_fn_ctxt pc fns in
   check_undefined_protos fc;
   let fc, typed_globals = type_globals fc gds in
-  (* Field defaults may call module functions too. Collect every function header
-     before checking initializers, just as we do before checking function bodies. *)
   let fc, classes_with_fields = create_class_ctxt fc cns in
   let typed_classes =
-    List.map
-      (fun (class_node, fields) -> type_class fc fields class_node)
-      classes_with_fields
+    List.map (fun (cn, fields) -> type_class fc fields cn) classes_with_fields
   in
   let typed_protos =
     List.filter_map
@@ -583,10 +904,47 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
         | None -> Some (type_proto fc pn))
       pns
   in
+  ignore (create_nominal_ctxt fc);
   let typed_funs = List.map (type_fn fc) fns in
-  let typed_funs = typed_funs @ type_generic_instances fc in
+  let generic_funs = ref [] in
+  let nominal_classes = ref [] in
+  let complete_classes = ref [] in
+  let rec drain () =
+    let new_funs = type_generic_instances fc in
+    generic_funs := !generic_funs @ new_funs;
+    let new_classes =
+      List.filter
+        (fun (cn : cdecl node) -> not (List.mem cn.elt.cname !complete_classes))
+        !(state.nominal_classes)
+    in
+    List.iter
+      (fun cn ->
+        ignore (validate_implementations fc [ cn ]);
+        complete_classes := cn.elt.cname :: !complete_classes;
+        let context, fields = create_class_ctxt fc [ cn ] in
+        let header = Option.get (List.assoc_opt cn.elt.cname context.classes) in
+        state.class_headers :=
+          (cn.elt.cname, header)
+          :: List.remove_assoc cn.elt.cname !(state.class_headers);
+        nominal_classes :=
+          !nominal_classes @ [ type_class fc (snd (List.hd fields)) cn ])
+      new_classes;
+    if
+      (not (Queue.is_empty state.pending))
+      || List.length !complete_classes < List.length !(state.nominal_classes)
+    then drain ()
+  in
+  drain ();
   Prog
-    (optimization_level, typed_funs, typed_classes, typed_protos, typed_globals)
+    ( optimization_level,
+      typed_funs @ !generic_funs,
+      typed_classes @ !nominal_classes,
+      typed_protos,
+      typed_globals,
+      List.map
+        (fun (i : idecl node) ->
+          (i.elt.iname, List.map (type_proto fc) i.elt.protos))
+        (interfaces @ List.rev !(state.nominal_interfaces)) )
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =

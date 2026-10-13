@@ -71,9 +71,19 @@ RefTy convert_ref_ty(value v) {
                 ref.size  = Int_val(Field(v, 1));
                 break;
             }
+            case Constants::REFTY_DArray: {
+                ref.tag   = RefTyTag::RDArray;
+                ref.inner = std::make_unique<Ty>(convert_ty(Field(v, 0)));
+                break;
+            }
             case Constants::REFTY_Class: {
                 ref.tag   = RefTyTag::RClass;
                 ref.cname = std::string(String_val(Field(v, 0)));
+                break;
+            }
+            case Constants::REFTY_Interface: {
+                ref.tag = RefTyTag::RInterface;
+                ref.cname = String_val(Field(v, 0));
                 break;
             }
             case Constants::REFTY_Fun: {
@@ -139,5 +149,6 @@ RetTy convert_ret_ty(value v) {
 }
 
 bool is_obj_ty(const Ty& t) {
-    return t.tag == TyTag::TRef && (t.ref_ty->tag == RefTyTag::RClass || t.ref_ty->tag == RefTyTag::RArray);
+    return t.tag == TyTag::TRef &&
+           (t.ref_ty->tag == RefTyTag::RClass || t.ref_ty->tag == RefTyTag::RArray || t.ref_ty->tag == RefTyTag::RDArray);
 }

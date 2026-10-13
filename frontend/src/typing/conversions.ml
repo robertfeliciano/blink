@@ -38,6 +38,7 @@ and convert_ty (t : Ast.ty) : Typed_ast.ty =
 and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   match r with
   | Ast.RString -> Typed_ast.RString
+  | Ast.RDArray t -> Typed_ast.RDArray (convert_ty t)
   | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int sz)
   | Ast.RClass cn -> (
       match Ast.unqualified_id cn with
@@ -89,6 +90,8 @@ and convert_source_ty (t : Typed_ast.ty) : Ast.ty =
 and convert_source_ref_ty (r : Typed_ast.ref_ty) : Ast.ref_ty =
   match r with
   | Typed_ast.RString -> Ast.RString
+  | Typed_ast.RDArray t -> Ast.RDArray (convert_source_ty t)
+  | Typed_ast.RInterface cn -> Ast.RClass (Ast.unqualified_name (Ast.no_loc cn))
   | Typed_ast.RArray (t, sz) -> Ast.RArray (convert_source_ty t, Z.of_int sz)
   | Typed_ast.RClass cn -> Ast.RClass (Ast.unqualified_name (Ast.no_loc cn))
   | Typed_ast.RFun (tl, rt) ->

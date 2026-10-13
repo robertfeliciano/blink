@@ -27,7 +27,6 @@ let int = number_digits
 let decimal = number_digits '.' digit+
 let scientific = number_digits ('E'|'e') '-'? digit+
 let id = alpha (alpha | digit | '_' | '\'')*
-let generic_type_param = ['A'-'Z']
 
 let whitespace = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
@@ -128,7 +127,8 @@ rule read = parse
   | "enable" { ENABLE } *)
   | "class" { CLASS }
   | "free"   { FREE }
-  (* | "impls" { IMPLS } *)
+  | "impl" { IMPLS }
+  | "interface" { INTERFACE }
   (* | "global" { GLOBAL } *)
   | "?" { QMARK }
   | "as" { AS }
@@ -136,8 +136,6 @@ rule read = parse
   (* | "lambda" { LAMBDA } *)
   | "//" { read_single_line_comment lexbuf }
   | "/*" { read_multi_line_comment lexbuf } 
-  | "<" { LT_TYPE }
-  | ">" { GT_TYPE }
   (* | "?" { OPT_TYPE } *)
   | id { IDENT (Lexing.lexeme lexbuf) }
   | int { INT (Z.of_string (normalize_number (Lexing.lexeme lexbuf))) }

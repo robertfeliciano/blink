@@ -40,7 +40,8 @@ and ref_ty =
   | RArray of ty * Z.t
   | RClass of qualified_name node
   | RFun of ty list * ret_ty
-  | RGeneric of string * ty list
+  | RGeneric of qualified_name node * ty list
+  | RDArray of ty
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -113,6 +114,8 @@ type exp =
       * block (* scope, args+types, ret type, body *)
   | Null
   | Conditional of exp node * exp node * exp node
+  | ObjInitGeneric of qualified_name node * ty list * (id node * exp node) list
+  | ArrayAlloc of ty * exp node
 
 and vdecl = id * ty option * exp node option * bool
 
@@ -161,9 +164,10 @@ type fdecl = {
 type field = { fieldName : id; ftyp : ty; init : exp node option }
 
 type cdecl = {
+  type_params : id node list;
   annotations : annotation list;
   cname : id;
-  impls : id list;
+  impls : ty list;
   fields : vdecl node list;
   methods : fdecl node list;
 }
@@ -176,6 +180,12 @@ type proto = {
   args : (ty * id) list;
 }
 
+type idecl = {
+  type_params : id node list;
+  iname : id;
+  protos : proto node list;
+}
+
 type import = { path : qualified_name node; alias : id node option }
 
 type top_level_decl =
@@ -183,6 +193,7 @@ type top_level_decl =
   | Class of cdecl node
   | Prototype of proto node
   | Global of gdecl node
+  | Interface of idecl node
 
 type top_level = { declaration : top_level_decl; export_loc : Range.t option }
 type program = Prog of import node list * top_level node list
@@ -197,57 +208,69 @@ let partition_declarations (Prog (_, declarations)) =
       | Function fn -> (fn :: functions, classes, prototypes, globals)
       | Class cn -> (functions, cn :: classes, prototypes, globals)
       | Prototype pn -> (functions, classes, pn :: prototypes, globals)
-      | Global gn -> (functions, classes, prototypes, gn :: globals))
+      | Global gn -> (functions, classes, prototypes, gn :: globals)
+      | Interface _ -> (functions, classes, prototypes, globals))
     declarations ([], [], [], [])
 
 (* Type parameters are bound before module resolution. Share this traversal
    with specialization so annotations inside lambdas and local declarations
    follow the same substitution as the function signature. *)
-let map_fdecl_types ty (fn : fdecl node) =
+let rec map_exp_types ty en =
+  let exp = map_exp_types ty in
+  let block = map_block_types ty in
   let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
-  let rec exp en =
-    let elt =
-      match en.elt with
-      | Call (f, es) -> Call (exp f, List.map exp es)
-      | Proj (e, i) -> Proj (exp e, i)
-      | Bop (op, e1, e2) -> Bop (op, exp e1, exp e2)
-      | Uop (op, e) -> Uop (op, exp e)
-      | Index (e1, e2) -> Index (exp e1, exp e2)
-      | Array es -> Array (List.map exp es)
-      | Cast (e, t) -> Cast (exp e, ty t)
-      | ObjInit (cn, fields) ->
-          ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
-      | Lambda (scope, args, body) ->
-          Lambda (List.map exp scope, args, block body)
-      | TypedLambda (scope, args, ret, body) ->
-          TypedLambda
-            ( List.map exp scope,
-              List.map (fun (i, t) -> (i, ty t)) args,
-              ret_ty ret,
-              block body )
-      | Conditional (e1, e2, e3) -> Conditional (exp e1, exp e2, exp e3)
-      | (Bool _ | Int _ | Float _ | Str _ | Id _ | Null) as e -> e
-    in
-    { en with elt }
-  and block body = List.map stmt body
-  and stmt sn =
-    let elt =
-      match sn.elt with
-      | Decl (i, t, e, const) ->
-          Decl (i, Option.map ty t, Option.map exp e, const)
-      | Assn (e1, op, e2) -> Assn (exp e1, op, exp e2)
-      | Ret e -> Ret (Option.map exp e)
-      | SCall (f, es) -> SCall (exp f, List.map exp es)
-      | If (e, b1, b2) -> If (exp e, block b1, block b2)
-      | ForEach (i, e, b) -> ForEach (i, exp e, block b)
-      | For (i, (e1, e2, incl), step, b) ->
-          For (i, (exp e1, exp e2, incl), Option.map exp step, block b)
-      | While (e, b) -> While (exp e, block b)
-      | Free es -> Free (List.map exp es)
-      | (Break | Continue) as s -> s
-    in
-    { sn with elt }
+  let elt =
+    match en.elt with
+    | Call (f, es) -> Call (exp f, List.map exp es)
+    | Proj (e, i) -> Proj (exp e, i)
+    | Bop (op, e1, e2) -> Bop (op, exp e1, exp e2)
+    | Uop (op, e) -> Uop (op, exp e)
+    | Index (e1, e2) -> Index (exp e1, exp e2)
+    | Array es -> Array (List.map exp es)
+    | ArrayAlloc (t, size) -> ArrayAlloc (ty t, exp size)
+    | ObjInitGeneric (cn, ts, fields) ->
+        ObjInitGeneric
+          (cn, List.map ty ts, List.map (fun (i, e) -> (i, exp e)) fields)
+    | Cast (e, t) -> Cast (exp e, ty t)
+    | ObjInit (cn, fields) ->
+        ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
+    | Lambda (scope, args, body) -> Lambda (List.map exp scope, args, block body)
+    | TypedLambda (scope, args, ret, body) ->
+        TypedLambda
+          ( List.map exp scope,
+            List.map (fun (i, t) -> (i, ty t)) args,
+            ret_ty ret,
+            block body )
+    | Conditional (e1, e2, e3) -> Conditional (exp e1, exp e2, exp e3)
+    | (Bool _ | Int _ | Float _ | Str _ | Id _ | Null) as e -> e
   in
+  { en with elt }
+
+and map_block_types ty body = List.map (map_stmt_types ty) body
+
+and map_stmt_types ty sn =
+  let exp = map_exp_types ty in
+  let block = map_block_types ty in
+  let elt =
+    match sn.elt with
+    | Decl (i, t, e, const) -> Decl (i, Option.map ty t, Option.map exp e, const)
+    | Assn (e1, op, e2) -> Assn (exp e1, op, exp e2)
+    | Ret e -> Ret (Option.map exp e)
+    | SCall (f, es) -> SCall (exp f, List.map exp es)
+    | If (e, b1, b2) -> If (exp e, block b1, block b2)
+    | ForEach (i, e, b) -> ForEach (i, exp e, block b)
+    | For (i, (e1, e2, incl), step, b) ->
+        For (i, (exp e1, exp e2, incl), Option.map exp step, block b)
+    | While (e, b) -> While (exp e, block b)
+    | Free es -> Free (List.map exp es)
+    | (Break | Continue) as s -> s
+  in
+  { sn with elt }
+
+let map_fdecl_types ty (fn : fdecl node) =
+  let exp = map_exp_types ty in
+  let block = map_block_types ty in
+  let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
   {
     fn with
     elt =
@@ -269,6 +292,9 @@ let rec bind_type_params params = function
       | Some i when List.exists (fun p -> p.elt = i) params ->
           TParam cn.elt.name
       | _ -> t)
+  | TRef (RDArray t) -> TRef (RDArray (bind_type_params params t))
+  | TRef (RGeneric (cn, ts)) ->
+      TRef (RGeneric (cn, List.map (bind_type_params params) ts))
   | TRef (RArray (t, sz)) -> TRef (RArray (bind_type_params params t, sz))
   | TRef (RFun (args, ret)) ->
       let ret =
@@ -296,6 +322,70 @@ let bind_proto_params (pn : proto node) =
           | RetVal t -> RetVal (ty t));
       };
   }
+
+let map_cdecl_types ty (cn : cdecl node) =
+  let exp = map_exp_types ty in
+  let fields =
+    List.map
+      (fun field ->
+        let name, annotation, init, const = field.elt in
+        {
+          field with
+          elt = (name, Option.map ty annotation, Option.map exp init, const);
+        })
+      cn.elt.fields
+  in
+  {
+    cn with
+    elt =
+      {
+        cn.elt with
+        annotations =
+          List.map
+            (fun (i, es) -> (i, Option.map (List.map exp) es))
+            cn.elt.annotations;
+        fields;
+        methods = List.map (map_fdecl_types ty) cn.elt.methods;
+        impls = List.map ty cn.elt.impls;
+      };
+  }
+
+let map_idecl_types ty (i : idecl node) =
+  let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
+  {
+    i with
+    elt =
+      {
+        i.elt with
+        protos =
+          List.map
+            (fun (p : proto node) ->
+              {
+                p with
+                elt =
+                  {
+                    p.elt with
+                    args = List.map (fun (t, n) -> (ty t, n)) p.elt.args;
+                    frtyp = ret_ty p.elt.frtyp;
+                  };
+              })
+            i.elt.protos;
+      };
+  }
+
+let bind_cdecl_params (cn : cdecl node) =
+  map_cdecl_types (bind_type_params cn.elt.type_params) cn
+
+let bind_idecl_params (i : idecl node) =
+  map_idecl_types (bind_type_params i.elt.type_params) i
+
+let interface_declarations (Prog (_, declarations)) =
+  List.filter_map
+    (fun item ->
+      match item.elt.declaration with
+      | Interface value -> Some value
+      | _ -> None)
+    declarations
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
@@ -339,7 +429,11 @@ let rec show_ref_ty ?(lvl = 0) = function
         (indent (lvl + 1))
         args_s (indent lvl)
         (show_ret_ty ~lvl:(lvl + 1) ret)
-  | RGeneric _ -> failwith "generics not supported yet"
+  | RGeneric (cn, ts) ->
+      show_qualified_name cn ^ "<"
+      ^ String.concat ", " (List.map (show_ty ~lvl) ts)
+      ^ ">"
+  | RDArray t -> "[" ^ show_ty ~lvl t ^ "]"
 
 and show_ret_ty ?(lvl = 0) = function
   | RetVoid -> "RetVoid"
@@ -385,6 +479,13 @@ let rec show_exp ?(lvl = 0) = function
   | Index (arr, idx) ->
       Printf.sprintf "%sIndex(%s, %s)" (indent lvl) (show_node show_exp arr)
         (show_node show_exp idx)
+  | ArrayAlloc (t, e) ->
+      "ArrayAlloc(" ^ show_ty t ^ ", " ^ show_node show_exp e ^ ")"
+  | ObjInitGeneric (cn, ts, fields) ->
+      show_exp ~lvl (ObjInit (cn, fields))
+      ^ "<"
+      ^ String.concat ", " (List.map show_ty ts)
+      ^ ">"
   | Array elems ->
       let elems_s =
         String.concat ";\n"
@@ -589,7 +690,10 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
     (match init with Some e -> show_node show_exp e | None -> "None")
 
 let show_cdecl ?(lvl = 0)
-    { elt = { annotations; cname; impls; fields; methods }; loc = _ } =
+    {
+      elt = { annotations; cname; impls; fields; methods; type_params };
+      loc = _;
+    } =
   let fields_s =
     String.concat ";\n"
       (List.map (show_node (show_vdecl ~lvl:(lvl + 2))) fields)
@@ -607,7 +711,9 @@ let show_cdecl ?(lvl = 0)
      %s\n\
      %s]}"
     (show_annotations annotations)
-    (indent lvl) cname (String.concat ", " impls)
+    (indent lvl)
+    (cname ^ show_type_params type_params)
+    (String.concat ", " (List.map show_ty impls))
     (indent (lvl + 1))
     fields_s
     (indent (lvl + 1))
@@ -630,6 +736,10 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Prototype pn -> show_proto ~lvl:1 pn
     | Global { elt = { gname; gtyp; ginit; gconst }; _ } ->
         show_vdecl ~lvl:1 (gname, gtyp, ginit, gconst)
+    | Interface value ->
+        "interface " ^ value.elt.iname ^ " { "
+        ^ String.concat "; " (List.map show_proto value.elt.protos)
+        ^ " }"
   in
   prefix ^ declaration
 

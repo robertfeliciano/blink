@@ -626,7 +626,7 @@ let test_matching_prototype_and_definition _ =
     \     fun main() => i32 { return identity(7); }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [], []) -> ()
+  | Typed.Prog (_, _, _, [], [], []) -> ()
   | _ -> assert_failure "resolved prototype should not be emitted"
 
 let test_matching_void_prototype_and_definition _ =
@@ -654,7 +654,7 @@ let test_external_prototype_is_defined _ =
     "@C fun external(value: i32) => void;\n     fun main() => i32 { return 0; }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [ _ ], []) -> ()
+  | Typed.Prog (_, _, _, [ _ ], [], []) -> ()
   | _ -> assert_failure "external prototype should be emitted"
 
 let test_declared_source_types_are_validated _ =
@@ -698,7 +698,9 @@ let test_array_length_must_fit_target_int _ =
       Tu.validate_and_convert_ty (mk_node ()) Tc.empty array_ty)
 
 let test_unsupported_generic_type_is_type_error _ =
-  let generic_ty = TRef (RGeneric ("Box", [ TInt (TSigned Ti32) ])) in
+  let generic_ty =
+    TRef (RGeneric (unqualified_name (mk_node "Box"), [ TInt (TSigned Ti32) ]))
+  in
   assert_type_error (fun () ->
       Tu.validate_and_convert_ty (mk_node ()) Tc.empty generic_ty)
 
@@ -829,7 +831,7 @@ let empty: string;
 fun main() => i32 { count = result as i32; return count; }|}
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, _, globals) -> (
+  | Typed.Prog (_, _, _, _, globals, _) -> (
       let find name =
         List.find (fun (g : Typed.gdecl) -> g.gname = name) globals
       in
@@ -961,6 +963,8 @@ let test_concrete_type_conversion_round_trips _ =
         array_ty;
         TRef (RArray (array_ty, 3));
         TRef (RArray (i32, 0));
+        TRef (RDArray i32);
+        TRef (RDArray (TRef (RDArray class_ty)));
         void_function;
         TRef (RFun ([ void_function; array_ty ], RetVal array_ty));
         TRef (RFun ([], RetVal (TRef (RFun ([ i32 ], RetVal i32)))));
@@ -972,6 +976,89 @@ let test_concrete_type_conversion_round_trips _ =
         (Typing.Conversions.convert_ty
            (Typing.Conversions.convert_source_ty ty)))
     types
+
+let test_generic_nominal_typing _ =
+  List.iter assert_program_type_checks
+    [
+      "interface Value { fun get() => i32; } class Number impl Value { let \
+       value: i32; fun get() => i32 { return value; } } class Box<T> { let \
+       value: T; fun get() => T { return value; } } fun main() => i32 { let \
+       number = new Number { value = 42 }; let object = new Box<Number> { \
+       value = number }; let view: Value = number; let boxed = new Box<Value> \
+       { value = view }; let lambda = new Box<(i32) -> i32> { value = \
+       fn(value) { return value + 2; } }; let f = lambda.get(); return f(40); \
+       }";
+      "interface Reading<T> { fun get() => T; } class IntReader impl \
+       Reading<i32> { fun get() => i32 { return 42; } } fun read<T>(reader: \
+       Reading<T>) => T { return reader.get(); } fun main() => i32 { return \
+       read(new IntReader {}); }";
+      "class Box<T> { let value: T; fun get() => T { return value; } } fun \
+       main() => i32 { let box = new Box<i32> { value = 42 }; return \
+       box.get(); }";
+      "class Box<T> { let value: T; } class Empty<T> {} fun main() => i32 { \
+       let inferred = new Box { value = 42 }; let contextual: Empty<i32> = new \
+       Empty {}; return inferred.value; }";
+      "class Node<T> { let value: T; let next: Node<T> = null; } fun main() => \
+       i32 { let node = new Node<i32> { value = 42 }; node.next = node; return \
+       node.next.value; }";
+      "class Box<T> { let value: T; } fun read<T>(box: Box<T>) => T { return \
+       box.value; } fun main() => i32 { return read(new Box<i32> { value = 42 \
+       }); }";
+      "interface Value<T> { fun get() => T; } class Box<T> impl Value<T> { let \
+       value: T; fun get() => T { return value; } } fun read<T>(value: \
+       Value<T>) => T { return value.get(); } fun main() => i32 { return \
+       read(new Box<i32> { value = 42 }); }";
+      "interface Value<T> { fun get() => T; } class Box<T> impl Value<T> { let \
+       value: T; fun get() => T { return value; } } fun main() => i32 { let \
+       box = new Box<Box<i32>> { value = new Box<i32> { value = 42 } }; return \
+       box.get().get(); }";
+      "fun allocate<T>(value: T) => [T] { let values = new [T](2); values[0] = \
+       value; return values; } fun main() => i32 { let values = allocate(42); \
+       let result = values[0]; free values; return result; }";
+    ]
+
+let test_generic_nominal_errors _ =
+  List.iter assert_program_type_error
+    [
+      "interface Request { fun make() => Box<i32>; } class Box<T> impl Plain \
+       {} interface Plain { fun get() => i32; }";
+      "interface Request { fun make() => Box<i32>; } class Box<T> impl Plain { \
+       fun get() => string { return \"wrong\"; } } interface Plain { fun get() \
+       => i32; }";
+      "class Box<T,T> {}";
+      "interface Value<T,T> { fun get() => T; }";
+      "class Box<T> { let missing: Missing; } fun main() { let box = new \
+       Box<i32> {}; }";
+      "class Box<T> {} fun main() { let box = new Box<i32,string> {}; }";
+      "class Box<T> {} fun main() { let box = new Box {}; }";
+      "class Box<T> { let value: T; } fun main() { let box: Box<i32> = new Box \
+       {}; }";
+      "interface Value<T> { fun get() => T; } fun read(value: \
+       Value<i32,string>) {}";
+      "interface Value<T> { fun get() => T; } class Box<T> impl Value<T> { let \
+       value: T; fun get() => T { return value; } } fun main() { let wrong: \
+       Value<string> = new Box<i32> { value = 42 }; }";
+      "class Box<T> { let value: T; } fun main() { let wrong: Box<i64> = new \
+       Box<i32> { value = 42 }; }";
+      "class Box<T> { let value: T; } fun wrong(value: T) {}";
+      "fun main() { let values = new [i32](-1); }";
+      "fun main() { let values = new [i32](true); }";
+      "fun main() { let values: [i64] = new [i32](2); }";
+    ]
+
+let test_generic_class_instances _ =
+  let source =
+    "class Box<T> { let value: T; } fun main() => i32 { let a = new Box<i32> { \
+     value = 20 }; let b = new Box<i32> { value = 22 }; let c = new \
+     Box<string> { value = \"hello\" }; return a.value + b.value; }"
+  in
+  let classes program =
+    let (Typed.Prog (_, _, classes, _, _, _)) = program in
+    List.map (fun (cn : Typed.cdecl) -> cn.cname) classes
+  in
+  let instances = classes (type_program_exn source) in
+  assert_equal 2 (List.length instances);
+  assert_equal instances (classes (type_program_exn source))
 
 let test_generic_inference _ =
   List.iter assert_program_type_checks
@@ -1077,7 +1164,7 @@ let test_generic_instances _ =
        i64 = identity(1); return a + b; }"
   in
   let instances program =
-    let (Typed.Prog (_, fns, _, _, _)) = program in
+    let (Typed.Prog (_, fns, _, _, _, _)) = program in
     List.filter
       (fun (fn : Typed.fdecl) -> string_starts_with ~prefix:"_BLG" fn.fname)
       fns
@@ -1123,6 +1210,9 @@ let suite =
   >::: [
          "concrete type conversion round trips"
          >:: test_concrete_type_conversion_round_trips;
+         "generic nominal typing" >:: test_generic_nominal_typing;
+         "generic nominal errors" >:: test_generic_nominal_errors;
+         "generic class instance cache" >:: test_generic_class_instances;
          "generic inference" >:: test_generic_inference;
          "generic errors" >:: test_generic_errors;
          "generic instance cache" >:: test_generic_instances;

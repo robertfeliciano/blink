@@ -23,6 +23,7 @@ let function_program body =
       ],
       [],
       [],
+      [],
       [] )
 
 let desugar_exn program =
@@ -34,7 +35,7 @@ let desugar_exn program =
            (Core.Error.to_string_hum error))
 
 let only_function_body = function
-  | DA.Prog (_, [ fn ], [], [], []) -> fn.body
+  | DA.Prog (_, [ fn ], [], [], [], [], []) -> fn.body
   | program ->
       assert_failure
         (Printf.sprintf "expected one function and no declarations:\n%s"
@@ -54,7 +55,7 @@ let test_projected_call _ =
   let arg_types = [ int_ty ] in
   let call =
     SCall
-      ( Proj
+      ( ClassMethod
           ( Id ("box", TRef (RClass "Box")),
             "set",
             "Box",
@@ -64,8 +65,27 @@ let test_projected_call _ =
         RetVoid )
   in
   match desugar_exn (function_program [ call ]) |> only_function_body with
-  | [ DA.SCall (name, [ DA.Id ("box", _); DA.Int ("2", _) ]) ] ->
-      assert_bool "method name should be mangled" (name <> "set")
+  | [
+   DA.Decl (receiver, receiver_ty, DA.Id ("box", value_receiver_ty), true);
+   DA.Decl (argument, argument_ty, DA.Int ("2", DA.TSigned DA.Ti32), true);
+   DA.SCall
+     ( name,
+       [
+         DA.Id (call_receiver, call_receiver_ty);
+         DA.Id (call_argument, call_argument_ty);
+       ] );
+  ] ->
+      assert_equal "_ZN3Box3setE3Boxi32__void" name;
+      assert_equal ~msg:"call reuses evaluated receiver" receiver call_receiver;
+      assert_equal ~msg:"call reuses evaluated argument" argument call_argument;
+      assert_bool "receiver and argument have separate bindings"
+        (receiver <> argument);
+      List.iter
+        (assert_equal (DA.TRef (DA.RClass "Box")))
+        [ receiver_ty; value_receiver_ty; call_receiver_ty ];
+      List.iter
+        (assert_equal (DA.TInt (DA.TSigned DA.Ti32)))
+        [ argument_ty; call_argument_ty ]
   | body ->
       assert_failure
         (Printf.sprintf "projected call was not lowered:\n%s"
@@ -124,11 +144,13 @@ let test_class_method_extraction _ =
       methods = [ method_ ];
     }
   in
-  match desugar_exn (Prog (optimization_level, [], [ class_ ], [], [])) with
+  match desugar_exn (Prog (optimization_level, [], [ class_ ], [], [], [])) with
   | DA.Prog
       ( _,
         [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
         [ { cname = "Box"; fields = [ { fieldName = "value"; _ } ]; _ } ],
+        [],
+        [],
         [],
         [] ) ->
       assert_bool "method name should be mangled" (fname <> "get")
@@ -166,7 +188,7 @@ let test_optimization_level_propagation _ =
   let requested = Util.Optimization_level.O3 in
   let typed =
     match Typing.Type.type_prog ~optimization_level:requested ast with
-    | Ok (Typing.Typed_ast.Prog (actual, _, _, _, _) as typed) ->
+    | Ok (Typing.Typed_ast.Prog (actual, _, _, _, _, _) as typed) ->
         assert_equal ~msg:"type checker optimization level" requested actual;
         typed
     | Error error ->
@@ -175,7 +197,7 @@ let test_optimization_level_propagation _ =
              (Core.Error.to_string_hum error))
   in
   match desugar_exn typed with
-  | DA.Prog (actual, _, _, _, _) ->
+  | DA.Prog (actual, _, _, _, _, _, _) ->
       assert_equal ~msg:"desugarer optimization level" requested actual
 
 let test_inline_propagation _ =
@@ -183,7 +205,7 @@ let test_inline_propagation _ =
     "inline fun increment(value: i32) => i32 { return value + 1; }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, [ fn ], [], [], []) ->
+  | DA.Prog (_, [ fn ], [], [], [], [], []) ->
       assert_bool "desugaring should preserve inline functions" fn.inline
   | program ->
       assert_failure
@@ -229,7 +251,7 @@ let test_lambda_lifting _ =
      }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], []) ->
+  | DA.Prog (_, functions, classes, [], [], [], []) ->
       assert_bool "lambda should produce a lifted function"
         (List.length functions > 1);
       assert_bool "lambda should produce closure structs"
@@ -255,10 +277,16 @@ let rec exp_contains_lambda (exp : DA.exp) =
       || exp_contains_lambda then_exp
       || List.exists stmt_contains_lambda else_block
       || exp_contains_lambda else_exp
-  | DA.Uop (_, exp, _) | DA.Cast (exp, _) | DA.Proj (exp, _, _) ->
+  | DA.Uop (_, exp, _)
+  | DA.Cast (exp, _)
+  | DA.Proj (exp, _, _)
+  | DA.ArrayAlloc (exp, _) ->
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index
+  | DA.InterfaceCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
+  | DA.InterfaceCast (value, _, _) -> exp_contains_lambda value
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
 and stmt_contains_lambda (stmt : DA.stmt) =
@@ -267,6 +295,8 @@ and stmt_contains_lambda (stmt : DA.stmt) =
   | DA.Decl (_, _, init, _) -> exp_contains_lambda init
   | DA.Ret (Some exp) -> exp_contains_lambda exp
   | DA.Ret None -> false
+  | DA.InterfaceSCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
   | DA.SCall (_, args) | DA.Free args -> List.exists exp_contains_lambda args
   | DA.If (cond, then_block, else_block) ->
       exp_contains_lambda cond
@@ -292,7 +322,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], []) ->
+  | DA.Prog (_, functions, classes, [], [], [], []) ->
       let lifted_functions =
         List.filter
           (fun (fn : DA.fdecl) ->
@@ -335,7 +365,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], []) ->
+  | DA.Prog (_, functions, _, [], [], [], []) ->
       let main =
         match
           List.find_opt
@@ -391,7 +421,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], []) -> (
+  | DA.Prog (_, functions, _, [], [], [], []) -> (
       let main =
         match
           List.find_opt
@@ -435,7 +465,7 @@ const original = "shared";
 fun main() => i32 { count += 1; return count; }|}
   in
   match desugar_exn (parse_and_type_exn source) with
-  | DA.Prog (_, [ fn ], [], [], globals) -> (
+  | DA.Prog (_, [ fn ], [], [], globals, [], []) -> (
       let find name =
         List.find (fun (g : DA.gdecl) -> g.gname = name) globals
       in
@@ -470,7 +500,7 @@ let test_generic_function_lowering _ =
     | Ok typed -> typed
     | Error e -> assert_failure (Core.Error.to_string_hum e)
   in
-  let (DA.Prog (_, fns, classes, _, _)) = desugar_exn typed in
+  let (DA.Prog (_, fns, classes, _, _, _, _)) = desugar_exn typed in
   let instances =
     List.filter
       (fun (fn : DA.fdecl) -> Core.String.is_prefix fn.fname ~prefix:"_BLG")
@@ -483,6 +513,52 @@ let test_generic_function_lowering _ =
   assert_equal [ (DA.TInt (DA.TSigned DA.Ti32), "value") ] fn.args;
   assert_equal (DA.RetVal (DA.TInt (DA.TSigned DA.Ti32))) fn.frtyp
 
+let test_generic_class_and_buffer_lowering _ =
+  let typed =
+    parse_and_type_exn
+      "interface Value<T> { fun get() => T; } class Box<T> impl Value<T> { let \
+       values: [T]; fun get() => T { return values[0]; } } fun main() => i32 { \
+       let values = new [i32](1); values[0] = 42; let box = new Box<i32> { \
+       values = values }; let view: Value<i32> = box; let result = view.get(); \
+       free values, box; return result; }"
+  in
+  let (DA.Prog (_, functions, classes, _, _, interfaces, impls)) =
+    desugar_exn typed
+  in
+  assert_equal 1 (List.length interfaces);
+  assert_equal 1 (List.length impls);
+  let box =
+    List.find
+      (fun (cn : DA.cdecl) ->
+        List.exists
+          (fun (field : DA.field) -> field.fieldName = "values")
+          cn.fields)
+      classes
+  in
+  let field = List.hd box.fields in
+  assert_equal (DA.TRef (DA.RDArray (DA.TInt (DA.TSigned DA.Ti32)))) field.ftyp;
+  let method_ =
+    List.find
+      (fun (fn : DA.fdecl) ->
+        fn.args = [ (DA.TRef (DA.RClass box.cname), "this") ])
+      functions
+  in
+  assert_equal (DA.RetVal (DA.TInt (DA.TSigned DA.Ti32))) method_.frtyp;
+  let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
+  assert_bool
+    "buffer allocation survives lowering with its concrete element type"
+    (List.exists
+       (function
+         | DA.Decl
+             ( _,
+               _,
+               DA.ArrayAlloc
+                 (_, DA.TRef (DA.RDArray (DA.TInt (DA.TSigned DA.Ti32)))),
+               _ ) ->
+             true
+         | _ -> false)
+       main.body)
+
 let suite =
   let pipeline_tests =
     List.map
@@ -492,6 +568,8 @@ let suite =
   "Desugaring"
   >::: [
          "generic function lowering" >:: test_generic_function_lowering;
+         "generic class and buffer lowering"
+         >:: test_generic_class_and_buffer_lowering;
          "global lowering" >:: test_global_lowering;
          "compound assignment" >:: test_compound_assignment;
          "projected call" >:: test_projected_call;

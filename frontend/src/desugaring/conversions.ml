@@ -35,8 +35,10 @@ and convert_ty = function
 
 and convert_ref_ty = function
   | RString -> D.RString
+  | RDArray t -> D.RDArray (convert_ty t)
   | RArray (t, sz) -> D.RArray (convert_ty t, sz)
   | RClass cn -> D.RClass cn
+  | RInterface name -> D.RInterface name
   | RFun (args, ret) -> D.RFun (List.map convert_ty args, convert_ret_ty ret)
 
 let convert_unop = function Neg -> D.Neg | Not -> D.Not | BNeg -> D.BNeg

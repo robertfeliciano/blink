@@ -248,7 +248,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let bindings = ref [] in
       (match expected with
       | Some (Typed_ast.TRef (RFun _) as ty) ->
-          Generics.match_ty e bindings
+          Generics.match_ty ?state:tc.generics e bindings
             (TRef (RFun (List.map fst fn.elt.args, fn.elt.frtyp)))
             ty
       | _ -> ());
@@ -299,8 +299,23 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           (Typed_ast.Call (typed_callee, typed_args, arg_types, rt), rt)
       | _ -> type_error e "A void call cannot be used as an expression.")
   | Bop (binop, e1, e2) -> (
-      let te1, lty = type_exp tc e1 enclosing_class in
-      let te2, rty = type_exp tc e2 enclosing_class in
+      let te1, lty, te2, rty =
+        match (binop, e1.elt, e2.elt) with
+        | (Eqeq | Neq), Null, Null ->
+            type_error e "Cannot infer types for two null operands."
+        | (Eqeq | Neq), Null, _ ->
+            let te2, rty = type_exp tc e2 enclosing_class in
+            let te1, lty = type_exp_as rty tc e1 enclosing_class in
+            (te1, lty, te2, rty)
+        | (Eqeq | Neq), _, Null ->
+            let te1, lty = type_exp tc e1 enclosing_class in
+            let te2, rty = type_exp_as lty tc e2 enclosing_class in
+            (te1, lty, te2, rty)
+        | _ ->
+            let te1, lty = type_exp tc e1 enclosing_class in
+            let te2, rty = type_exp tc e2 enclosing_class in
+            (te1, lty, te2, rty)
+      in
       let promote te from_ty to_ty =
         if equal_ty from_ty to_ty then te else Typed_ast.Cast (te, to_ty)
       in
@@ -434,7 +449,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let t_iter, iter_ty = type_exp tc e_iter enclosing_class in
       let ty_of_array =
         match iter_ty with
-        | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
+        | Typed_ast.(TRef (RArray (arr_ty', _) | RDArray arr_ty')) -> arr_ty'
         | t ->
             type_error e
               ("cannot index non-array type, recieved " ^ Printer.show_ty t)
@@ -448,6 +463,19 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
   | Array _ -> type_array enclosing_class expected tc e
+  | ArrayAlloc (elt_ty, capacity) ->
+      let elt_ty = validate_and_convert_ty e tc elt_ty in
+      (match eval_const_exp capacity with
+      | Some size when Z.lt size Z.zero ->
+          type_error capacity "Array capacity cannot be negative."
+      | _ -> ());
+      let capacity_ty = Typed_ast.TInt (TSigned Ti64) in
+      let typed_capacity, _ =
+        type_exp_as capacity_ty tc capacity enclosing_class
+      in
+      let ty = Typed_ast.TRef (RDArray elt_ty) in
+      check_expected_ty expected ty e;
+      (Typed_ast.ArrayAlloc (typed_capacity, ty), ty)
   | Cast (ec, t) ->
       let te, e_ty = type_exp tc ec enclosing_class in
       let tty = validate_and_convert_ty e tc t in
@@ -460,6 +488,11 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
            Erase it here so field projection retains its ordinary lvalue. *)
         match tty with
         | TRef (RClass _) -> (te, tty)
+        | TRef (RInterface iname) -> (
+            match e_ty with
+            | TRef (RClass cname) ->
+                (Typed_ast.InterfaceCast (te, cname, iname), tty)
+            | _ -> (te, tty))
         | _ -> (Typed_ast.Cast (te, tty), tty)
       else
         type_error ec
@@ -515,51 +548,138 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class
             t_scope)
   | ObjInit (class_name, inits) ->
-      let cname = resolved_class_name class_name in
-      let cloc = class_name.loc in
-      let cfields, _methods =
-        match Tctxt.lookup_class_option cname tc with
-        | Some c -> c
-        | None ->
-            type_error
-              { elt = cname; loc = cloc }
-              ("Class  " ^ cname ^ " not found.")
+      let te, ty =
+        type_object_init expected tc e class_name None inits enclosing_class
       in
-      check_expected_ty expected (TRef (RClass cname)) e;
-      let initializes_field field =
-        List.exists
-          (fun ({ elt = fname; loc = _ }, _init) -> fname = field)
-          inits
+      check_expected_ty expected ty e;
+      (te, ty)
+  | ObjInitGeneric (class_name, types, inits) ->
+      let te, ty =
+        type_object_init expected tc e class_name (Some types) inits
+          enclosing_class
       in
-      let missing_fields =
-        List.filter_map
-          (fun (fname, _, _, has_default) ->
-            if not (initializes_field fname || has_default) then Some fname
-            else None)
-          cfields
-      in
-      if missing_fields <> [] then
-        type_error e
-          ("Missing fields in " ^ cname ^ " initialization: "
-          ^ String.concat ", " missing_fields);
-      let field_set = Hashtbl.create (List.length cfields) in
-      let type_field_inits (fname_node, init) =
-        let { elt = fname; loc = _ } = fname_node in
-        if Hashtbl.mem field_set fname then
-          type_error fname_node ("Already initialized field " ^ fname);
-        Hashtbl.add field_set fname ();
+      check_expected_ty expected ty e;
+      (te, ty)
+
+and type_object_init expected tc en class_name types inits enclosing_class =
+  let name = resolved_class_name class_name in
+  let source_types =
+    match types with
+    | Some types -> Some types
+    | None -> (
         match
-          List.find_opt (fun (fieldName, _, _, _) -> fieldName = fname) cfields
+          Option.bind tc.Tctxt.generics (fun state ->
+              List.assoc_opt name state.Generics.nominal_templates)
         with
-        | Some (_, fty, _, _) ->
-            let tinit, _init_ty = type_exp_as fty tc init enclosing_class in
-            (fname, tinit)
-        | None ->
-            type_error fname_node
-              ("Class " ^ cname ^ " does not contain member field " ^ fname)
-      in
-      let typed_inits = List.map type_field_inits inits in
-      (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
+        | Some (Generics.ClassTemplate cn) ->
+            let args =
+              List.filter_map
+                (fun (field, init) ->
+                  match
+                    List.find_opt
+                      (fun fn ->
+                        let id, _, _, _ = fn.elt in
+                        id = field.elt)
+                      cn.elt.fields
+                  with
+                  | Some { elt = _, Some ty, _, _; _ } -> Some (ty, init)
+                  | _ -> None)
+                inits
+            in
+            let fill_context bindings =
+              match (expected, tc.generics) with
+              | ( Some (Typed_ast.TRef (RClass actual | RInterface actual) as ty),
+                  Some state ) -> (
+                  match Generics.lookup_nominal state actual with
+                  | Some (origin, _) ->
+                      let own =
+                        TRef
+                          (RGeneric
+                             ( class_name,
+                               List.map (fun p -> TParam p) cn.elt.type_params
+                             ))
+                      in
+                      let context =
+                        if origin = name then Some own
+                        else
+                          List.find_opt
+                            (function
+                              | TRef (RGeneric (cn, _)) | TRef (RClass cn) ->
+                                  show_qualified_name cn = origin
+                              | _ -> false)
+                            cn.elt.impls
+                      in
+                      Option.iter
+                        (fun context ->
+                          Generics.match_ty ~state ~fill:true en bindings
+                            context ty)
+                        context
+                  | None -> ())
+              | _ -> ()
+            in
+            let bindings =
+              infer_generic_bindings tc args fill_context enclosing_class
+            in
+            Some
+              (List.map
+                 (fun p -> Generics.subst_ty !bindings (TParam p))
+                 cn.elt.type_params)
+        | Some (Generics.InterfaceTemplate _) ->
+            type_error class_name ("Cannot construct interface " ^ name ^ ".")
+        | None -> None)
+  in
+  let ty =
+    match source_types with
+    | Some types ->
+        validate_and_convert_ty en tc (TRef (RGeneric (class_name, types)))
+    | None -> validate_and_convert_ty en tc (TRef (RClass class_name))
+  in
+  let cname =
+    match ty with
+    | Typed_ast.TRef (RClass cname) -> cname
+    | _ -> type_error class_name ("Cannot construct interface " ^ name ^ ".")
+  in
+  let cloc = class_name.loc in
+  let cfields, _methods =
+    match Tctxt.lookup_class_option cname tc with
+    | Some c -> c
+    | None ->
+        type_error
+          { elt = cname; loc = cloc }
+          ("Class  " ^ cname ^ " not found.")
+  in
+  let initializes_field field =
+    List.exists (fun ({ elt = fname; loc = _ }, _init) -> fname = field) inits
+  in
+  let missing_fields =
+    List.filter_map
+      (fun (fname, _, _, has_default) ->
+        if not (initializes_field fname || has_default) then Some fname
+        else None)
+      cfields
+  in
+  if missing_fields <> [] then
+    type_error en
+      ("Missing fields in " ^ cname ^ " initialization: "
+      ^ String.concat ", " missing_fields);
+  let field_set = Hashtbl.create (List.length cfields) in
+  let type_field_inits (fname_node, init) =
+    let { elt = fname; loc = _ } = fname_node in
+    if Hashtbl.mem field_set fname then
+      type_error fname_node ("Already initialized field " ^ fname);
+    Hashtbl.add field_set fname ();
+    match
+      List.find_opt (fun (fieldName, _, _, _) -> fieldName = fname) cfields
+    with
+    | Some (_, fty, _, _) ->
+        let tinit, _init_ty = type_exp_as fty tc init enclosing_class in
+        (fname, tinit)
+    | None ->
+        type_error fname_node
+          ("Class " ^ cname ^ " does not contain member field " ^ fname)
+  in
+  let typed_inits = List.map type_field_inits inits in
+  (Typed_ast.ObjInit (cname, typed_inits), Typed_ast.(TRef (RClass cname)))
 
 and type_projection (expected : Typed_ast.ty option) (tc : Tctxt.t)
     (projection : Ast.exp node) (obj : Ast.exp node) (field : id)
@@ -578,6 +698,15 @@ and type_projection (expected : Typed_ast.ty option) (tc : Tctxt.t)
       | None ->
           type_error projection
             ("Class " ^ class_id ^ " has no member field " ^ field))
+  | Typed_ast.TRef (RInterface iname) -> (
+      match Tctxt.lookup_interface_method_option iname field tc with
+      | Some _ ->
+          type_error projection
+            "Interface methods must be called directly; method values are not \
+             supported."
+      | None ->
+          type_error projection
+            ("Interface " ^ iname ^ " has no member method " ^ field))
   | _ -> type_error obj "Must project field of a class."
 
 and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
@@ -587,6 +716,14 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
     | Typed_ast.Int (value, _), Typed_ast.TInt int_ty ->
         type_integer_constant e value int_ty
     | _ when equal_ty actual expected -> (te, expected)
+    | _, Typed_ast.TRef (RInterface iname) -> (
+        match actual with
+        | TRef (RClass cname) when Tctxt.implements cname iname tc ->
+            (Typed_ast.InterfaceCast (te, cname, iname), expected)
+        | _ ->
+            type_error e
+              ("Expected implementing class for interface " ^ iname ^ ", got "
+             ^ Printer.show_ty actual ^ "."))
     | _ when is_number actual && is_number expected ->
         let promoted = meet_number e (actual, expected) in
         if equal_ty promoted expected then
@@ -601,6 +738,18 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
          ^ Printer.show_ty actual ^ ".")
   in
   match (e.elt, expected) with
+  | ObjInit (class_name, inits), _ ->
+      let te, actual =
+        type_object_init (Some expected) tc e class_name None inits
+          enclosing_class
+      in
+      promote te actual
+  | ObjInitGeneric (class_name, types, inits), _ ->
+      let te, actual =
+        type_object_init (Some expected) tc e class_name (Some types) inits
+          enclosing_class
+      in
+      promote te actual
   | Id i, _ when Option.is_some (Tctxt.lookup_generic_option i tc) ->
       type_exp ~expected tc e enclosing_class
   | Call (f, args), _ -> (
@@ -657,10 +806,7 @@ and type_call ?expected tc node f args from_exp enclosing_class =
           (typed_callee, arg_types, typed_args, ret)
       | Error message -> type_error node message)
 
-and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
-    enclosing_class =
-  if List.length args <> List.length fn.elt.args then
-    type_error node "Invalid number of arguments supplied to generic function.";
+and infer_generic_bindings tc args fill_context enclosing_class =
   let bindings = ref [] in
   let rec needs_context en =
     match en.elt with
@@ -698,7 +844,7 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
           let callback_ty =
             TRef (RFun (List.map fst callback.elt.args, callback.elt.frtyp))
           in
-          Generics.match_patterns en bindings ty callback_ty
+          Generics.match_patterns ?state:tc.generics en bindings ty callback_ty
     | _ when (not default) && needs_context en -> ()
     | _ ->
         if (not default) || Generics.unresolved !bindings ty then
@@ -706,7 +852,10 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
             try
               let expected_ty =
                 if Generics.unresolved !bindings ty then None
-                else Some (convert_ty (Generics.subst_ty !bindings ty))
+                else
+                  Some
+                    (validate_and_convert_ty en tc
+                       (Generics.subst_ty !bindings ty))
               in
               let actual =
                 match expected_ty with
@@ -717,20 +866,33 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
               Some actual
             with Generics.CannotInfer _ -> None
           in
-          Option.iter (Generics.match_ty en bindings ty) result
+          Option.iter
+            (Generics.match_ty ?state:tc.generics en bindings ty)
+            result
   in
-  List.iter2 (fun (ty, _) en -> infer false ty en) fn.elt.args args;
-  Option.iter
-    (fun ty ->
-      Generics.match_ret_ty ~fill:true node bindings fn.elt.frtyp
-        (Typed_ast.RetVal ty))
-    expected;
+  List.iter (fun (ty, en) -> infer false ty en) args;
+  fill_context bindings;
   let rec infer_pending () =
     let previous = List.length !bindings in
-    List.iter2 (fun (ty, _) en -> infer true ty en) fn.elt.args args;
+    List.iter (fun (ty, en) -> infer true ty en) args;
     if List.length !bindings > previous then infer_pending ()
   in
   infer_pending ();
+  bindings
+
+and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
+    enclosing_class =
+  if List.length args <> List.length fn.elt.args then
+    type_error node "Invalid number of arguments supplied to generic function.";
+  let pairs = List.map2 (fun (ty, _) en -> (ty, en)) fn.elt.args args in
+  let fill_context bindings =
+    Option.iter
+      (fun ty ->
+        Generics.match_ret_ty ?state:tc.generics ~fill:true node bindings
+          fn.elt.frtyp (Typed_ast.RetVal ty))
+      expected
+  in
+  let bindings = infer_generic_bindings tc pairs fill_context enclosing_class in
   let instance = request_generic tc node fn !bindings in
   match type_func_app args instance.ty from_exp tc enclosing_class with
   | Ok (arg_types, typed_args, ret) ->
@@ -778,21 +940,35 @@ and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
       let tobj, obj_ty = type_exp tc obj enclosing_class in
       match obj_ty with
       | Typed_ast.(TRef (RClass cid)) -> (
-          match Tctxt.lookup_method_option cid mth tc with
-          | Some (rt, argheaders) -> (
-              let argtypes = List.map fst argheaders in
-              let temp_func = Typed_ast.(TRef (RFun (argtypes, rt))) in
-              match
-                type_func_app args temp_func from_exp tc enclosing_class
-              with
-              | Error msg -> Error msg
-              | Ok (arg_types, typed_args, rt) ->
+          let member =
+            match Tctxt.lookup_method_option cid mth tc with
+            | Some (ret, headers) ->
+                let ty = Typed_ast.TRef (RFun (List.map fst headers, ret)) in
+                Some (Typed_ast.ClassMethod (tobj, mth, cid, ty), ty)
+            | None ->
+                Option.map
+                  (fun (ty, _) -> (Typed_ast.Proj (tobj, mth, cid, ty), ty))
+                  (Tctxt.lookup_field_option cid mth tc)
+          in
+          match member with
+          | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth)
+          | Some (callee, ty) -> (
+              match type_func_app args ty from_exp tc enclosing_class with
+              | Error message -> Error message
+              | Ok (types, args, ret) -> Ok (callee, types, args, ret)))
+      | Typed_ast.TRef (RInterface iname) -> (
+          match Tctxt.lookup_interface_method_option iname mth tc with
+          | None -> Error ("Interface " ^ iname ^ " has no member method " ^ mth)
+          | Some (slot, (_, ret, headers)) -> (
+              let typ = Typed_ast.TRef (RFun (List.map fst headers, ret)) in
+              match type_func_app args typ from_exp tc enclosing_class with
+              | Error message -> Error message
+              | Ok (types, args, ret) ->
                   Ok
-                    ( Typed_ast.Proj (tobj, mth, cid, TRef (RFun (argtypes, rt))),
-                      arg_types,
-                      typed_args,
-                      rt ))
-          | None -> Error ("Class " ^ cid ^ " has no member method " ^ mth))
+                    ( Typed_ast.InterfaceMethod (tobj, slot, typ),
+                      types,
+                      args,
+                      ret )))
       | _ -> Error "Attempting to call method of non-class type.")
   | _ -> Error "Attemping to call method of non-class type."
 
@@ -866,6 +1042,8 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
               ("Must provide a default constructor for " ^ cname ^ " class.")
       in
       constructor
+  | Typed_ast.TRef (RInterface iname) -> Typed_ast.Null (RInterface iname)
+  | Typed_ast.TRef (RDArray ty) -> Typed_ast.Null (RDArray ty)
   | Typed_ast.TRef (RFun _) ->
       type_error stmt_n "Default functions not allowed."
   | Typed_ast.TRef (RArray (t, sz)) as array_ty ->

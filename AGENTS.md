@@ -93,7 +93,7 @@ They are ignored and should not be committed.
 The module implementation lives in `frontend/src/modules/` as the standalone
 `blink.modules` library. DFS loads a dependency-first graph with cycle detection.
 Per-file name resolution enforces exports and lexical scope before combining
-declarations for typing. Module-owned symbols, classes, and globals have stable
+declarations for typing. Module-owned symbols, classes, interfaces, and globals have stable
 internal identities; entry `main` and `@C` symbols retain exact names. Shared C
 signatures are reconciled by typing. Import/export metadata stays in the frontend;
 globals cross the native FFI as ordinary resolved declarations.
@@ -116,10 +116,10 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
-- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, prototypes, and
+- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces, prototypes, and
   compilation-local generic state.
 - `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
-  specialization identities, and pending instances.
+  function and nominal specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
 - `frontend/src/typing/dune` exposes the typing library.
@@ -133,11 +133,21 @@ AST binds located `TParam` types before module resolution. Calls and function
 values infer concrete type arguments from arguments and expected signatures;
 there is no explicit call-site specialization syntax. Typing registers concrete
 headers before checking queued instance bodies, including recursive instances.
-The final typed program contains only concrete functions; the desugared AST and
-native bridge contract are unchanged. Instances are cached per compilation, with
+The final typed program contains only concrete functions, classes, and interfaces.
+Generic nominal origins and arguments stay in compilation-local frontend state. Instances are cached per compilation, with
 limits of 4096 instances and 128 entries in a requesting chain. Generic prototypes
-require matching definitions; generic methods, classes, main and @C declarations
-are unsupported. Dependent bodies are checked only when instantiated.
+require matching definitions; independently generic methods, main and @C declarations
+are unsupported. Class and interface type parameters use the same angle-bracket syntax. Dependent bodies are checked only when instantiated.
+
+Language interfaces declare method prototypes; classes opt in with `impl` and
+must define each method with exactly matching ordered parameter and return
+types. Interfaces support `export` and qualified imported names. Typing inserts
+class-to-interface conversions, and lowering supplies ordered method tables and
+interface calls. See `docs/interfaces.md` and `examples/interfaces/`.
+Runtime interface values contain an object pointer and a shared method-table
+pointer, passed as an LLVM aggregate. Conversions preserve object identity and
+do not allocate a wrapper. Keep interface value types distinct from class and
+array types whose LLVM values are pointers.
 
 ### Desugaring
 
@@ -157,7 +167,8 @@ The final program includes the selected optimization level and global
 declarations. Globals support scalar and string storage with constant
 initializers; typing resolves constant dependencies and rejects cycles before
 lowering. Runtime global initialization and aggregate/function globals remain
-unsupported. The desugared program's fifth field is its `gdecl` list.
+unsupported. The desugared program's fifth field is its `gdecl` list; interface declarations
+and class implementation tables are the sixth and seventh fields.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities
@@ -200,6 +211,12 @@ allocas. Reads and assignments share local-first address lookup. Exported global
 have one module-owned identity and storage location across every import; source
 exports do not require LLVM external linkage.
 The generated module targets the build host and uses position-independent code.
+`codegenValueType` maps class/array values to pointers while preserving interface
+values as aggregates. `RDArray` denotes runtime-sized heap buffers (`[T]`), and
+`ArrayAlloc` carries their capacity and concrete type across the bridge. Fixed
+array literals also allocate on the heap; nested fixed literals initialize inline
+storage in their parent. `runtime/stdlib/vector.bl` implements exported `List<T>`
+and `Vector<T>` over dynamic buffers with explicit disposal and borrowed payloads.
 
 ### Tests
 
@@ -210,6 +227,7 @@ The generated module targets the build host and uses position-independent code.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
+- `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
 - `frontend/test/e2e.ml` compiles source text through the complete pipeline.
 - `frontend/test/backend_tests.ml` tests bridge/codegen with constructed ASTs.
 - `frontend/test/backend_fixture_compiler.ml` builds those backend fixtures.
@@ -417,7 +435,7 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
-Generic classes, generic methods, interface constraints, and several prospective
+Independently generic methods, interface constraints, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 

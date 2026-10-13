@@ -1,0 +1,59 @@
+// Vectors own their buffers. Stored reference values remain caller-owned.
+@C fun exit(status: i32);
+
+export interface List<T> {
+    fun push(value: T);
+    fun get(index: i32) => T;
+    fun set(index: i32, value: T);
+    fun len() => i32;
+    fun clear();
+    fun dispose();
+}
+
+export class Vector<T> impl List<T> {
+    let buffer: [T] = null;
+    let count: i32 = 0;
+    let capacity: i32 = 0;
+
+    fun push(value: T) {
+        if count == capacity {
+            if capacity >= 1073741823 { exit(1); }
+            let next_capacity = 4;
+            if capacity > 0 { next_capacity = capacity * 2; }
+            let next_buffer = new [T](next_capacity);
+            for index in 0..count {
+                next_buffer[index] = buffer[index];
+            }
+            if capacity > 0 { free buffer; }
+            buffer = next_buffer;
+            capacity = next_capacity;
+        }
+        buffer[count] = value;
+        count += 1;
+    }
+
+    fun get(index: i32) => T {
+        if index < 0 or index >= count { exit(1); }
+        return buffer[index];
+    }
+
+    fun set(index: i32, value: T) {
+        if index < 0 or index >= count { exit(1); }
+        buffer[index] = value;
+    }
+
+    fun len() => i32 {
+        return count;
+    }
+
+    fun clear() {
+        count = 0;
+    }
+
+    fun dispose() {
+        if capacity > 0 { free buffer; }
+        buffer = null;
+        count = 0;
+        capacity = 0;
+    }
+}

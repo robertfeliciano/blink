@@ -20,7 +20,7 @@ let verify_ir () =
   assert_success "LLVM verification"
     "llc --filetype=null new_output.ll -o /dev/null"
 
-let native ?(options = []) name files =
+let native ?(options = []) ?(expected_exit = 42) name files =
   List.map
     (fun optimization ->
       name ^ optimization >:: fun context ->
@@ -29,7 +29,7 @@ let native ?(options = []) name files =
           assert_success_silently "module compilation"
             (command ~options:(optimization :: options) "main.bl");
           verify_ir ();
-          compile_and_run ~expected_exit:42))
+          compile_and_run ~expected_exit))
     [ "-O0"; "-O2" ]
 
 let negative ?(options = []) ?(also = []) name files expected =
@@ -44,10 +44,128 @@ let negative ?(options = []) ?(also = []) name files expected =
         (expected :: also);
       assert_bool "no output on failure" (not (Sys.file_exists "new_output.ll")))
 
+let vector_options = [ "-stdlib-root"; Filename.dirname stdlib_source ]
+
+let vector_payload_source =
+  {|import std.vector;
+let count = 0;
+class Runner<T> {
+  let callback: (T) -> T = null;
+  fun apply(callback: (T) -> T, value: T) => T {
+    this.callback = callback;
+    return callback(value);
+  }
+}
+fun touch(values: vector.Vector<(i32) -> i32>) => vector.Vector<(i32) -> i32> {
+  count += 1;
+  return values;
+}
+fun touch_runner(runner: Runner<i32>) => Runner<i32> {
+  count += 1;
+  return runner;
+}
+@C fun strcmp(left: string, right: string) => i32;
+interface Value { fun get() => i32; }
+class Box impl Value { let value: i32; fun get() => i32 { return value; } }
+fun read<T>(list: vector.List<T>) => T { return list.get(0); }
+fun main() => i32 {
+  let numbers = new vector.Vector<i32> {};
+  let list: vector.List<i32> = numbers;
+  for index in 0..65 { list.push(index); }
+  if list.len() != 65 or list.get(64) != 64 { return 1; }
+  list.clear();
+  if list.len() != 0 { return 2; }
+  list.push(42);
+  list.set(0, 42);
+  if read(numbers) != 42 { return 3; }
+  list.dispose();
+  list.dispose();
+  if list.len() != 0 { return 4; }
+  list.push(42);
+
+  let box = new Box { value = 42 };
+  let objects = new vector.Vector<Box> {};
+  let words = new vector.Vector<string> {};
+  for index in 0..9 { objects.push(box); words.push("hello"); }
+  if objects.get(8).value != 42 or strcmp(words.get(8), "hello") != 0 { return 5; }
+  let view: Value = box;
+  let interfaces = new vector.Vector<Value> {};
+  for index in 0..9 { interfaces.push(view); }
+  if interfaces.get(8).get() != 42 { return 5; }
+
+  let f: (i32) -> i32 = fn(value) { return value + 2; };
+  let callbacks = new vector.Vector<(i32) -> i32> {};
+  for index in 0..9 { callbacks.push(f); }
+  let callback = callbacks.get(8);
+  if callback(40) != 42 { return 6; }
+  touch(callbacks).push(fn[count](value) { return count + value; });
+  let captured = callbacks.get(9);
+  if captured(41) != 42 or count != 1 { return 7; }
+  let runner = new Runner<i32> {};
+  let value = touch_runner(runner).apply(fn[count](value) { return count + value; }, 40);
+  if value != 42 or count != 2 { return 8; }
+  let ordered = runner.callback;
+
+  let nested = new vector.Vector<vector.Vector<i32>> {};
+  for index in 0..9 { nested.push(numbers); }
+  let result = nested.get(8).get(0);
+  nested.dispose();
+  callbacks.dispose();
+  interfaces.dispose();
+  objects.dispose();
+  words.dispose();
+  list.dispose();
+  free nested, callbacks, interfaces, objects, words, numbers, runner;
+  free f, captured, ordered, box;
+  return result;
+}|}
+
 let suite =
   "module native integration"
   >::: List.concat
          [
+           native ~options:vector_options "vector example"
+             [
+               ( "main.bl",
+                 Core.In_channel.read_all
+                   (executable_path "../../../../examples/vector.bl") );
+             ];
+           native ~options:vector_options "vector growth and reference payloads"
+             [ ("main.bl", vector_payload_source) ];
+           native ~options:vector_options ~expected_exit:1
+             "vector checked empty get"
+             [
+               ( "main.bl",
+                 "import std.vector; fun main() => i32 { let values = new \
+                  vector.Vector<i32> {}; return values.get(0); }" );
+             ];
+           native ~options:vector_options ~expected_exit:1
+             "vector checked negative set"
+             [
+               ( "main.bl",
+                 "import std.vector; fun main() => i32 { let values = new \
+                  vector.Vector<i32> {}; values.push(42); values.set(-1, 0); \
+                  return 42; }" );
+             ];
+           native "generic class imports private binding and shared instances"
+             [
+               ( "common.bl",
+                 "fun seed() => i32 { return 21; } export interface Value<T> { \
+                  fun get() => T; } export class Box<T> impl Value<T> { let \
+                  value: T; fun get() => T { return value; } fun secret() => \
+                  i32 { return seed(); } }" );
+               ( "left.bl",
+                 "import common; export fun make() => common.Box<i32> { return \
+                  new common.Box<i32> { value = 21 }; }" );
+               ( "right.bl",
+                 "import common; export fun read(value: common.Value<i32>) => \
+                  i32 { return value.get(); }" );
+               ( "main.bl",
+                 "import common; import left; import right; fun seed() => i32 \
+                  { return 100; } fun main() => i32 { let value = left.make(); \
+                  let result = value.secret() + right.read(value); free value; \
+                  return result; }" );
+             ];
            native "generic imports private helpers and callbacks"
              [
                ( "helper.bl",
@@ -223,6 +341,25 @@ fun main() => i32 {
                ]
                "mutable global";
            ];
+           native "exported interface runtime dispatch"
+             [
+               ( "contracts.bl",
+                 "export interface I { fun value() => i32; } export fun \
+                  read(item: I) => i32 { return item.value(); }" );
+               ( "first.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 20; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "second.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 22; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "main.bl",
+                 "import contracts; import first; import second; fun main() => \
+                  i32 { let a: contracts.I = first.make(); let b: contracts.I \
+                  = second.make(); let result = contracts.read(a) + \
+                  contracts.read(b); free a, b; return result; }" );
+             ];
            native
              ~options:[ "-stdlib-root"; Filename.dirname stdlib_source ]
              "module example"

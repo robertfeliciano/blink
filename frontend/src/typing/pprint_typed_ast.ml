@@ -30,6 +30,8 @@ let rec show_ref_ty = function
   | RString -> "string"
   | RArray (t, sz) -> Printf.sprintf "%s_x_%d" (show_ty t) sz
   | RClass cn -> Printf.sprintf "%s" cn
+  | RDArray t -> "[" ^ show_ty t ^ "]"
+  | RInterface name -> "interface " ^ name
   | RFun (tys, r) -> (
       String.concat "_" (List.map show_ty tys)
       ^
@@ -92,6 +94,11 @@ let show_aop = function
 
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function
+  | ClassMethod (e, method_name, class_name, ty) ->
+      "ClassMethod(" ^ show_exp ~lvl e ^ ", " ^ class_name ^ "." ^ method_name
+      ^ ", " ^ show_ty ty ^ ")"
+  | ArrayAlloc (e, t) ->
+      "ArrayAlloc(" ^ show_exp ~lvl e ^ ", " ^ show_ty t ^ ")"
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) ->
       Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
@@ -163,6 +170,11 @@ let rec show_exp ?(lvl = 0) = function
         scope_s args_s (show_ret_ty ret_ty)
         (show_block ~lvl:(lvl + 1) body)
         (indent lvl)
+  | InterfaceMethod (receiver, slot, ty) ->
+      Printf.sprintf "InterfaceMethod(%s, %d, %s)" (show_exp receiver) slot
+        (show_ty ty)
+  | InterfaceCast (receiver, cname, iname) ->
+      "InterfaceCast(" ^ show_exp receiver ^ ", " ^ cname ^ ", " ^ iname ^ ")"
   | Conditional (cond, when_true, when_false, ty) ->
       Printf.sprintf "Conditional(%s, %s, %s, %s)"
         (show_exp ~lvl:(lvl + 1) cond)
@@ -331,7 +343,8 @@ let show_cdecl ?(lvl = 0) { annotations; cname; impls; fields; methods } =
     methods_s
     (indent (lvl + 1))
 
-let show_typed_program (Prog (optimization_level, fns, cns, pns, gds)) =
+let show_typed_program
+    (Prog (optimization_level, fns, cns, pns, gds, interfaces)) =
   let globals_s =
     String.concat "\n"
       (List.map
@@ -343,9 +356,21 @@ let show_typed_program (Prog (optimization_level, fns, cns, pns, gds)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
+  let interfaces_s =
+    String.concat "\n"
+      (List.map
+         (fun (name, methods) ->
+           "interface " ^ name ^ " {\n"
+           ^ String.concat "\n" (List.map (show_proto ~lvl:1) methods)
+           ^ "\n}")
+         interfaces)
+  in
   Printf.sprintf
     "Program{optimization=%s;\n\
      Globals{\n\
+     %s\n\
+     }\n\
+     Interfaces{\n\
      %s\n\
      }\n\
      Classes{\n\
@@ -358,4 +383,4 @@ let show_typed_program (Prog (optimization_level, fns, cns, pns, gds)) =
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    globals_s cns_s pn_s fns_s
+    globals_s interfaces_s cns_s pn_s fns_s

@@ -7,11 +7,26 @@ Value* StmtToLLVisitor::operator()(const Assn& s) {
     if (!lhsPtr)
         throw std::runtime_error("Assignment to invalid lvalue");
 
+    const Ty& lhsTy = gen.getExpTy(*s.lhs);
+    const EIndex* index = std::get_if<EIndex>(&s.lhs->val);
+    bool inlineArray = index && lhsTy.tag == TyTag::TRef && lhsTy.ref_ty->tag == RefTyTag::RArray &&
+                       gen.getExpTy(*index->collection).ref_ty->tag == RefTyTag::RArray;
     Value* rhsVal = gen.codegenExp(*s.rhs);
     if (!rhsVal)
         throw std::runtime_error("Assignment RHS produced null value");
 
-    gen.builder->CreateStore(rhsVal, lhsPtr);
+    if (inlineArray) {
+        llvm::Type* arrayTy = gen.codegenType(lhsTy);
+        const llvm::DataLayout& dl = gen.mod->getDataLayout();
+        gen.builder->CreateMemMove(lhsPtr, dl.getABITypeAlign(arrayTy), rhsVal, dl.getABITypeAlign(arrayTy),
+                                   dl.getTypeAllocSize(arrayTy));
+        if (std::holds_alternative<EArray>(s.rhs->val)) {
+            gen.builder->CreateCall(gen.mod->getFunction("free"), {rhsVal});
+            return lhsPtr;
+        }
+    } else {
+        gen.builder->CreateStore(rhsVal, lhsPtr);
+    }
 
     return rhsVal;
 }
@@ -71,6 +86,10 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
     }
 
     llvm_unreachable("Calling unknown function.");
+}
+
+Value* StmtToLLVisitor::operator()(const InterfaceSCall& s) {
+    return gen.codegenInterfaceCall(*s.receiver, s.slot, s.args);
 }
 
 Value* StmtToLLVisitor::operator()(const If& s) {
@@ -179,7 +198,10 @@ Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
         Value* toBeFreed = gen.codegenExp(*e);
-        Value* freeVal   = gen.builder->CreateCall(freeFun, {toBeFreed});
+        const Ty& ty = gen.getExpTy(*e);
+        if (ty.tag == TyTag::TRef && ty.ref_ty->tag == RefTyTag::RInterface)
+            toBeFreed = gen.interfaceObject(toBeFreed);
+        gen.builder->CreateCall(freeFun, {toBeFreed});
     }
 
     return nullptr;

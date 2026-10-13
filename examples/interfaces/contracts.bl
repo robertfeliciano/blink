@@ -1,0 +1,7 @@
+export interface Value {
+    fun value() => i32;
+}
+
+export fun read(item: Value) => i32 {
+    return item.value();
+}

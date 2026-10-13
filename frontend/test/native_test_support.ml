@@ -51,14 +51,23 @@ let assert_nonempty_file filename =
   | _ -> ()
   | exception Sys_error message -> assert_failure message
 
-let compile_and_run ~expected_exit =
+let compile_and_run_with_sources ~sources ~expected_exit =
   assert_nonempty_file "new_output.ll";
   assert_success "LLVM object generation"
     "llc --filetype=obj --relocation-model=pic new_output.ll -o program.o";
   assert_nonempty_file "program.o";
-  assert_success "native linking" "clang program.o -o program -lm";
+  let link_command =
+    String.concat " "
+      ([ "clang"; "program.o" ]
+      @ List.map Filename.quote sources
+      @ [ "-o"; "program"; "-lm" ])
+  in
+  assert_success "native linking" link_command;
   assert_nonempty_file "program";
   assert_exit_code expected_exit "timeout 10 ./program"
+
+let compile_and_run ~expected_exit =
+  compile_and_run_with_sources ~sources:[] ~expected_exit
 
 let in_temp_dir ~prefix test_context callback =
   let temp_dir = bracket_tmpdir ~prefix test_context in

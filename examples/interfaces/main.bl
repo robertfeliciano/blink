@@ -1,0 +1,25 @@
+import contracts;
+
+class First impl contracts.Value {
+    fun value() => i32 { return 10; }
+}
+
+class Second impl contracts.Value {
+    fun value() => i32 { return 20; }
+}
+
+fun choose(first: First, second: Second, useFirst: bool) => contracts.Value {
+    let selected: contracts.Value = first;
+    if not useFirst { selected = second; }
+    return selected;
+}
+
+fun main() => i32 {
+    let first = new First {};
+    let second = new Second {};
+    let left = contracts.read(choose(first, second, true));
+    let right = contracts.read(choose(first, second, false));
+    free first, second;
+    if left == 10 and right == 20 { return 0; }
+    return 1;
+}

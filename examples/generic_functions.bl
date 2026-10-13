@@ -15,5 +15,6 @@ fun main() => i32 {
     let f: (i32) -> i32 = identity;
     let result = apply(f, first(values)) + identity(values[1]);
     free f;
+    free values;
     return result;
 }

@@ -4,8 +4,8 @@ and you'll miss it...
 ## Imports and modules
 
 Each `.bl` file is a module. Imports introduce a local alias; only functions,
-function prototypes, classes and global variables marked `export` are accessible
-through it.
+function prototypes, classes, interfaces and global variables marked `export` are
+accessible through it.
 Private declarations remain usable inside their defining file.
 
 ```blink
@@ -97,6 +97,49 @@ reads of mutable globals during initialization, and array, class and function
 globals are unsupported. All globals are initialized before `main` and live for
 the duration of the program. String literals retain their existing static
 storage lifetime and must not be freed.
+
+## Interfaces
+
+Interfaces declare method prototypes. A class explicitly implements an interface
+with `impl` and must define every declared method with exactly the same parameter
+types, in the same order, and the same return type. Parameter names may differ.
+
+```blink
+export interface Reading {
+    fun read() => i32;
+}
+
+class Sensor impl Reading {
+    let value: i32 = 10;
+    fun read() => i32 { return this.value; }
+}
+
+fun read_value(source: Reading) => i32 {
+    return source.read();
+}
+```
+
+An implementing class can be passed to an interface-typed parameter. Calls
+through the interface dispatch to the object's concrete implementation at
+runtime. Converting a class reference to an interface keeps the same object;
+changes made through its methods remain visible through the original reference.
+
+Interfaces can be exported and imported like classes, including qualified types
+and implementations such as `class Sensor impl contracts.Reading`. A class can
+implement multiple interfaces with a comma-separated list. Interfaces contain
+prototypes only; they cannot be instantiated or contain fields or method bodies.
+
+See [the interface guide](docs/interfaces.md) for runtime representation and
+ownership details.
+
+The [interface example](examples/interfaces/main.bl) imports an exported
+interface, chooses between two implementing classes at runtime, and passes the
+result to a function accepting that interface:
+
+```sh
+./compile -O2 examples/interfaces/main.bl
+./new_output.o
+```
 
 ## Develop with Docker
 
@@ -322,10 +365,88 @@ signatures and use-site context rather than guessing types from template bodies.
 Each compilation permits at most 4096 instances and an instantiation chain of 128;
 expanding recursion reports a specialization-limit diagnostic.
 
-Only top-level functions are generic in this release. Generic classes, methods,
-`main`, external `@C` functions, constraints, and compile-time value parameters are
-unsupported. Function values have concrete signatures; higher-rank polymorphic
+Top-level functions, classes, and interfaces can be generic. Independently
+generic methods, `main`, external `@C` functions, constraints, and compile-time
+value parameters remain unsupported. Function values have concrete signatures; higher-rank polymorphic
 values and inference from later statements are unsupported. Existing restrictions
 on global initialization still apply. Specialization preserves the current calling
 and memory behavior, but additional instances can increase compile time and binary
 size. See `examples/generic_functions.bl` for functions, arrays, and callbacks.
+
+
+## Generic collections and Vector
+
+Classes and interfaces declare type parameters with angle brackets. Concrete
+applications such as `Vector<i32>`, `Vector<string>`, and `List<Box>` are distinct
+nominal types. Fields, method signatures, local annotations, and method bodies
+use the enclosing type parameters. The frontend specializes each requested
+class/interface once per compilation, including recursive references. The
+backend receives concrete layouts and interface method tables.
+
+The standard library's `std.vector` module exports a growable `Vector<T>` and its
+`List<T>` interface:
+
+```blink
+import std.vector;
+
+fun main() => i32 {
+    let values = new vector.Vector<i32> {};
+    let list: vector.List<i32> = values;
+    for index in 0..64 { list.push(index); }
+    let answer = list.get(20) + list.get(22);
+    list.dispose();
+    free values;
+    return answer;
+}
+```
+
+Compile the first collection example with:
+
+```sh
+./compile -O0 -stdlib-root runtime/stdlib examples/vector.bl
+./new_output.o
+```
+
+`push` appends, doubling capacity when necessary; `get` and `set` check their
+indices and terminate with exit status 1 on invalid access. `len` returns the
+number of stored elements. `clear` empties the vector while retaining capacity.
+`dispose` releases its buffer and resets it; calling it again is safe, and the
+vector can be reused. Free the vector object separately after its last use.
+Vectors own their buffers. Stored class references, interface views, arrays,
+and callback closures remain caller-owned; copying them preserves references.
+
+Generic classes may explicitly implement generic interfaces:
+
+```blink
+interface Reading<T> { fun read() => T; }
+class Box<T> impl Reading<T> {
+    let value: T;
+    fun read() => T { return value; }
+}
+```
+
+Construct them with `new Box<i32> { value = 42 }`, or let field initializers or
+an expected type infer the arguments: `let box = new Box { value = 42 };` and
+`let wide: Box<i64> = new Box { value = 42 };`. Empty constructions require an
+expected type or explicit arguments. Interface method signatures must match
+exactly after substitution; `List<i32>` does not convert to `List<i64>`. Generic
+functions can infer parameters from these nominal types and their implemented
+interfaces without explicit function specialization syntax. Imported and nested
+types use the same angle brackets, such as `vector.Vector<vector.Vector<i32>>`.
+
+## Heap array storage
+
+`[T]` is a runtime-sized buffer allocated with `new [T](capacity)`. It supports
+indexing and `free`; negative capacities, allocation-size overflow, and allocation
+failure terminate with exit status 1 (constant negative capacities are type
+errors). Allocation is zero-initialized. Raw buffers do not carry a length or
+perform bounds checks; keep their capacity alongside them, as `Vector<T>` does.
+Elements use their ordinary value representation, including class pointers and
+interface values containing an object pointer and method table pointer.
+
+Fixed-size array literals also allocate heap storage, so returning a literal
+keeps its storage alive after the callee exits. Free each owning allocation once.
+Nested fixed-size arrays remain inline in their enclosing array; their interior
+addresses are borrowed and must not be freed separately. Freeing an array does
+not free referenced objects or closures stored in it. Classes, interface views,
+and closures keep their existing explicit ownership rules.

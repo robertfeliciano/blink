@@ -28,7 +28,12 @@
 
 (test
  (name frontend_tests)
- (modules frontend_tests test_typing test_parsing test_desugaring)
+ (modules
+  frontend_tests
+  test_typing
+  test_parsing
+  test_desugaring
+  test_interfaces)
  (libraries
   blink.parsing
   blink.desugaring
@@ -101,6 +106,8 @@
  (deps
   ../src/blink.exe
   ../../compile
+  ../../runtime/stdlib/vector.bl
+  ../../examples/vector.bl
   ../../runtime/stdlib/io.bl
   ../../runtime/stdlib/math.bl
   ../../runtime/stdlib/math_native.bl

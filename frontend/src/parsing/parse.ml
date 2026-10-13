@@ -8,7 +8,34 @@ let get_pos (pos : Lexing.position) =
 type diagnostic = { loc : Util.Range.t; message : string }
 
 let parse_prog_diagnostic (lexbuf : Lexing.lexbuf) =
-  try Ok (Parser.program Lexer.read lexbuf) with
+  let pending = ref [] in
+  let positioned lexbuf (token, start_pos, end_pos) =
+    lexbuf.Lexing.lex_start_p <- start_pos;
+    lexbuf.Lexing.lex_curr_p <- end_pos;
+    token
+  in
+  let split lexbuf count =
+    let start_pos = lexbuf.Lexing.lex_start_p in
+    let position n =
+      { start_pos with Lexing.pos_cnum = start_pos.pos_cnum + n }
+    in
+    pending :=
+      List.init (count - 1) ~f:(fun n ->
+          (Parser.GT, position (n + 1), position (n + 2)));
+    positioned lexbuf (Parser.GT, start_pos, position 1)
+  in
+  let read lexbuf =
+    match !pending with
+    | token :: rest ->
+        pending := rest;
+        positioned lexbuf token
+    | [] -> (
+        match Lexer.read lexbuf with
+        | Parser.GTGT -> split lexbuf 2
+        | Parser.GTGTGT -> split lexbuf 3
+        | token -> token)
+  in
+  try Ok (Parser.program read lexbuf) with
   | SyntaxError msg ->
       let err =
         Fmt.str "Syntax Error at %s: %s" (get_pos lexbuf.lex_curr_p) msg

@@ -19,11 +19,21 @@ type t = {
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
+  interfaces : (id * method_header list) list;
+  implementations : (id * id list) list;
   protos : ctxt; (* id -> type and defined_yet *)
 }
 
 let empty =
-  { generics = None; locals = []; globals = []; classes = []; protos = [] }
+  {
+    generics = None;
+    locals = [];
+    globals = [];
+    classes = [];
+    protos = [];
+    interfaces = [];
+    implementations = [];
+  }
 
 let show_tys tctxt =
   String.concat "\n"
@@ -74,7 +84,12 @@ let add_class c id fields funs =
 let set_class c id fields funs =
   { c with classes = (id, (fields, funs)) :: List.remove_assoc id c.classes }
 
-let lookup_class_option id c = List.assoc_opt id c.classes
+let lookup_class_option id c =
+  match List.assoc_opt id c.classes with
+  | Some _ as found -> found
+  | None ->
+      Option.bind c.generics (fun state ->
+          List.assoc_opt id !(state.class_headers))
 
 let lookup_field_option c_name f_name c =
   let rec lookup_field_aux f_name l =
@@ -105,3 +120,30 @@ let lookup_generic_option id c =
   | Some _ -> None
   | None ->
       Option.bind c.generics (fun state -> List.assoc_opt id state.templates)
+
+let lookup_interface_option id c =
+  match List.assoc_opt id c.interfaces with
+  | Some _ as found -> found
+  | None ->
+      Option.bind c.generics (fun state ->
+          List.assoc_opt id !(state.interface_headers))
+
+let implements cname iname c =
+  match List.assoc_opt cname c.implementations with
+  | Some names -> List.mem iname names
+  | None ->
+      Option.fold ~none:false
+        ~some:(fun state ->
+          List.mem iname
+            (Option.value
+               (List.assoc_opt cname !(state.Generics.implementations))
+               ~default:[]))
+        c.generics
+
+let lookup_interface_method_option iname mname c =
+  match lookup_interface_option iname c with
+  | None -> None
+  | Some methods ->
+      List.find_opt
+        (fun (_, (name, _, _)) -> name = mname)
+        (List.mapi (fun slot method_ -> (slot, method_)) methods)

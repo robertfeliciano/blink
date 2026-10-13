@@ -156,6 +156,32 @@ let returned_expression source =
       assert_failure
         (Printf.sprintf "unexpected expression program:\n%s" (show_prog program))
 
+let test_shift_precedence_after_generic_syntax _ =
+  (match returned_expression "fun main() => i32 { return x >> y + z; }" with
+  | Bop
+      ( Add,
+        { elt = Bop (Lshr, { elt = Id "x"; _ }, { elt = Id "y"; _ }); _ },
+        { elt = Id "z"; _ } ) ->
+      ()
+  | _ ->
+      assert_failure "logical shift should retain its precedence over addition");
+  (match returned_expression "fun main() => i32 { return x >>> y * z; }" with
+  | Bop
+      ( Mul,
+        { elt = Bop (Ashr, { elt = Id "x"; _ }, { elt = Id "y"; _ }); _ },
+        { elt = Id "z"; _ } ) ->
+      ()
+  | _ ->
+      assert_failure
+        "arithmetic shift should retain its precedence over multiplication");
+  ignore
+    (parse_exn
+       "class Box<T> { let value: T; } fun identity<T>(value: T) => T { return \
+        value; } fun main() => i32 { let box = new Box<Box<i32>> { value = new \
+        Box<i32> { value = 42 } }; let f: (Box<Box<i32>>) -> Box<Box<i32>> = \
+        identity; if 1 < 2 and 3 > 2 { return f(box).value.value >> 1; } \
+        return 0; }")
+
 let test_conditional_expression_shape _ =
   match returned_expression "fun main() => i32 { return true ? 1 : 2; }" with
   | Conditional
@@ -272,13 +298,66 @@ let test_generic_parser_boundaries _ =
     [
       "fun f<>(value: i32) {}";
       "fun f<T,>(value: T) {}";
-      "class Box<T> {}";
       "fun main() { identity<i32>(42); }";
     ];
   ignore
     (parse_exn
        "fun f<T>(value: T) => T { return value; } fun main() => i32 { if 1 < 2 \
         and 3 > 2 { return 8 >> 1; } return 1 << 2; }")
+
+let test_generic_nominal_parameter_scope _ =
+  match
+    parse_exn
+      "class Box<T> { let value: T; fun get() => T { return value; } } \
+       interface Value<U> { fun get() => U; }"
+  with
+  | Prog
+      ( _,
+        [
+          { elt = { declaration = Class cn; _ }; _ };
+          { elt = { declaration = Interface interface; _ }; _ };
+        ] ) -> (
+      assert_equal [ "T" ]
+        (List.map (fun parameter -> parameter.elt) cn.elt.type_params);
+      assert_equal [ "U" ]
+        (List.map (fun parameter -> parameter.elt) interface.elt.type_params);
+      (match (List.hd cn.elt.fields).elt with
+      | _, Some (TParam parameter), _, _ ->
+          assert_equal "T" parameter.elt;
+          assert_bool "class parameter reference retains its range"
+            (parameter.loc <> Util.Range.norange)
+      | _ -> assert_failure "class field parameter was not bound");
+      (match (List.hd cn.elt.methods).elt.frtyp with
+      | RetVal (TParam parameter) -> assert_equal "T" parameter.elt
+      | _ -> assert_failure "method return parameter was not bound");
+      match (List.hd interface.elt.protos).elt.frtyp with
+      | RetVal (TParam parameter) ->
+          assert_equal "U" parameter.elt;
+          assert_bool "interface parameter reference retains its range"
+            (parameter.loc <> Util.Range.norange)
+      | _ -> assert_failure "interface parameter was not bound")
+  | _ -> assert_failure "expected generic class and interface declarations"
+
+let test_generic_nominal_syntax _ =
+  List.iter
+    (fun source -> ignore (parse_exn source))
+    [
+      "interface List<T> { fun get(index: i32) => T; } class Box<T> impl \
+       List<T> { let value: T; fun get(index: i32) => T { return value; } }";
+      "class Box<T> { let value: T; } fun main() { let box: \
+       helper.Box<Box<i32>>; let nested: Box<Box<Box<i32>>>; }";
+      "class Node<T> { let value: T; let next: Node<T>; }";
+      "fun allocate<T>(count: i32) => [T] { return new [T](count); }";
+      "fun main() { let buffers: [[i32]] = new [[i32]](2); let callbacks = new \
+       [(i32) -> i32](2); return; }";
+    ];
+  List.iter assert_parse_error
+    [
+      "class Box<> {}";
+      "interface List<T,> {}";
+      "fun main() { let values = new [i32](); }";
+      "fun main() { let value: Box<i32,>; }";
+    ]
 
 let suite =
   let valid_tests =
@@ -296,11 +375,16 @@ let suite =
          "valid programs" >::: valid_tests;
          "invalid programs" >::: invalid_tests;
          "generic declarations" >:: test_generic_declarations;
+         "generic nominal syntax" >:: test_generic_nominal_syntax;
+         "generic nominal parameter scope"
+         >:: test_generic_nominal_parameter_scope;
          "generic parser boundaries" >:: test_generic_parser_boundaries;
          "top-level declarations" >:: test_top_level_declarations;
          "global declarations" >:: test_global_declarations;
          "inline modifier" >:: test_inline_modifier;
          "operator precedence" >:: test_operator_precedence;
+         "shift precedence after generic syntax"
+         >:: test_shift_precedence_after_generic_syntax;
          "conditional expression shape" >:: test_conditional_expression_shape;
          "conditional precedence" >:: test_conditional_precedence;
          "conditional right associativity"

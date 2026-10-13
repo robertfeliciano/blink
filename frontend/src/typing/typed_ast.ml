@@ -11,6 +11,8 @@ and ref_ty =
   | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
+  | RInterface of id
+  | RDArray of ty
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -81,6 +83,10 @@ type exp =
       * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
   | Conditional of exp * exp * exp * ty
+  | InterfaceCast of exp * id * id
+  | InterfaceMethod of exp * int * ty
+  | ArrayAlloc of exp * ty
+  | ClassMethod of exp * id * id * ty
 
 and vdecl = id * ty * exp * bool
 (* and ldecl = id * ref_ty * exp *)
@@ -148,3 +154,4 @@ type program =
       * cdecl list
       * proto list
       * gdecl list
+      * (id * proto list) list

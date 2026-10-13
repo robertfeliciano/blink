@@ -1,0 +1,41 @@
+import std.vector;
+
+@C fun strcmp(left: string, right: string) => i32;
+
+class Box {
+    let value: i32;
+}
+
+fun main() => i32 {
+    let numbers = new vector.Vector<i32> {};
+    let list: vector.List<i32> = numbers;
+    for index in 0..64 {
+        list.push(index);
+    }
+    if list.len() != 64 { return 1; }
+    let result = list.get(20) + list.get(22);
+    list.set(0, result);
+    if list.get(0) != 42 { return 2; }
+    list.clear();
+    list.push(result);
+
+    let words = new vector.Vector<string> {};
+    let strings: vector.List<string> = words;
+    strings.push("hello");
+    strings.push("vector");
+    if strcmp(strings.get(1), "vector") != 0 { return 3; }
+
+    let box = new Box { value = 42 };
+    let boxes = new vector.Vector<Box> {};
+    let objects: vector.List<Box> = boxes;
+    objects.push(box);
+    if objects.get(0).value != 42 { return 4; }
+
+    result = list.get(0);
+    objects.dispose();
+    strings.dispose();
+    list.dispose();
+    free boxes, words, numbers;
+    free box;
+    return result;
+}
