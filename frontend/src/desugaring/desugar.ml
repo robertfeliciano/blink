@@ -29,8 +29,8 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     inline = fn.inline;
   }
 
-let lower_interface (i : Typed.idecl) =
-  (i.iname, List.map desugar_proto i.protos)
+let lower_interface (i : Typed.idecl) : idecl =
+  { iname = i.iname; protos = List.map desugar_proto i.protos }
 
 let impl_symbol cname (p : proto) =
   mangle_name ~enclosing_class:cname p.fname
@@ -39,8 +39,8 @@ let impl_symbol cname (p : proto) =
 
 let impls_for_class interfaces (c : Typed.cdecl) =
   let impl_for_interface name =
-    let methods = List.assoc name interfaces in
-    { iname = name; methods = List.map (impl_symbol c.cname) methods }
+    let interface = List.find (fun (i : idecl) -> i.iname = name) interfaces in
+    { iname = name; methods = List.map (impl_symbol c.cname) interface.protos }
   in
   List.map impl_for_interface c.impls
 
@@ -78,8 +78,11 @@ let desugar_program (prog : Typed.program) : program =
 
   let interfaces =
     List.map
-      (fun (name, methods) ->
-        (name, List.map (lower_interface_signature final_cs) methods))
+      (fun (i : idecl) ->
+        {
+          i with
+          protos = List.map (lower_interface_signature final_cs) i.protos;
+        })
       interfaces
   in
   Prog (optimization_level, final_fns, final_cs, desugared_protos, interfaces)

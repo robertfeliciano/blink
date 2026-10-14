@@ -5,6 +5,28 @@ type fixture = { name : string; source : string; expected_exit : int }
 let fixtures =
   [
     {
+      name = "free-operands-evaluate-in-source-order";
+      source =
+        {|class Item {}
+class Counter { let order: i32 = 0; }
+fun pick(counter: Counter, item: Item, digit: i32) => Item {
+  counter.order = counter.order * 10 + digit;
+  return item;
+}
+fun main() => i32 {
+  let counter = new Counter {};
+  let left = new Item {}; let right = new Item {};
+  let captured = 42;
+  let callback: (i32) -> i32 = fn[captured](value) { return captured + value; };
+  free pick(counter, left, 1), callback, pick(counter, right, 2);
+  let order = counter.order;
+  free counter;
+  if order == 12 { return 42; }
+  return 91;
+}|};
+      expected_exit = 42;
+    };
+    {
       name = "arithmetic";
       source = "fun main() => i32 { return 5 + 3 * 4; }";
       expected_exit = 17;

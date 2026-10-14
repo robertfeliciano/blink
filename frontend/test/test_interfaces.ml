@@ -264,7 +264,7 @@ fun main() => i32 {
                        as class_);
                     ],
                     _,
-                    [ ("I", protos) ] )) -> (
+                    [ { iname = "I"; protos } ] )) -> (
                let printed_class =
                  Desugaring.Pprint_desugared_ast.show_cdecl class_
                in

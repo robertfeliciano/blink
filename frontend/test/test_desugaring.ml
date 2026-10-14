@@ -475,6 +475,43 @@ fun main() => i32 {
         (Printf.sprintf "unexpected function reassignment lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_free_preserves_source_order _ =
+  let source =
+    {|class Item {}
+class Holder { let item: Item = new Item {}; }
+fun main() => i32 {
+  let holder = new Holder { item = new Item {} };
+  let captured = 42;
+  let callback: (i32) -> i32 = fn[captured](value) { return captured + value; };
+  free holder.item, callback, holder;
+  return 0;
+}|}
+  in
+  let (DA.Prog (_, functions, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
+  let rec check_free = function
+    | DA.Decl (env, _, DA.Proj (DA.Id ("callback", _), "envptr", _), true)
+      :: DA.Free
+           [
+             DA.Proj (DA.Id ("holder", _), "item", _);
+             DA.Id (free_env, _);
+             DA.Id ("callback", _);
+             DA.Id ("holder", _);
+           ]
+      :: _
+      when env = free_env ->
+        ()
+    | _ :: rest -> check_free rest
+    | [] ->
+        assert_failure
+          ("free must preserve source order, with the closure environment \
+            before its closure:\n"
+          ^ Printer.show_block main.body)
+  in
+  check_free main.body
+
 let test_conditional_preserves_branch_local_preludes _ =
   let source =
     {|
@@ -548,6 +585,8 @@ let suite =
          "nested lambda lifting" >:: test_nested_lambda_lifting;
          "function reassignment projects current closure"
          >:: test_function_reassignment_projects_current_closure;
+         "free preserves source order and closure cleanup"
+         >:: test_free_preserves_source_order;
          "conditional preserves branch-local preludes"
          >:: test_conditional_preserves_branch_local_preludes;
          "parsed and typed programs" >::: pipeline_tests;

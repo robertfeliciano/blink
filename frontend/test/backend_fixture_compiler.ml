@@ -189,7 +189,7 @@ let interface_dispatch () =
       [ get; set; read; main ],
       [ box ],
       [],
-      [ ("Value", protos) ] )
+      [ DA.{ iname = "Value"; protos } ] )
 
 let fixtures =
   [

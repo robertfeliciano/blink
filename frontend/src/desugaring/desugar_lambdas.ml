@@ -590,7 +590,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       let bcs, bfs, b' = lift_lambda_from_block cs' lctxt b in
       (add_cdecls bcs cs', efs @ bfs @ fs, lctxt, [ lower_while ess e' b' ])
   | Free es ->
-      let final_cs, final_fs, all_setup_stmts, desugared_exps =
+      let final_cs, final_fs, all_setup_stmts, rev_exps =
         List.fold_left
           (fun (cs_acc, fs_acc, stmts_acc, exps_acc) e ->
             let ncs, nfs, ns, _l_opt, _f_ptr_opt, e', env_opt =
@@ -613,14 +613,15 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
               match env_opt with
               | Some env_ptr ->
                   let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-                  Id (env_ptr, i8_ptr) :: e' :: exps_acc
+                  e' :: Id (env_ptr, i8_ptr) :: exps_acc
               | _ -> e' :: exps_acc
             in
             (ncs, fs_acc @ nfs, stmts_acc @ ns, final_es))
           (cs, fs, [], []) es
       in
 
-      (final_cs, final_fs, lctxt, all_setup_stmts @ [ Free desugared_exps ])
+      (* Restore source order, freeing each closure's environment first. *)
+      (final_cs, final_fs, lctxt, all_setup_stmts @ [ Free (List.rev rev_exps) ])
   | Assn (l, r, ty) ->
       let lcs, lfs, lss, _, _, l', _ = lift_lambdas_from_exps cs lctxt None l in
       let rcs, rfs, rss, _, _fptr_opt, r', _env_opt =

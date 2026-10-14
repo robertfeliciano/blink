@@ -95,6 +95,7 @@ type proto = {
   args : ty list;
 }
 
+type idecl = { iname : id; protos : proto list }
 type impl = { iname : id; methods : id list }
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
 
@@ -111,7 +112,7 @@ type program =
       * fdecl list
       * cdecl list
       * proto list
-      * (id * proto list) list
+      * idecl list
 [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"
