@@ -29,7 +29,8 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     inline = fn.inline;
   }
 
-let lower_interface (name, methods) = (name, List.map desugar_proto methods)
+let lower_interface (i : Typed.idecl) =
+  (i.iname, List.map desugar_proto i.protos)
 
 let impl_symbol cname (p : proto) =
   mangle_name ~enclosing_class:cname p.fname

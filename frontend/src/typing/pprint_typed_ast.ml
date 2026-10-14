@@ -344,9 +344,9 @@ let show_typed_program (Prog (optimization_level, fns, cns, pns, interfaces)) =
   let interfaces_s =
     String.concat "\n"
       (List.map
-         (fun (name, methods) ->
-           "interface " ^ name ^ " {\n"
-           ^ String.concat "\n" (List.map (show_proto ~lvl:1) methods)
+         (fun { iname; protos } ->
+           "interface " ^ iname ^ " {\n"
+           ^ String.concat "\n" (List.map (show_proto ~lvl:1) protos)
            ^ "\n}")
          interfaces)
   in

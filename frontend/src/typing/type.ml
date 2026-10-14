@@ -413,7 +413,11 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
       typed_protos,
       List.map
         (fun (i : idecl node) ->
-          (i.elt.iname, List.map (type_proto fc) i.elt.protos))
+          Typed_ast.
+            {
+              iname = i.elt.iname;
+              protos = List.map (type_proto fc) i.elt.protos;
+            })
         interfaces )
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)

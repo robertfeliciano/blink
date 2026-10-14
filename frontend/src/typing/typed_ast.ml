@@ -142,10 +142,12 @@ type proto = {
   args : ty list;
 }
 
+type idecl = { iname : id; protos : proto list }
+
 type program =
   | Prog of
       Util.Optimization_level.t
       * fdecl list
       * cdecl list
       * proto list
-      * (id * proto list) list
+      * idecl list
