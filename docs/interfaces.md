@@ -74,8 +74,10 @@ Default interface values and explicit `null` represent a null object. Calling a
 method requires a live, non-null object. Equality compares the underlying object
 references.
 
-The desugared AST carries interface signatures, class implementation tables,
-class-to-interface conversions, and interface method calls across the OCaml/C++
-bridge. The backend keeps interface values as LLVM aggregates and emits shared
-constant tables plus indirect calls with the concrete receiver as the first
+The desugared AST carries interface signatures, class-to-interface conversions,
+and interface method calls across the OCaml/C++ bridge. Each class declaration
+owns an `impls` list containing its interface names and ordered method symbols;
+classes without interfaces have an empty list. The backend keeps interface values
+as LLVM aggregates and emits shared constant tables plus indirect calls with the
+concrete receiver as the first
 argument.

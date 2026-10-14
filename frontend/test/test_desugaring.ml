@@ -34,7 +34,7 @@ let desugar_exn program =
            (Core.Error.to_string_hum error))
 
 let only_function_body = function
-  | DA.Prog (_, [ fn ], [], [], [], []) -> fn.body
+  | DA.Prog (_, [ fn ], [], [], []) -> fn.body
   | program ->
       assert_failure
         (Printf.sprintf "expected one function and no declarations:\n%s"
@@ -128,8 +128,14 @@ let test_class_method_extraction _ =
   | DA.Prog
       ( _,
         [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
-        [ { cname = "Box"; fields = [ { fieldName = "value"; _ } ]; _ } ],
-        [],
+        [
+          {
+            cname = "Box";
+            fields = [ { fieldName = "value"; _ } ];
+            impls = [];
+            _;
+          };
+        ],
         [],
         [] ) ->
       assert_bool "method name should be mangled" (fname <> "get")
@@ -165,7 +171,7 @@ fun main() => i32 {
   let box = new Box {}; box.set(10, 20); box.add(10); return box.add(2);
 }|}
   in
-  let (DA.Prog (_, functions, _, _, _, _)) =
+  let (DA.Prog (_, functions, _, _, _)) =
     parse_and_type_exn source |> desugar_exn
   in
   let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
@@ -196,7 +202,7 @@ fun main() => i32 {
            (Printer.show_block body))
 
 let test_while_condition_setup source _ =
-  let (DA.Prog (_, functions, _, _, _, _)) =
+  let (DA.Prog (_, functions, _, _, _)) =
     parse_and_type_exn source |> desugar_exn
   in
   let check = List.find (fun (fn : DA.fdecl) -> fn.fname = "check") functions in
@@ -255,7 +261,7 @@ let test_optimization_level_propagation _ =
              (Core.Error.to_string_hum error))
   in
   match desugar_exn typed with
-  | DA.Prog (actual, _, _, _, _, _) ->
+  | DA.Prog (actual, _, _, _, _) ->
       assert_equal ~msg:"desugarer optimization level" requested actual
 
 let test_inline_propagation _ =
@@ -263,7 +269,7 @@ let test_inline_propagation _ =
     "inline fun increment(value: i32) => i32 { return value + 1; }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, [ fn ], [], [], [], []) ->
+  | DA.Prog (_, [ fn ], [], [], []) ->
       assert_bool "desugaring should preserve inline functions" fn.inline
   | program ->
       assert_failure
@@ -309,11 +315,17 @@ let test_lambda_lifting _ =
      }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], [], []) ->
+  | DA.Prog (_, functions, classes, [], []) ->
       assert_bool "lambda should produce a lifted function"
         (List.length functions > 1);
       assert_bool "lambda should produce closure structs"
-        (List.length classes >= 2)
+        (List.length classes >= 2);
+      List.iter
+        (fun (class_ : DA.cdecl) ->
+          assert_equal
+            ~msg:"generated closure and environment structs have no impls" []
+            class_.impls)
+        classes
   | program ->
       assert_failure
         (Printf.sprintf "unexpected lambda lowering:\n%s"
@@ -377,7 +389,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], [], []) ->
+  | DA.Prog (_, functions, classes, [], []) ->
       let lifted_functions =
         List.filter
           (fun (fn : DA.fdecl) ->
@@ -420,7 +432,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], [], []) ->
+  | DA.Prog (_, functions, _, [], []) ->
       let main =
         match
           List.find_opt
@@ -476,7 +488,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], [], []) -> (
+  | DA.Prog (_, functions, _, [], []) -> (
       let main =
         match
           List.find_opt

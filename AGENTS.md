@@ -148,6 +148,9 @@ array types whose LLVM values are pointers.
 Desugaring removes constructs the backend does not understand directly.
 For example, methods are extracted into functions and lambdas are lifted.
 The final program includes the selected optimization level.
+Interface signatures remain in the program, while each desugared class owns an
+`impls` list of interface names and ordered method symbols. Classes without
+interfaces, including generated closure and environment structs, use `impls = []`.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities

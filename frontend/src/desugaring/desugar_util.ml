@@ -122,7 +122,7 @@ let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
       init = Null fptr_ty;
     }
   in
-  { cname; fields = [ env_field; fptr_field ]; annotations = [] }
+  { cname; fields = [ env_field; fptr_field ]; annotations = []; impls = [] }
 
 let rec create_default_init t =
   match t with

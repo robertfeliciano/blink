@@ -22,7 +22,6 @@ let arithmetic () =
       [ function_ "main" [ DA.Ret (Some result) ] ],
       [],
       [],
-      [],
       [] )
 
 let function_call () =
@@ -35,7 +34,7 @@ let function_call () =
   let main =
     function_ "main" [ DA.Ret (Some (DA.Call ("double", [ int 21 ], i32))) ]
   in
-  DA.Prog (optimization_level, [ double; main ], [], [], [], [])
+  DA.Prog (optimization_level, [ double; main ], [], [], [])
 
 let array_index () =
   let array_ty = DA.TRef (DA.RArray (i32, 3)) in
@@ -46,7 +45,7 @@ let array_index () =
       DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [])
 
 let object_field () =
   let field name =
@@ -58,6 +57,7 @@ let object_field () =
         cname = "Box";
         fields = [ field "left"; field "right" ];
         annotations = [];
+        impls = [];
       }
   in
   let box_ty = DA.TRef (DA.RClass "Box") in
@@ -77,7 +77,7 @@ let object_field () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [], [])
 
 let conditional () =
   let expression =
@@ -90,7 +90,6 @@ let conditional () =
   DA.Prog
     ( optimization_level,
       [ function_ "main" [ DA.Ret (Some expression) ] ],
-      [],
       [],
       [],
       [] )
@@ -112,7 +111,7 @@ let literal_values () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [])
 
 let interface_dispatch () =
   let box_ty = DA.TRef (DA.RClass "Box") in
@@ -122,6 +121,7 @@ let interface_dispatch () =
       {
         cname = "Box";
         annotations = [];
+        impls = [ { iname = "Value"; methods = [ "box_get"; "box_set" ] } ];
         fields = [ { prelude = []; fieldName = "n"; ftyp = i32; init = int 0 } ];
       }
   in
@@ -189,8 +189,7 @@ let interface_dispatch () =
       [ get; set; read; main ],
       [ box ],
       [],
-      [ ("Value", protos) ],
-      [ ("Box", "Value", [ "box_get"; "box_set" ]) ] )
+      [ ("Value", protos) ] )
 
 let fixtures =
   [

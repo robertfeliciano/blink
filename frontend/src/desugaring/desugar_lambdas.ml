@@ -151,7 +151,12 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
   (* set the fields of the env struct to the scope vars of the lambda *)
   (* create env struct *)
   let lambda_env =
-    { cname = lifted_lambda_scope; fields = env_fields; annotations = [] }
+    {
+      cname = lifted_lambda_scope;
+      fields = env_fields;
+      annotations = [];
+      impls = [];
+    }
   in
   (* the lambda must have been assigned to a variable after initial desugaring pass *)
   let vname = match vname_opt with Some v -> v | None -> gensym "lambda" in

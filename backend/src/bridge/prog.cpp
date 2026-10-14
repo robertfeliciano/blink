@@ -68,14 +68,5 @@ Program convert_program(value prog) {
             interface.protos.push_back(convert_proto(Field(ps, 0)));
         program.interfaces.push_back(std::move(interface));
     }
-    for (value xs = Field(prog, 5); xs != Val_emptylist; xs = Field(xs, 1)) {
-        value impl = Field(xs, 0);
-        InterfaceImpl implementation;
-        implementation.cname = String_val(Field(impl, 0));
-        implementation.iname = String_val(Field(impl, 1));
-        for (value ms = Field(impl, 2); ms != Val_emptylist; ms = Field(ms, 1))
-            implementation.methods.emplace_back(String_val(Field(ms, 0)));
-        program.implementations.push_back(std::move(implementation));
-    }
     return program;
 }

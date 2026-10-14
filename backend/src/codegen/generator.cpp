@@ -30,25 +30,27 @@ llvm::FunctionType* Generator::codegenInterfaceMethodType(const Proto& proto) {
 
 void Generator::codegenInterfaceTables(const Program& p) {
     auto* pointerTy = llvm::PointerType::getUnqual(*ctxt);
-    for (const auto& implementation : p.implementations) {
-        const auto& protos = interfaceEnv.at(implementation.iname)->protos;
-        if (protos.size() != implementation.methods.size())
-            throw std::runtime_error("Interface method table has the wrong number of methods");
-        std::vector<llvm::Constant*> methods;
-        for (size_t slot = 0; slot < protos.size(); ++slot) {
-            llvm::Function* method = mod->getFunction(implementation.methods[slot]);
-            if (!method)
-                throw std::runtime_error("Unknown interface implementation method: " + implementation.methods[slot]);
-            auto* expectedType = codegenInterfaceMethodType(protos[slot]);
-            if (method->getFunctionType() != expectedType)
-                throw std::runtime_error("Interface implementation ABI mismatch: " + implementation.methods[slot]);
-            methods.push_back(method);
+    for (const auto& cdecl : p.classes) {
+        for (const auto& impl : cdecl.impls) {
+            const auto& protos = interfaceEnv.at(impl.iname)->protos;
+            if (protos.size() != impl.methods.size())
+                throw std::runtime_error("Interface method table has the wrong number of methods");
+            std::vector<llvm::Constant*> methods;
+            for (size_t slot = 0; slot < protos.size(); ++slot) {
+                llvm::Function* method = mod->getFunction(impl.methods[slot]);
+                if (!method)
+                    throw std::runtime_error("Unknown interface implementation method: " + impl.methods[slot]);
+                auto* expectedType = codegenInterfaceMethodType(protos[slot]);
+                if (method->getFunctionType() != expectedType)
+                    throw std::runtime_error("Interface implementation ABI mismatch: " + impl.methods[slot]);
+                methods.push_back(method);
+            }
+            auto* tableType = llvm::ArrayType::get(pointerTy, methods.size());
+            auto* table = new llvm::GlobalVariable(*mod, tableType, true, llvm::GlobalValue::PrivateLinkage,
+                                                   llvm::ConstantArray::get(tableType, methods),
+                                                   "blink.interface.table." + std::to_string(interfaceTables.size()));
+            interfaceTables.emplace(std::make_pair(cdecl.cname, impl.iname), table);
         }
-        auto* tableType = llvm::ArrayType::get(pointerTy, methods.size());
-        auto* table = new llvm::GlobalVariable(*mod, tableType, true, llvm::GlobalValue::PrivateLinkage,
-                                               llvm::ConstantArray::get(tableType, methods),
-                                               "blink.interface.table." + std::to_string(interfaceTables.size()));
-        interfaceTables.emplace(std::make_pair(implementation.cname, implementation.iname), table);
     }
 }
 

@@ -96,7 +96,7 @@ Field convert_field(value v) { // record field = { prelude : stmt list; fieldNam
     return out;
 }
 
-CDecl convert_cdecl(value v) { // record cdecl = { cname : id; fields : field list }
+CDecl convert_cdecl(value v) { // record cdecl = { cname; fields; annotations; impls }
     CDecl out;
     out.cname      = std::string(String_val(Field(v, 0)));
     value fields_v = Field(v, 1);
@@ -111,6 +111,15 @@ CDecl convert_cdecl(value v) { // record cdecl = { cname : id; fields : field li
         std::string annotation = std::string(String_val(Field(anno_v, 0)));
         out.annotations.emplace_back(annotation);
         anno_v = Field(anno_v, 1);
+    }
+
+    for (value xs = Field(v, 3); xs != Val_emptylist; xs = Field(xs, 1)) {
+        value decl = Field(xs, 0); // record impl = { iname; methods }
+        InterfaceImpl impl;
+        impl.iname = String_val(Field(decl, 0));
+        for (value methods = Field(decl, 1); methods != Val_emptylist; methods = Field(methods, 1))
+            impl.methods.emplace_back(String_val(Field(methods, 0)));
+        out.impls.push_back(std::move(impl));
     }
 
     return out;

@@ -40,7 +40,7 @@ let impl_symbol cname (p : proto) =
 let impls_for_class interfaces (c : Typed.cdecl) =
   let impl_for_interface name =
     let methods = List.assoc name interfaces in
-    (c.cname, name, List.map (impl_symbol c.cname) methods)
+    { iname = name; methods = List.map (impl_symbol c.cname) methods }
   in
   List.map impl_for_interface c.impls
 
@@ -55,7 +55,11 @@ let desugar_program (prog : Typed.program) : program =
   let (Prog (optimization_level, fns, cns, pns, interfaces)) = prog in
   let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
-  let extracted_methods, structs = List.split (List.map desugar_class cns) in
+  let interfaces = List.map lower_interface interfaces in
+  let lower_class (c : Typed.cdecl) =
+    desugar_class ~impls:(impls_for_class interfaces c) c
+  in
+  let extracted_methods, structs = List.split (List.map lower_class cns) in
   let initial_fn_list = List.flatten extracted_methods @ desugared_fns in
   (* thread struct list and accumalte lifted functions while updating 
     fdecl body
@@ -72,21 +76,13 @@ let desugar_program (prog : Typed.program) : program =
       (structs, []) initial_fn_list
   in
 
-  let interfaces = List.map lower_interface interfaces in
-  let impls = List.concat_map (impls_for_class interfaces) cns in
   let interfaces =
     List.map
       (fun (name, methods) ->
         (name, List.map (lower_interface_signature final_cs) methods))
       interfaces
   in
-  Prog
-    ( optimization_level,
-      final_fns,
-      final_cs,
-      desugared_protos,
-      interfaces,
-      impls )
+  Prog (optimization_level, final_fns, final_cs, desugared_protos, interfaces)
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

@@ -24,11 +24,16 @@ struct Field {
     std::unique_ptr<Exp>               init;
 };
 
+struct InterfaceImpl {
+    std::string              iname;
+    std::vector<std::string> methods;
+};
+
 struct CDecl {
-    std::string              cname;
-    std::vector<std::string> impls;
-    std::vector<Field>       fields;
-    std::vector<std::string> annotations;
+    std::string                cname;
+    std::vector<Field>          fields;
+    std::vector<std::string>    annotations;
+    std::vector<InterfaceImpl>  impls;
 };
 
 struct Proto {

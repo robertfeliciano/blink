@@ -165,6 +165,81 @@ let suite =
            "Cannot cast"
            "interface I {} class C impl I {} fun bad(make: () -> C) => () -> I \
             { return make as (() -> I); }";
+         ( "implementations belong to each concrete class" >:: fun _ ->
+           let typed =
+             type_exn
+               {|interface I { fun first() => i32; fun second() => i32; }
+interface J { fun second() => i32; }
+class C impl J, I {
+  fun second() => i32 { return 2; }
+  fun first() => i32 { return 1; }
+}
+class D impl I {
+  fun first() => i32 { return 3; }
+  fun second() => i32 { return 4; }
+}
+class Plain {}
+fun main() => i32 {
+  let captured = 40;
+  let callback: (i32) -> i32 = fn[captured](x) { return captured + x; };
+  return callback(2);
+}|}
+           in
+           match Desugaring.Desugar.desugar_prog typed with
+           | Error error -> assert_failure (Core.Error.to_string_hum error)
+           | Ok (DA.Prog (_, functions, classes, _, _)) ->
+               let class_named name =
+                 List.find
+                   (fun (class_ : DA.cdecl) -> class_.cname = name)
+                   classes
+               in
+               let method_symbol cname result =
+                 let method_ =
+                   List.find
+                     (fun (fn : DA.fdecl) ->
+                       match (fn.args, fn.body) with
+                       | ( (DA.TRef (DA.RClass owner), "this") :: [],
+                           [ DA.Ret (Some (DA.Int (value, _))) ] ) ->
+                           owner = cname && value = string_of_int result
+                       | _ -> false)
+                     functions
+                 in
+                 method_.fname
+               in
+               let c_first = method_symbol "C" 1 in
+               let c_second = method_symbol "C" 2 in
+               assert_equal
+                 ~msg:"class C keeps its impl order and interface method slots"
+                 DA.
+                   [
+                     { iname = "J"; methods = [ c_second ] };
+                     { iname = "I"; methods = [ c_first; c_second ] };
+                   ]
+                 (class_named "C").impls;
+               assert_equal ~msg:"class D refers to its own extracted methods"
+                 DA.
+                   [
+                     {
+                       iname = "I";
+                       methods = [ method_symbol "D" 3; method_symbol "D" 4 ];
+                     };
+                   ]
+                 (class_named "D").impls;
+               assert_equal ~msg:"ordinary classes have no impls" []
+                 (class_named "Plain").impls;
+               let generated =
+                 List.filter
+                   (fun (class_ : DA.cdecl) ->
+                     not (List.mem class_.cname [ "C"; "D"; "Plain" ]))
+                   classes
+               in
+               assert_bool "capturing lambda generates closure and environment"
+                 (List.length generated >= 2);
+               List.iter
+                 (fun (class_ : DA.cdecl) ->
+                   assert_equal ~msg:"generated classes have no impls" []
+                     class_.impls)
+                 generated );
          ( "lowered interface tables, conversion, and call slots" >:: fun _ ->
            let typed =
              type_exn
@@ -184,15 +259,20 @@ let suite =
                (DA.Prog
                   ( _,
                     functions,
+                    [
+                      ({ cname = "C"; impls = [ { iname = "I"; methods } ]; _ }
+                       as class_);
+                    ],
                     _,
-                    _,
-                    [ ("I", protos) ],
-                    [ ("C", "I", methods) ] ) as lowered) -> (
-               assert_bool "lowered printer includes the implementation table"
-                 (Core.String.is_substring
-                    (Desugaring.Pprint_desugared_ast.show_desugared_program
-                       lowered)
-                    ~substring:"C impl I");
+                    [ ("I", protos) ] )) -> (
+               let printed_class =
+                 Desugaring.Pprint_desugared_ast.show_cdecl class_
+               in
+               List.iter
+                 (fun substring ->
+                   assert_bool "lowered class printer includes its impl table"
+                     (Core.String.is_substring printed_class ~substring))
+                 [ "name=C"; "impls=["; "I [" ];
                assert_equal 2 (List.length protos);
                assert_equal 2 (List.length methods);
                let read =

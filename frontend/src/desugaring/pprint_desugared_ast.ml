@@ -254,23 +254,32 @@ let show_field ?(lvl = 0) { prelude; fieldName; ftyp; init } =
     fieldName (show_ty ftyp)
     (show_exp ~lvl:(lvl + 1) init)
 
-let show_cdecl ?(lvl = 0) { cname; fields; annotations } =
+let show_impl ?(lvl = 0) { iname; methods } =
+  indent lvl ^ iname ^ " [" ^ String.concat ", " methods ^ "]"
+
+let show_cdecl ?(lvl = 0) { cname; fields; annotations; impls } =
   let fields_s =
     String.concat ";\n" (List.map (fun f -> show_field ~lvl:(lvl + 1) f) fields)
   in
   let anno_s =
     String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
   in
-  Printf.sprintf "%s[\n%s\n%s]cdecl{name=%s; \n%sfields=[\n%s];\n}"
+  let impls_s =
+    String.concat ";\n" (List.map (show_impl ~lvl:(lvl + 1)) impls)
+  in
+  Printf.sprintf
+    "%s[\n%s\n%s]cdecl{name=%s; \n%sfields=[\n%s];\n%simpls=[\n%s];\n}"
     (indent (lvl + 1))
     anno_s
     (indent (lvl + 1))
     cname
     (indent (lvl + 1))
     fields_s
+    (indent (lvl + 1))
+    impls_s
 
 let show_desugared_program
-    (Prog (optimization_level, fns, cns, pns, interfaces, implementations)) =
+    (Prog (optimization_level, fns, cns, pns, interfaces)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
@@ -283,19 +292,9 @@ let show_desugared_program
            ^ "\n}")
          interfaces)
   in
-  let implementations_s =
-    String.concat "\n"
-      (List.map
-         (fun (cname, iname, methods) ->
-           cname ^ " impl " ^ iname ^ " [" ^ String.concat ", " methods ^ "]")
-         implementations)
-  in
   Printf.sprintf
     "Program{optimization=%s;\n\
      Interfaces{\n\
-     %s\n\
-     }\n\
-     Implementations{\n\
      %s\n\
      }\n\
      Classes{\n\
@@ -308,4 +307,4 @@ let show_desugared_program
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    interfaces_s implementations_s cns_s pn_s fns_s
+    interfaces_s cns_s pn_s fns_s
