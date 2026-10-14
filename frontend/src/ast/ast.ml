@@ -27,7 +27,12 @@ type uint = Tu8 | Tu16 | Tu32 | Tu64 | Tu128 [@@deriving show]
 type float_ty = Tf32 | Tf64 [@@deriving show]
 type int_ty = TSigned of sint | TUnsigned of uint [@@deriving show]
 
-type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
+type ty =
+  | TBool
+  | TInt of int_ty
+  | TFloat of float_ty
+  | TRef of ref_ty
+  | TParam of id node
 (* | TOpt of ty *)
 
 and ref_ty =
@@ -131,13 +136,20 @@ and stmt =
 
 and block = stmt node list
 
-type gdecl = { name : id; init : exp node }
+type gdecl = {
+  gname : id;
+  gtyp : ty option;
+  ginit : exp node option;
+  gconst : bool;
+}
+
 type annotation = id node * exp node list option
 
 let has_annotation name annotations =
   List.exists (fun (id, _) -> id.elt = name) annotations
 
 type fdecl = {
+  type_params : id node list;
   annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
@@ -157,6 +169,7 @@ type cdecl = {
 }
 
 type proto = {
+  type_params : id node list;
   annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
@@ -171,6 +184,7 @@ type top_level_decl =
   | Class of cdecl node
   | Prototype of proto node
   | Interface of idecl node
+  | Global of gdecl node
 
 type top_level = { declaration : top_level_decl; export_loc : Range.t option }
 type program = Prog of import node list * top_level node list
@@ -179,13 +193,112 @@ type program = Prog of import node list * top_level node list
    share this partition rather than duplicating the classification rule. *)
 let partition_declarations (Prog (_, declarations)) =
   List.fold_right
-    (fun { elt = { declaration; _ }; _ } (functions, classes, prototypes) ->
+    (fun { elt = { declaration; _ }; _ }
+         (functions, classes, prototypes, globals) ->
       match declaration with
-      | Function fn -> (fn :: functions, classes, prototypes)
-      | Class cn -> (functions, cn :: classes, prototypes)
-      | Prototype pn -> (functions, classes, pn :: prototypes)
-      | Interface _ -> (functions, classes, prototypes))
-    declarations ([], [], [])
+      | Function fn -> (fn :: functions, classes, prototypes, globals)
+      | Class cn -> (functions, cn :: classes, prototypes, globals)
+      | Prototype pn -> (functions, classes, pn :: prototypes, globals)
+      | Interface _ -> (functions, classes, prototypes, globals)
+      | Global gn -> (functions, classes, prototypes, gn :: globals))
+    declarations ([], [], [], [])
+
+(* Type parameters are bound before module resolution. Share this traversal
+   with specialization so annotations inside lambdas and local declarations
+   follow the same substitution as the function signature. *)
+let map_fdecl_types ty (fn : fdecl node) =
+  let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
+  let rec exp en =
+    let elt =
+      match en.elt with
+      | Call (f, es) -> Call (exp f, List.map exp es)
+      | Proj (e, i) -> Proj (exp e, i)
+      | Bop (op, e1, e2) -> Bop (op, exp e1, exp e2)
+      | Uop (op, e) -> Uop (op, exp e)
+      | Index (e1, e2) -> Index (exp e1, exp e2)
+      | Array es -> Array (List.map exp es)
+      | Cast (e, t) -> Cast (exp e, ty t)
+      | ObjInit (cn, fields) ->
+          ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
+      | Lambda (scope, args, body) ->
+          Lambda (List.map exp scope, args, block body)
+      | TypedLambda (scope, args, ret, body) ->
+          TypedLambda
+            ( List.map exp scope,
+              List.map (fun (i, t) -> (i, ty t)) args,
+              ret_ty ret,
+              block body )
+      | Conditional (e1, e2, e3) -> Conditional (exp e1, exp e2, exp e3)
+      | (Bool _ | Int _ | Float _ | Str _ | Id _ | Null) as e -> e
+    in
+    { en with elt }
+  and block body = List.map stmt body
+  and stmt sn =
+    let elt =
+      match sn.elt with
+      | Decl (i, t, e, const) ->
+          Decl (i, Option.map ty t, Option.map exp e, const)
+      | Assn (e1, op, e2) -> Assn (exp e1, op, exp e2)
+      | Ret e -> Ret (Option.map exp e)
+      | SCall (f, es) -> SCall (exp f, List.map exp es)
+      | If (e, b1, b2) -> If (exp e, block b1, block b2)
+      | ForEach (i, e, b) -> ForEach (i, exp e, block b)
+      | For (i, (e1, e2, incl), step, b) ->
+          For (i, (exp e1, exp e2, incl), Option.map exp step, block b)
+      | While (e, b) -> While (exp e, block b)
+      | Free es -> Free (List.map exp es)
+      | (Break | Continue) as s -> s
+    in
+    { sn with elt }
+  in
+  {
+    fn with
+    elt =
+      {
+        fn.elt with
+        args = List.map (fun (t, i) -> (ty t, i)) fn.elt.args;
+        frtyp = ret_ty fn.elt.frtyp;
+        annotations =
+          List.map
+            (fun (i, es) -> (i, Option.map (List.map exp) es))
+            fn.elt.annotations;
+        body = block fn.elt.body;
+      };
+  }
+
+let rec bind_type_params params = function
+  | TRef (RClass cn) as t -> (
+      match unqualified_id cn with
+      | Some i when List.exists (fun p -> p.elt = i) params ->
+          TParam cn.elt.name
+      | _ -> t)
+  | TRef (RArray (t, sz)) -> TRef (RArray (bind_type_params params t, sz))
+  | TRef (RFun (args, ret)) ->
+      let ret =
+        match ret with
+        | RetVoid -> RetVoid
+        | RetVal t -> RetVal (bind_type_params params t)
+      in
+      TRef (RFun (List.map (bind_type_params params) args, ret))
+  | t -> t
+
+let bind_fdecl_params (fn : fdecl node) =
+  map_fdecl_types (bind_type_params fn.elt.type_params) fn
+
+let bind_proto_params (pn : proto node) =
+  let ty = bind_type_params pn.elt.type_params in
+  {
+    pn with
+    elt =
+      {
+        pn.elt with
+        args = List.map (fun (t, i) -> (ty t, i)) pn.elt.args;
+        frtyp =
+          (match pn.elt.frtyp with
+          | RetVoid -> RetVoid
+          | RetVal t -> RetVal (ty t));
+      };
+  }
 
 let interface_declarations (Prog (_, declarations)) =
   List.filter_map
@@ -244,6 +357,7 @@ and show_ret_ty ?(lvl = 0) = function
   | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty ~lvl:(lvl + 1) t)
 
 and show_ty ?(lvl = 0) = function
+  | TParam name -> "TParam(" ^ name.elt ^ ")"
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "TFloat(%s)" (show_float_ty ft)
@@ -440,8 +554,13 @@ let show_annotations annos =
        annos)
   ^ "\n"
 
-let show_proto ?(lvl = 0) { elt = { annotations; frtyp; fname; args }; loc = _ }
-    =
+let show_type_params params =
+  match params with
+  | [] -> ""
+  | _ -> "<" ^ String.concat ", " (List.map (fun p -> p.elt) params) ^ ">"
+
+let show_proto ?(lvl = 0)
+    { elt = { annotations; frtyp; fname; args; type_params }; loc = _ } =
   let args_s =
     String.concat "; "
       (List.map
@@ -450,11 +569,12 @@ let show_proto ?(lvl = 0) { elt = { annotations; frtyp; fname; args }; loc = _ }
   in
   Printf.sprintf "%s[%s]proto{name=%s; ret=%s; args=[%s]}" (indent lvl)
     (show_annotations annotations)
-    fname
+    (fname ^ show_type_params type_params)
     (show_ret_ty ~lvl:(lvl + 1) frtyp)
     args_s
 
-let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body; inline } =
+let show_fdecl ?(lvl = 0)
+    { annotations; frtyp; fname; args; body; inline; type_params } =
   let args_s =
     String.concat "; "
       (List.map
@@ -465,7 +585,8 @@ let show_fdecl ?(lvl = 0) { annotations; frtyp; fname; args; body; inline } =
     "%s[%s]fdecl{name=%s; inline=%b; ret=%s; args=[%s]; body=[\n%s\n%s]}"
     (indent lvl)
     (show_annotations annotations)
-    fname inline
+    (fname ^ show_type_params type_params)
+    inline
     (show_ret_ty ~lvl:(lvl + 1) frtyp)
     args_s
     (String.concat "" (List.map (show_node_stmt ~lvl:(lvl + 1)) body))
@@ -523,6 +644,8 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
         "interface " ^ value.elt.iname ^ " { "
         ^ String.concat "; " (List.map show_proto value.elt.protos)
         ^ " }"
+    | Global { elt = { gname; gtyp; ginit; gconst }; _ } ->
+        show_vdecl ~lvl:1 (gname, gtyp, ginit, gconst)
   in
   prefix ^ declaration
 

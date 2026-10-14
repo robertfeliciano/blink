@@ -22,4 +22,5 @@ std::string stmtToString(const Stmt& stmt, int indentLevel = 0);
 // Declarations / program printing
 std::string fdeclToString(const FDecl& f);
 std::string cdeclToString(const CDecl& c);
+std::string gdeclToString(const GDecl& g);
 std::string programToString(const Program& prog);

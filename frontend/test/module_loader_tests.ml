@@ -254,8 +254,8 @@ let test_syntax _ =
       "export import a;";
       "export";
       "export export fun f() {}";
-      "export let x = 1;";
-      "export const x = 1;";
+      "export let x = 1";
+      "export const x;";
       "class C { export fun f() {} }";
       "class C { export let x = 1; }";
       "fun f() { import a; }";
@@ -283,7 +283,7 @@ let test_qualified_uses _ =
     ];
   let program = parse "fun f(x: i32) { let y = (x as geo.Circle).radius; }" in
   match partition_declarations program with
-  | [ fn ], [], [] -> (
+  | [ fn ], [], [], [] -> (
       match fn.elt.body with
       | [
        {

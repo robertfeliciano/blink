@@ -1,11 +1,14 @@
 import helper;
 import geometry as shapes;
 import std.io;
+import state;
 
 fun main() => i32 {
     let box: shapes.Box = new shapes.Box { value = helper.answer() };
     io.println("Hello from Blink modules!");
-    let result = box.read();
+    state.advance();
+    let result = state.count;
+    if box.read() != result { return 1; }
     free box;
     return result;
 }

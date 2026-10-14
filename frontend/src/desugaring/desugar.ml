@@ -51,8 +51,14 @@ let lower_interface_signature structs (p : proto) =
     frtyp = fst (transform_ret_ty p.frtyp structs);
   }
 
+let desugar_global (gn : Typed.gdecl) : gdecl =
+  let prelude, ginit = desugar_exp gn.ginit in
+  if prelude <> [] then
+    desugar_error "Global initializer requires runtime code.";
+  { gname = gn.gname; gtyp = convert_ty gn.gtyp; ginit; gconst = gn.gconst }
+
 let desugar_program (prog : Typed.program) : program =
-  let (Prog (optimization_level, fns, cns, pns, interfaces)) = prog in
+  let (Prog (optimization_level, fns, cns, pns, gds, interfaces)) = prog in
   let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
   let interfaces = List.map lower_interface interfaces in
@@ -85,7 +91,13 @@ let desugar_program (prog : Typed.program) : program =
         })
       interfaces
   in
-  Prog (optimization_level, final_fns, final_cs, desugared_protos, interfaces)
+  Prog
+    ( optimization_level,
+      final_fns,
+      final_cs,
+      desugared_protos,
+      List.map desugar_global gds,
+      interfaces )
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

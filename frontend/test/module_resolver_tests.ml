@@ -47,6 +47,102 @@ let suite =
                "import contracts; fun read(x: contracts.I) => i32 { return \
                 x.value(); } fun main() => i32 { return 0; }" );
            ];
+         types "generic definition-site bindings and parameter scope"
+           [
+             ( [ "helper" ],
+               "fun secret() => i32 { return 42; } export fun answer<T>(value: \
+                T) => i32 { let copy: T = value; return secret(); }" );
+             ( [ "main" ],
+               "import helper; class T {} fun secret() => i32 { return 1; } \
+                fun main() => i32 { return helper.answer(0); }" );
+           ];
+         types "generic type parameter shadows class"
+           [
+             ( [ "main" ],
+               "class T {} fun identity<T>(value: T) => T { return value; } \
+                fun main() => i32 { return identity(42); }" );
+           ];
+         types "generic imported function value"
+           [
+             ( [ "helper" ],
+               "export fun identity<T>(value: T) => T { return value; }" );
+             ( [ "main" ],
+               "import helper; fun main() => i32 { let f: (i32) -> i32 = \
+                helper.identity; return f(42); }" );
+           ];
+         rejects "generic private export" "private"
+           [
+             ([ "helper" ], "fun identity<T>(value: T) => T { return value; }");
+             ( [ "main" ],
+               "import helper; fun main() => i32 { return helper.identity(42); \
+                }" );
+           ];
+         rejects "generic parameter does not leak" "Unknown name"
+           [
+             ( [ "main" ],
+               "fun identity<T>(value: T) => T { return value; } fun \
+                bad(value: T) {}" );
+           ];
+         types "global reads writes and imported constant initializer"
+           [
+             ([ "state" ], "export let count = 40; export const limit: i32 = 2;");
+             ( [ "main" ],
+               "import state as shared; const increment = shared.limit; fun \
+                main() => i32 { shared.count += increment; return \
+                shared.count; }" );
+           ];
+         types "global same spellings and local shadowing"
+           [
+             ([ "left" ], "export let value = 20;");
+             ([ "right" ], "export let value = 22;");
+             ( [ "main" ],
+               "import left; import right; let value = 9; fun read(value: i32) \
+                => i32 { return value; } fun main() => i32 { let value = 3; \
+                return left.value + right.value + read(value); }" );
+           ];
+         types "global lambda direct access and capture"
+           [
+             ([ "state" ], "export let count = 40;");
+             ( [ "main" ],
+               "import state; let count = 40; fun main() => i32 { let direct: \
+                () -> i32 = fn[]() { return state.count + count; }; let \
+                captured: () -> i32 = fn[count]() { return count; }; return \
+                direct() + captured(); }" );
+           ];
+         rejects "global private access" "private"
+           [
+             ([ "state" ], "let secret = 42;");
+             ( [ "main" ],
+               "import state; fun main() => i32 { return state.secret; }" );
+           ];
+         rejects "global initializer private access" "private"
+           [
+             ([ "state" ], "const secret = 42;");
+             ( [ "main" ],
+               "import state; let value = state.secret; fun main() => i32 { \
+                return value; }" );
+           ];
+         rejects "global alias collision" "conflicts with a declaration"
+           [
+             helper;
+             ( [ "main" ],
+               "import helper; let helper = 42; fun main() => i32 { return 0; }"
+             );
+           ];
+         rejects "duplicate global" "Duplicate declaration"
+           [
+             ( [ "main" ],
+               "let value = 20; const value = 22; fun main() => i32 { return \
+                0; }" );
+           ];
+         rejects "global function duplicate" "Duplicate declaration"
+           [
+             ( [ "main" ],
+               "let value = 20; fun value() => i32 { return 22; } fun main() \
+                => i32 { return 0; }" );
+           ];
+         rejects "global main is reserved" "main"
+           [ ([ "main" ], "let main = 42;") ];
          ( "symbol encoding" >:: fun _ ->
            let encode owner name =
              match Modules.Module_symbols.encode ~owner ~name with
@@ -69,7 +165,7 @@ let suite =
            assert_equal [] imports;
            assert_bool "exports consumed"
              (List.for_all (fun item -> item.elt.export_loc = None) items);
-           let functions, _, _ =
+           let functions, _, _, _ =
              partition_declarations (Prog (imports, items))
            in
            assert_equal
@@ -284,7 +380,8 @@ let suite =
            [ helper; main "return helper.missing();" ];
          rejects "module is not a value" "not a value"
            [ helper; main "let value = helper; return 0;" ];
-         rejects "function is not a type" "not the required class or interface type"
+         rejects "function is not a type"
+           "not the required class or interface type"
            [ helper; main "let value: helper.answer; return 0;" ];
          rejects "class is not a function" "not a function"
            [

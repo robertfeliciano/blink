@@ -14,6 +14,8 @@ class ExpToLLVisitor {
   public:
     explicit ExpToLLVisitor(Generator& g) : gen(g) {}
 
+    llvm::Constant* codegenConstant(const Exp& e);
+
     Value* operator()(const EBool& e);
     Value* operator()(const EInt& e);
     Value* operator()(const EFloat& e);

@@ -1,0 +1,7 @@
+// Imported globals share storage with their defining module.
+export let count: i32 = 40;
+export const increment: i32 = 2;
+
+export fun advance() => void {
+    count += increment;
+}

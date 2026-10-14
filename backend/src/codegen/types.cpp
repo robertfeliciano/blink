@@ -77,7 +77,7 @@ llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
         case RetTyTag::RetVoid:
             return llvm::Type::getVoidTy(*gen.ctxt);
         case RetTyTag::RetVal:
-            return codegenTy(*rty.val);
+            return codegenValueTy(*rty.val);
     }
 }
 

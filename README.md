@@ -4,7 +4,8 @@ and you'll miss it...
 ## Imports and modules
 
 Each `.bl` file is a module. Imports introduce a local alias; only functions,
-function prototypes, classes and interfaces marked `export` are accessible through it.
+function prototypes, classes, interfaces, and global variables marked `export`
+are accessible through it.
 Private declarations remain usable inside their defining file.
 
 ```blink
@@ -36,10 +37,20 @@ The project import root defaults to the entry file's directory. Pass
 `DIR/io.bl`. No standard-library path is hardcoded; specify it explicitly.
 Both options work with `blink` and `compile`, including from another directory.
 `std.io.println` uses libc `puts`, adds a newline, and returns its status.
+`std.math` provides `f64` math functions backed by libm: `sin`, `cos`, `tan`,
+`asin` (arcsine), `acos` (arccosine), `atan`, `atan2(y, x)`, `sinh`, `cosh`,
+`tanh`, `asinh`, `acosh`, `atanh`, `sqrt`, `cbrt`, and `hypot(x, y)`.
+Trigonometric angles are in radians. `ln(x)` is the natural logarithm, and
+`log(x, base)` computes `ln(x) / ln(base)`. After `import std.math;`, call
+functions such as `math.sqrt(9.0)` or `math.log(8.0, 2.0)`.
+The module also exports immutable `f64` constants: `pi`, `tau` (2π), `half_pi`,
+`quarter_pi`, `e`, `sqrt2`, `sqrt3`, `ln2`, and `ln10`. Use them through the
+import alias, for example `math.sin(math.half_pi)`.
+The `compile` helper links libm automatically.
 
 Imports must precede declarations. Aliases cannot be reused by declarations or
 local bindings. Import cycles, private-member access and imported `main`
-declarations are errors. Imports are not re-exported, and there are no globals,
+declarations are errors. Imports are not re-exported, and there are no
 wildcard imports, packages or runtime module initialization.
 
 The [module implementation notes](frontend/src/modules/README.md) describe
@@ -87,6 +98,48 @@ result to a function accepting that interface:
 ./compile -O2 examples/interfaces/main.bl
 ./new_output.o
 ```
+
+## Global variables
+
+Declare globals with `let` or `const` outside functions. Globals are private
+unless marked `export`; access exported globals through the imported module's
+alias, just like functions:
+
+```blink
+// state.bl
+export let count: i32 = 40;
+export const limit: i32 = 100;
+export fun increment() => void { count += 1; }
+
+// main.bl
+import state;
+fun main() => i32 {
+    state.increment();
+    state.count += 1;
+    return state.count; // 42
+}
+```
+
+Every import refers to the same variable, including when several modules import
+the same dependency. `let` globals can be reassigned through an import; `const`
+globals cannot. Locals and parameters can shadow globals. A lambda can access
+globals directly; explicitly capturing a global copies its current value using
+the existing capture rules.
+
+Globals support integer, floating-point, boolean and string types. Types may be
+inferred from initializers. Initializers must be literals (including negative
+numeric literals), integer constant expressions, or references to other constant
+globals. Forward references to constants are supported, including exported
+constants accessed through an import. Their declared or inferred types still
+apply; referring to a constant does not make it an untyped literal. Constant
+dependency cycles are errors.
+
+A typed `let` without an initializer uses the usual primitive default: zero,
+`false`, or the empty string. `const` requires an initializer. Runtime calls,
+reads of mutable globals during initialization, and array, class and function
+globals are unsupported. All globals are initialized before `main` and live for
+the duration of the program. String literals retain their existing static
+storage lifetime and must not be freed.
 
 ## Develop with Docker
 
@@ -268,3 +321,54 @@ fun main() => i32 {
 ```
 
 Free lambda closures when they are no longer needed.
+
+## Generic functions
+
+Functions can declare type parameters using angle brackets. Calls infer their
+concrete types from arguments and expected result types:
+
+```blink
+fun identity<T>(value: T) => T {
+    return value;
+}
+
+fun main() => i32 {
+    let value = identity(42);
+    let f: (i32) -> i32 = identity;
+    let result = f(value);
+    free f;
+    return result;
+}
+```
+
+Type parameters work in argument and return types, fixed-size arrays, function
+signatures, local annotations, and lambda signatures. A generic function passed
+as a callback is specialized from the receiving parameter's function type. An
+unresolved use, such as `let f = identity;`, requires an ordinary type annotation;
+there is no explicit type-argument syntax at call sites. Concrete arguments must
+agree on repeated type parameters. Context-dependent literals use inferred types
+before existing default literal types, and ordinary conversions apply after
+inference. Expected result types fill type parameters that arguments have not
+already determined.
+
+The frontend generates one concrete function per distinct combination of type
+arguments within each compilation. Recursive calls reuse registered signatures.
+Instances are shared across imports, and templates retain their defining module's
+private bindings. Generic prototypes require matching definitions; parameter names
+may differ between the prototype and definition.
+
+Bodies are type-checked for each requested instance. For example, `value + value`
+works when the inferred type supports addition and otherwise reports an error at
+the template body, with the requesting call locations. Unused templates are parsed
+and resolved, but their dependent bodies are not type-checked. Inference uses
+signatures and use-site context rather than guessing types from template bodies.
+Each compilation permits at most 4096 instances and an instantiation chain of 128;
+expanding recursion reports a specialization-limit diagnostic.
+
+Only top-level functions are generic in this release. Generic classes, methods,
+`main`, external `@C` functions, constraints, and compile-time value parameters are
+unsupported. Function values have concrete signatures; higher-rank polymorphic
+values and inference from later statements are unsupported. Existing restrictions
+on global initialization still apply. Specialization preserves the current calling
+and memory behavior, but additional instances can increase compile time and binary
+size. See `examples/generic_functions.bl` for functions, arrays, and callbacks.

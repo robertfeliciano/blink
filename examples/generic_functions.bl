@@ -1,0 +1,19 @@
+fun identity<T>(value: T) => T {
+    return value;
+}
+
+fun first<T>(values: [T; 2]) => T {
+    return values[0];
+}
+
+fun apply<T>(f: (T) -> T, value: T) => T {
+    return f(value);
+}
+
+fun main() => i32 {
+    let values = [20, 22];
+    let f: (i32) -> i32 = identity;
+    let result = apply(f, first(values)) + identity(values[1]);
+    free f;
+    return result;
+}

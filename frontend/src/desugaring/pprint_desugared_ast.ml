@@ -279,7 +279,15 @@ let show_cdecl ?(lvl = 0) { cname; fields; annotations; impls } =
     impls_s
 
 let show_desugared_program
-    (Prog (optimization_level, fns, cns, pns, interfaces)) =
+    (Prog (optimization_level, fns, cns, pns, gds, interfaces)) =
+  let globals_s =
+    String.concat "\n"
+      (List.map
+         (fun { gname; gtyp; ginit; gconst } ->
+           Printf.sprintf "global %s: %s = %s (const=%b)" gname (show_ty gtyp)
+             (show_exp ginit) gconst)
+         gds)
+  in
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
@@ -294,6 +302,9 @@ let show_desugared_program
   in
   Printf.sprintf
     "Program{optimization=%s;\n\
+     Globals{\n\
+     %s\n\
+     }\n\
      Interfaces{\n\
      %s\n\
      }\n\
@@ -307,4 +318,4 @@ let show_desugared_program
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    interfaces_s cns_s pn_s fns_s
+    globals_s interfaces_s cns_s pn_s fns_s

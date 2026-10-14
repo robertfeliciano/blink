@@ -60,7 +60,13 @@ Program convert_program(value prog) {
     program.classes   = std::move(cls);
     program.protos    = std::move(protos);
 
-    for (value xs = Field(prog, 4); xs != Val_emptylist; xs = Field(xs, 1)) {
+    value gdecls = Field(prog, 4);
+    while (gdecls != Val_emptylist) {
+        program.globals.push_back(convert_gdecl(Field(gdecls, 0)));
+        gdecls = Field(gdecls, 1);
+    }
+
+    for (value xs = Field(prog, 5); xs != Val_emptylist; xs = Field(xs, 1)) {
         value decl = Field(xs, 0);
         InterfaceDecl interface;
         interface.iname = String_val(Field(decl, 0));

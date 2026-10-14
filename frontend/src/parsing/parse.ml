@@ -2,7 +2,8 @@ open Core
 open Lexer
 
 let get_pos (pos : Lexing.position) =
-  Fmt.str "%s: line %d, col %d" pos.pos_fname pos.pos_lnum (pos.pos_cnum - pos.pos_bol)
+  Fmt.str "%s: line %d, col %d" pos.pos_fname pos.pos_lnum
+    (pos.pos_cnum - pos.pos_bol)
 
 type diagnostic = { loc : Util.Range.t; message : string }
 
@@ -17,9 +18,7 @@ let parse_prog_diagnostic (lexbuf : Lexing.lexbuf) =
       let err = Fmt.str "Parser Error at %s" (get_pos lexbuf.lex_curr_p) in
       Error { loc = Util.Range.lex_range lexbuf; message = err }
   | Ast.ParserError (pos, msg) ->
-      let err =
-        Fmt.str "Parser Error at %s: %s" (get_pos pos) msg
-      in
+      let err = Fmt.str "Parser Error at %s: %s" (get_pos pos) msg in
       Error { loc = Util.Range.mk_lex_range pos pos; message = err }
 
 let parse_prog lexbuf =

@@ -84,6 +84,11 @@ let suite =
          positive "interface methods can refer to interfaces"
            "interface I { fun other(value: I) => I; } class C impl I { fun \
             other(value: I) => I { return value; } }";
+         positive "generic identity retains interface types and global methods"
+           "const base: i32 = 40; interface I { fun value() => i32; } class C \
+            impl I { fun value() => i32 { return base + 2; } } fun \
+            identity<T>(value: T) => T { return value; } fun main() => i32 { \
+            let item: I = new C {}; return identity(item).value(); }";
          negative ~line:2 "missing method" "missing interface method value"
            (contract ^ "class C impl I {}");
          negative ~line:2 "wrong parameter count" "signature does not match I"
@@ -187,7 +192,7 @@ fun main() => i32 {
            in
            match Desugaring.Desugar.desugar_prog typed with
            | Error error -> assert_failure (Core.Error.to_string_hum error)
-           | Ok (DA.Prog (_, functions, classes, _, _)) ->
+           | Ok (DA.Prog (_, functions, classes, _, _, _)) ->
                let class_named name =
                  List.find
                    (fun (class_ : DA.cdecl) -> class_.cname = name)
@@ -263,6 +268,7 @@ fun main() => i32 {
                       ({ cname = "C"; impls = [ { iname = "I"; methods } ]; _ }
                        as class_);
                     ],
+                    _,
                     _,
                     [ { iname = "I"; protos } ] )) -> (
                let printed_class =

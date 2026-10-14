@@ -19,7 +19,7 @@ test-e2e:
 	cd frontend && dune exec ./test/e2e.exe
 
 test-backend:
-	cd frontend && dune exec ./test/backend_tests.exe
+	cd frontend && dune build ./test/backend_fixture_compiler.exe && dune exec ./test/backend_tests.exe
 
 clean: 
 	@rm -rf backend/build *.{s,o,ll} && cd frontend && dune clean

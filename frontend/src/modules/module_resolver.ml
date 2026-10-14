@@ -1,11 +1,11 @@
 open Ast
-(** Resolve files in their own lexical scope, then combine declarations. Only
-    ordinary names cross into typing/desugaring; the native FFI is unchanged. *)
+(** Resolve files in their own lexical scope, then combine declarations. Module
+    metadata stays in the frontend; subsequent phases receive resolved names. *)
 
 open Module_model
 module Names = Set.Make (String)
 
-type kind = Function_kind | Class_kind | Interface_kind
+type kind = Function_kind | Class_kind | Interface_kind | Global_kind
 type symbol = { identity : string; kind : kind; public : bool }
 
 type scope = {
@@ -24,6 +24,7 @@ let declaration_info = function
   | Prototype pn -> (pn.elt.fname, Function_kind, pn.elt.annotations)
   | Class cn -> (cn.elt.cname, Class_kind, cn.elt.annotations)
   | Interface value -> (value.elt.iname, Interface_kind, [])
+  | Global gn -> (gn.elt.gname, Global_kind, [])
 
 let make_scope entry source =
   let declarations = Hashtbl.create 16 in
@@ -145,7 +146,7 @@ let resolve graph : (program, diagnostic) result =
                 "Class types must use a direct import alias (alias.Class)."
         in
         if
-          symbol.kind = Function_kind
+          (symbol.kind <> Class_kind && symbol.kind <> Interface_kind)
           ||
           match required with
           | Some kind -> symbol.kind <> kind
@@ -185,7 +186,7 @@ let resolve graph : (program, diagnostic) result =
                ^ " is not a value; select an exported member.")
           | Id name ->
               let symbol = local_symbol node name in
-              if symbol.kind <> Function_kind then
+              if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (name
                  ^ " is a class, not a function or value; use new or a typed \
@@ -194,7 +195,7 @@ let resolve graph : (program, diagnostic) result =
           | Proj ({ elt = Id alias; _ }, member)
             when Hashtbl.mem scope.aliases alias ->
               let symbol = imported_symbol node alias member in
-              if symbol.kind <> Function_kind then
+              if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (alias ^ "." ^ member
                  ^ " is a class, not a function or value; use new or a typed \
@@ -209,7 +210,7 @@ let resolve graph : (program, diagnostic) result =
           | Cast (value, target) -> Cast (recurse value, ty target)
           | ObjInit (name, fields) ->
               ObjInit
-                ( nominal_name name,
+                ( nominal_name ~required:Class_kind name,
                   List.map (fun (field, value) -> (field, recurse value)) fields
                 )
           | Conditional (test, yes, no) ->
@@ -326,6 +327,21 @@ let resolve graph : (program, diagnostic) result =
           let identity = (local_symbol node name).identity in
           let declaration =
             match node.elt.declaration with
+            | Global value ->
+                Global
+                  {
+                    value with
+                    elt =
+                      {
+                        value.elt with
+                        gname = identity;
+                        gtyp = Option.map ty value.elt.gtyp;
+                        ginit =
+                          Option.map
+                            (exp Names.empty Names.empty)
+                            value.elt.ginit;
+                      };
+                  }
             | Function value ->
                 Function (fn Names.empty Names.empty identity value)
             | Prototype value ->
@@ -338,6 +354,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         fname = identity;
+                        type_params = value.elt.type_params;
                         annotations = annotations value.elt.annotations;
                         args = args value.elt.args;
                         frtyp = ret_ty value.elt.frtyp;

@@ -84,6 +84,8 @@ They are ignored and should not be committed.
 - `frontend/src/ast/ast.ml` defines the parser-facing AST.
 - AST nodes carry `Util.Range.t` source locations.
 - This tree preserves source-level constructs and optional annotations.
+- Top-level global variables use `gdecl` nodes and the `Global` declaration
+  variant, with the same export wrapper as functions and classes.
 - `frontend/src/ast/dune` exposes the AST library.
 
 ### Parsing
@@ -91,9 +93,10 @@ They are ignored and should not be committed.
 The module implementation lives in `frontend/src/modules/` as the standalone
 `blink.modules` library. DFS loads a dependency-first graph with cycle detection.
 Per-file name resolution enforces exports and lexical scope before combining
-declarations for typing. Module-owned symbols, classes and interfaces have stable internal
-identities; entry `main` and `@C` symbols retain exact names. Shared C signatures
-are reconciled by typing. No module data crosses the native FFI.
+declarations for typing. Module-owned symbols, classes, interfaces, and globals
+have stable internal identities; entry `main` and `@C` symbols retain exact names.
+Shared C signatures are reconciled by typing. Import/export metadata stays in the
+frontend; globals cross the native FFI as ordinary resolved declarations.
 See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
 for a runnable example, and `runtime/stdlib/io.bl` for bootstrap `std.io` using libc.
 Module interfaces are inferred from `.ml`, without module `.mli` files.
@@ -113,7 +116,10 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
-- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces, and prototypes.
+- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
+  prototypes, and compilation-local generic state.
+- `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
+  specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
 - `frontend/src/typing/dune` exposes the typing library.
@@ -122,6 +128,16 @@ Type failures are reported with source locations through `type_error` helpers.
 Keep constness and class context intact when extending context operations.
 Function prototypes and definitions are collected before bodies are checked.
 Classes track fields and method headers in a separate class context.
+Generic top-level functions use `fun identity<T>(value: T) => T` syntax. The source
+AST binds located `TParam` types before module resolution. Calls and function
+values infer concrete type arguments from arguments and expected signatures;
+there is no explicit call-site specialization syntax. Typing registers concrete
+headers before checking queued instance bodies, including recursive instances.
+The final typed program contains only concrete functions; the desugared AST and
+native bridge contract are unchanged. Instances are cached per compilation, with
+limits of 4096 instances and 128 entries in a requesting chain. Generic prototypes
+require matching definitions; generic methods, classes, main and @C declarations
+are unsupported. Dependent bodies are checked only when instantiated.
 
 Language interfaces declare method prototypes; classes opt in with `impl` and
 must define each method with exactly matching ordered parameter and return
@@ -147,10 +163,14 @@ array types whose LLVM values are pointers.
 
 Desugaring removes constructs the backend does not understand directly.
 For example, methods are extracted into functions and lambdas are lifted.
-The final program includes the selected optimization level.
-Interface signatures remain in the program, while each desugared class owns an
-`impls` list of interface names and ordered method symbols. Classes without
-interfaces, including generated closure and environment structs, use `impls = []`.
+The final program includes the selected optimization level and global
+declarations. Globals support scalar and string storage with constant
+initializers; typing resolves constant dependencies and rejects cycles before
+lowering. Runtime global initialization and aggregate/function globals remain
+unsupported. The desugared program's fifth field is its `gdecl` list and its
+sixth field is its interface `idecl` list. Each desugared class owns an `impls`
+list of interface names and ordered method symbols. Classes without interfaces,
+including generated closure and environment structs, use `impls = []`.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities
@@ -188,6 +208,10 @@ Exercise every changed constructor through a backend or end-to-end test.
 It also tracks local allocas, class/struct metadata, and loop branch targets.
 Program codegen declares classes first, then built-ins and function prototypes,
 then emits function bodies and runs the requested LLVM optimization pipeline.
+Global storage is declared before function bodies and kept separately from local
+allocas. Reads and assignments share local-first address lookup. Exported globals
+have one module-owned identity and storage location across every import; source
+exports do not require LLVM external linkage.
 The generated module targets the build host and uses position-independent code.
 
 ### Tests
@@ -407,7 +431,8 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
-Generics and several prospective language features remain unsupported.
+Generic classes, generic methods, interface constraints, and several prospective
+language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 
 ## Where to start

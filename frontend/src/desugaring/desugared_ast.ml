@@ -106,12 +106,15 @@ type cdecl = {
   impls : impl list;
 }
 
+type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
+
 type program =
   | Prog of
       Util.Optimization_level.t
       * fdecl list
       * cdecl list
       * proto list
+      * gdecl list
       * idecl list
 [@@boxed]
 

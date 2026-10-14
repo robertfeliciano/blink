@@ -27,6 +27,126 @@ fun main() => i32 {
       expected_exit = 42;
     };
     {
+      name = "globals-preserve-integer-bit-widths";
+      source =
+        {|const bits: u8 = 1;
+let inverted = ~bits;
+const negative: i8 = -1;
+const step: i8 = 1;
+let shifted = negative >> step;
+fun main() => i32 {
+  let runtime_bits = bits;
+  if inverted != ~runtime_bits { return 1; }
+  if shifted != (negative >> step) { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-preserve-string-reference-identity";
+      source =
+        {|const alias = original;
+const original = "shared";
+let copy = alias;
+fun main() => i32 {
+  let local = original;
+  if alias != original or copy != local { return 1; }
+  copy = "different";
+  if alias != original { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-preserve-f32-rounding-on-widening";
+      source =
+        {|const base: f32 = 0.1;
+let widened: f64 = base;
+const integer_base: f32 = 16777216;
+let integer_widened: f64 = integer_base;
+fun main() => i32 {
+  if widened != (base as f64) { return 1; }
+  if integer_widened != (integer_base as f64) { return 2; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-cross-functions-and-shadowing";
+      source =
+        {|let count = 20;
+fun add() => void { count += 2; }
+fun local() => i32 { let count = 20; return count; }
+fun main() => i32 { add(); return count + local(); }|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-lambda-access-and-capture";
+      source =
+        {|let count = 20;
+fun main() => i32 {
+  let direct: () -> i32 = fn[]() { return count; };
+  let snapshot: () -> i32 = fn[count]() { return count; };
+  count += 2;
+  let result = direct() + snapshot();
+  free direct;
+  free snapshot;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-class-defaults-and-methods";
+      source =
+        {|let count = 20;
+class Box { let value: i32 = count; fun read() => i32 { return value + count; } }
+fun main() => i32 {
+  let box = new Box {};
+  count = 22;
+  let result = box.read();
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-primitive-defaults-and-strings";
+      source =
+        {|@C fun strcmp(left: string, right: string) => i32;
+let enabled: bool;
+let ratio: f64;
+let number: i32;
+let greeting: string;
+const expected = "world";
+fun main() => i32 {
+  if enabled { return 1; }
+  if ratio != 0.0 { return 2; }
+  if number != 0 { return 3; }
+  if strcmp(greeting, "") != 0 { return 4; }
+  greeting = expected;
+  if strcmp(greeting, "world") != 0 { return 5; }
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "globals-wide-and-narrow-constants";
+      source =
+        {|const signed: i128 = -170141183460469231731687303715884105728;
+const unsigned: u128 = 340282366920938463463374607431768211455;
+const half: f32 = -1.5;
+const answer: i32 = future + 2;
+const future: i8 = 40;
+let unsigned_copy = unsigned;
+fun main() => i32 {
+  if signed != -170141183460469231731687303715884105728 { return 1; }
+  if unsigned_copy != 340282366920938463463374607431768211455 { return 2; }
+  if half != -1.5 { return 3; }
+  return answer as i32;
+}|};
+      expected_exit = 42;
+    };
+    {
       name = "arithmetic";
       source = "fun main() => i32 { return 5 + 3 * 4; }";
       expected_exit = 17;
@@ -304,6 +424,124 @@ fun main() => i32 {
     };
   ]
 
+let generic_fixtures =
+  [
+    {
+      name = "generic-functions-and-values";
+      source =
+        {|fun identity<T>(value: T) => T { return value; }
+fun apply<T,U>(f: (T) -> U, value: T) => U { return f(value); }
+fun main() => i32 {
+  let f: (i32) -> i32 = identity;
+  let x: i64 = identity(42);
+  let s = identity("hello");
+  let result = f(apply(identity, x as i32));
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-return-context-and-recursion";
+      source =
+        {|fun zero<T>() => T { return 0; }
+fun left<T>(value: T, n: i32) => T {
+  if n == 0 { return value; }
+  return right(value, n - 1);
+}
+fun right<U>(value: U, n: i32) => U { return left(value, n); }
+fun main() => i32 { let x: i64 = zero(); return left(42, 4) + (x as i32); }
+|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-aggregate-signatures";
+      source =
+        {|class Box { let value: i32; }
+fun identity<T>(value: T) => T { return value; }
+fun first<T>(values: [T; 2]) => T { return values[0]; }
+fun main() => i32 {
+  let box = new Box { value = 42 };
+  let boxes = [box, box];
+  let result = identity(first(boxes)).value;
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-array-values-and-callbacks";
+      source =
+        {|fun identity<T>(value: T) => T { return value; }
+fun apply<T>(f: (T) -> T, value: T) => T { return f(value); }
+fun first<T>(values: [T; 2]) => T { return values[0]; }
+fun capture<T>(value: T) => () -> T {
+  let copy: T = value;
+  return fn[copy]() { return copy; };
+}
+fun main() => i32 {
+  let values = [20, 22];
+  let f: ([i32; 2]) -> [i32; 2] = identity;
+  let direct = identity(values);
+  let indirect = f(direct);
+  let callback = apply(identity, indirect);
+  let matrix = [[20, 22], [22, 20]];
+  let nested = apply(identity, matrix);
+  let closure = capture(callback);
+  let captured = closure();
+  let result = first(captured) + first(nested[1]);
+  free closure;
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-values-and-callbacks";
+      source =
+        {|class Box { let value: i32; }
+fun identity<T>(value: T) => T { return value; }
+fun apply<T>(f: (T) -> T, value: T) => T { return f(value); }
+fun main() => i32 {
+  let box = new Box { value = 42 };
+  let f: (Box) -> Box = identity;
+  let result = apply(identity, f(box)).value;
+  free f;
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-lambda-types-and-side-effects";
+      source =
+        {|let count = 0;
+fun next() => i32 { count += 1; return 40; }
+fun identity<T>(value: T) => T { return value; }
+fun capture<T>(value: T) => () -> T {
+  let copy: T = value;
+  return fn[copy]() { return copy; };
+}
+fun main() => i32 {
+  let f = capture(identity(next()));
+  let result = f() + count + count;
+  free f;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-void-and-inline";
+      source =
+        {|let count = 0;
+inline fun identity<T>(value: T) => T { return value; }
+fun consume<T>(value: T) { count += 1; }
+fun main() => i32 { consume(1); consume("hello"); return identity(40) + count; }
+|};
+      expected_exit = 42;
+    };
+  ]
+
 let stage_failure fixture stage error =
   assert_failure
     (Printf.sprintf "%s failed during %s: %s" fixture.name stage
@@ -324,7 +562,7 @@ let check_frontend_stages fixture =
   | Ok _ -> ()
   | Error error -> stage_failure fixture "desugaring" error
 
-let test_fixture fixture test_context =
+let test_fixture ?(optimization = "-O0") fixture test_context =
   check_frontend_stages fixture;
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
   Native_test_support.in_temp_dir
@@ -333,11 +571,13 @@ let test_fixture fixture test_context =
     (fun () ->
       Core.Out_channel.write_all "program.bl" ~data:fixture.source;
       let compile_command =
-        Printf.sprintf "%s %s" (Filename.quote compiler)
+        Printf.sprintf "%s %s %s" (Filename.quote compiler) optimization
           (Filename.quote "program.bl")
       in
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
+      Native_test_support.assert_success "LLVM verification"
+        "llc --filetype=null new_output.ll -o /dev/null";
       Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
 
 let test_underapplication (name, source) test_context =
@@ -364,6 +604,24 @@ let test_underapplication (name, source) test_context =
 
 let interface_fixtures =
   [
+    {
+      name = "interface-generic-values-and-global-methods";
+      source =
+        {|const base: i32 = 40;
+interface I { fun value() => i32; }
+class C impl I { fun value() => i32 { return base + 2; } }
+fun identity<T>(value: T) => T { return value; }
+fun main() => i32 {
+  let item: I = new C {};
+  if identity(item).value() != 42 { return 1; }
+  let callback: (I) -> I = identity;
+  let echoed = callback(item);
+  let result = echoed.value();
+  free callback, echoed;
+  return result;
+}|};
+      expected_exit = 42;
+    };
     {
       name = "interface-overridden-field-defaults";
       source =
@@ -896,6 +1154,15 @@ let suite =
                       >:: test_interface_fixture optimization fixture)
                     [ "-O0"; "-O2" ])
                 interface_fixtures;
+         "generic native execution"
+         >::: List.concat_map
+                (fun fixture ->
+                  List.map
+                    (fun optimization ->
+                      fixture.name ^ optimization
+                      >:: test_fixture ~optimization fixture)
+                    [ "-O0"; "-O2" ])
+                generic_fixtures;
          "native execution" >::: executable_tests;
        ]
 

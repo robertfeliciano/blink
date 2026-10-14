@@ -105,8 +105,15 @@ let resolved_class_name name =
   | None ->
       type_error name "Qualified class names must be resolved before typing."
 
+let validate_array_length node sz =
+  if Z.lt sz (Z.of_int 0) then type_error node "negative length specified"
+  else if not (Z.fits_int sz) then
+    type_error node "array length is too large for this target"
+
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
+  | TParam name ->
+      type_error name ("Unresolved type parameter " ^ name.elt ^ ".")
   | TInt _ | TFloat _ | TBool -> ()
   | TRef r -> typecheck_rty l tc r
 
@@ -114,10 +121,8 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   match r with
   | RString -> ()
   | RArray (t, sz) ->
-      if Z.lt sz (Z.of_int 0) then type_error l "negative length specified"
-      else if not (Z.fits_int sz) then
-        type_error l "array length is too large for this target"
-      else typecheck_ty l tc t
+      validate_array_length l sz;
+      typecheck_ty l tc t
   | RClass c ->
       if
         None = Tctxt.lookup_class_option (resolved_class_name c) tc
@@ -126,7 +131,7 @@ and typecheck_rty (l : 'a Ast.node) (tc : Tctxt.t) (r : Ast.ref_ty) : unit =
   | RFun (tl, rt) ->
       List.iter (typecheck_ty l tc) tl;
       typecheck_ret_ty l tc rt
-  | RGeneric _ -> type_error l "Generic types are not supported."
+  | RGeneric _ -> type_error l "Generic class types are not supported."
 
 and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
@@ -360,7 +365,9 @@ let exact_nonnegative_int (node : 'a node) description value =
     type_error node (description ^ " is too large for this target")
   else Z.to_int value
 
-let rec eval_const_exp (e : exp node) : Z.t option =
+(* A typed operation supplies its width for bit-pattern operations. Untyped
+   source expressions retain the existing arbitrary-precision rules. *)
+let rec eval_const_exp ?int_ty (e : exp node) : Z.t option =
   match e.elt with
   | Int i -> Some i
   | Bop (Add, e1, e2) -> eval_const_binop e1 e2 Z.add
@@ -384,7 +391,10 @@ let rec eval_const_exp (e : exp node) : Z.t option =
           Z.shift_left v1 (exact_nonnegative_int e2 "Shift amount" v2))
   | Bop (Lshr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
-          Z.shift_right_trunc v1 (exact_nonnegative_int e2 "Shift amount" v2))
+          let shift = exact_nonnegative_int e2 "Shift amount" v2 in
+          match int_ty with
+          | Some ty -> Z.shift_right (Z.extract v1 0 (int_width ty)) shift
+          | None -> Z.shift_right_trunc v1 shift)
   | Bop (Ashr, e1, e2) ->
       eval_const_binop e1 e2 (fun v1 v2 ->
           Z.shift_right v1 (exact_nonnegative_int e2 "Shift amount" v2))
@@ -396,7 +406,15 @@ let rec eval_const_exp (e : exp node) : Z.t option =
   | Bop (BXor, e1, e2) -> eval_const_binop e1 e2 Z.logxor
   | Bop (BOr, e1, e2) -> eval_const_binop e1 e2 Z.logor
   | Uop (BNeg, e1) -> (
-      match eval_const_exp e1 with Some v1 -> Some Z.(lognot v1) | _ -> None)
+      match eval_const_exp e1 with
+      | Some v1 ->
+          let value = Z.lognot v1 in
+          Some
+            (match int_ty with
+            | Some (Typed_ast.TUnsigned _ as ty) ->
+                Z.extract value 0 (int_width ty)
+            | _ -> value)
+      | _ -> None)
   | _ -> None
 
 and eval_const_binop e1 e2 operator =

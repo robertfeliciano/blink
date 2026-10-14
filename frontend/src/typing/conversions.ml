@@ -29,6 +29,7 @@ let rec convert_ret_ty (rt : Ast.ret_ty) : Typed_ast.ret_ty =
 
 and convert_ty (t : Ast.ty) : Typed_ast.ty =
   match t with
+  | Ast.TParam _ -> invalid_arg "Unresolved type parameter reached conversion"
   | Ast.TBool -> Typed_ast.TBool
   | Ast.TInt it -> Typed_ast.TInt (convert_int_ty it)
   | Ast.TFloat ft -> Typed_ast.TFloat (convert_float_ty ft)
@@ -38,14 +39,61 @@ and convert_ref_ty (r : Ast.ref_ty) : Typed_ast.ref_ty =
   match r with
   | Ast.RString -> Typed_ast.RString
   | Ast.RArray (t, sz) -> Typed_ast.RArray (convert_ty t, Z.to_int sz)
-  | Ast.RClass cn ->
-      (match Ast.unqualified_id cn with
+  | Ast.RClass cn -> (
+      match Ast.unqualified_id cn with
       | Some id -> Typed_ast.RClass id
-      | None -> invalid_arg "Qualified class name reached conversion before resolution")
+      | None ->
+          invalid_arg
+            "Qualified class name reached conversion before resolution")
   | Ast.RFun (tl, rt) ->
       Typed_ast.RFun (List.map convert_ty tl, convert_ret_ty rt)
   | Ast.RGeneric _ ->
       failwith "generic type reached conversion before type validation"
+
+let convert_source_sint (s : Typed_ast.sint) : Ast.sint =
+  match s with
+  | Typed_ast.Ti8 -> Ast.Ti8
+  | Typed_ast.Ti16 -> Ast.Ti16
+  | Typed_ast.Ti32 -> Ast.Ti32
+  | Typed_ast.Ti64 -> Ast.Ti64
+  | Typed_ast.Ti128 -> Ast.Ti128
+
+let convert_source_uint (u : Typed_ast.uint) : Ast.uint =
+  match u with
+  | Typed_ast.Tu8 -> Ast.Tu8
+  | Typed_ast.Tu16 -> Ast.Tu16
+  | Typed_ast.Tu32 -> Ast.Tu32
+  | Typed_ast.Tu64 -> Ast.Tu64
+  | Typed_ast.Tu128 -> Ast.Tu128
+
+let convert_source_float_ty (f : Typed_ast.float_ty) : Ast.float_ty =
+  match f with Typed_ast.Tf32 -> Ast.Tf32 | Typed_ast.Tf64 -> Ast.Tf64
+
+let convert_source_int_ty (i : Typed_ast.int_ty) : Ast.int_ty =
+  match i with
+  | Typed_ast.TSigned s -> Ast.TSigned (convert_source_sint s)
+  | Typed_ast.TUnsigned u -> Ast.TUnsigned (convert_source_uint u)
+
+let rec convert_source_ret_ty (rt : Typed_ast.ret_ty) : Ast.ret_ty =
+  match rt with
+  | Typed_ast.RetVoid -> Ast.RetVoid
+  | Typed_ast.RetVal t -> Ast.RetVal (convert_source_ty t)
+
+and convert_source_ty (t : Typed_ast.ty) : Ast.ty =
+  match t with
+  | Typed_ast.TBool -> Ast.TBool
+  | Typed_ast.TInt it -> Ast.TInt (convert_source_int_ty it)
+  | Typed_ast.TFloat ft -> Ast.TFloat (convert_source_float_ty ft)
+  | Typed_ast.TRef r -> Ast.TRef (convert_source_ref_ty r)
+
+and convert_source_ref_ty (r : Typed_ast.ref_ty) : Ast.ref_ty =
+  match r with
+  | Typed_ast.RString -> Ast.RString
+  | Typed_ast.RArray (t, sz) -> Ast.RArray (convert_source_ty t, Z.of_int sz)
+  | Typed_ast.RClass cn | Typed_ast.RInterface cn ->
+      Ast.RClass (Ast.unqualified_name (Ast.no_loc cn))
+  | Typed_ast.RFun (tl, rt) ->
+      Ast.RFun (List.map convert_source_ty tl, convert_source_ret_ty rt)
 
 let convert_unop : Ast.unop -> Typed_ast.unop = function
   | Ast.Neg -> Typed_ast.Neg

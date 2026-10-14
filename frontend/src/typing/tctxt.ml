@@ -15,6 +15,7 @@ type class_ctxt =
 *)
 
 type t = {
+  generics : Generics.t option;
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
@@ -25,6 +26,7 @@ type t = {
 
 let empty =
   {
+    generics = None;
     locals = [];
     globals = [];
     classes = [];
@@ -56,8 +58,7 @@ let show_tctxt tc =
 let add_local (c : t) (id : id) (bnd : ty * bool) : t =
   { c with locals = (id, bnd) :: c.locals }
 
-let lookup_local_option id c : (ty * bool) option =
-  List.assoc_opt id c.locals
+let lookup_local_option id c : (ty * bool) option = List.assoc_opt id c.locals
 
 (* globals ------------------------------------------------------------------ *)
 let add_global (c : t) (id : id) (bnd : ty * bool) : t =
@@ -66,11 +67,8 @@ let add_global (c : t) (id : id) (bnd : ty * bool) : t =
 let set_proto (c : t) (id : id) (bnd : ty * bool) : t =
   { c with protos = (id, bnd) :: List.remove_assoc id c.protos }
 
-let lookup_global_option id c : (ty * bool) option =
-  List.assoc_opt id c.globals
-
-let lookup_proto_option id c : (ty * bool) option =
-  List.assoc_opt id c.protos
+let lookup_global_option id c : (ty * bool) option = List.assoc_opt id c.globals
+let lookup_proto_option id c : (ty * bool) option = List.assoc_opt id c.protos
 
 let lookup_option id c : (ty * bool) option =
   match lookup_local_option id c with
@@ -84,13 +82,9 @@ let add_class c id fields funs =
   { c with classes = (id, (fields, funs)) :: c.classes }
 
 let set_class c id fields funs =
-  {
-    c with
-    classes = (id, (fields, funs)) :: List.remove_assoc id c.classes;
-  }
+  { c with classes = (id, (fields, funs)) :: List.remove_assoc id c.classes }
 
-let lookup_class_option id c =
-  List.assoc_opt id c.classes
+let lookup_class_option id c = List.assoc_opt id c.classes
 
 let lookup_field_option c_name f_name c =
   let rec lookup_field_aux f_name l =
@@ -129,3 +123,10 @@ let lookup_interface_method_option iname mname c =
       List.find_opt
         (fun (_, (name, _, _)) -> name = mname)
         (List.mapi (fun slot method_ -> (slot, method_)) methods)
+
+(* Locals and class fields keep precedence over generic top-level names. *)
+let lookup_generic_option id c =
+  match lookup_option id c with
+  | Some _ -> None
+  | None ->
+      Option.bind c.generics (fun state -> List.assoc_opt id state.templates)

@@ -142,6 +142,7 @@ type proto = {
   args : ty list;
 }
 
+type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
 type idecl = { iname : id; protos : proto list }
 
 type program =
@@ -150,4 +151,5 @@ type program =
       * fdecl list
       * cdecl list
       * proto list
+      * gdecl list
       * idecl list

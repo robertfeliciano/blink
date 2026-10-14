@@ -424,6 +424,9 @@ std::string cdeclToString(const CDecl& c) {
 
 std::string programToString(const Program& prog) {
     std::ostringstream oss;
+    for (const auto& g : prog.globals) {
+        oss << gdeclToString(g) << "\n\n";
+    }
     for (const auto& interface : prog.interfaces) {
         oss << "interface " << interface.iname << " {\n";
         for (const auto& proto : interface.protos)
@@ -440,4 +443,9 @@ std::string programToString(const Program& prog) {
         oss << fdeclToString(f) << "\n\n";
     }
     return oss.str();
+}
+
+std::string gdeclToString(const GDecl& g) {
+    return std::string(g.gconst ? "const " : "let ") + g.gname + ": " + tyToString(g.gtyp) + " = " +
+           expToString(*g.ginit) + ";";
 }
