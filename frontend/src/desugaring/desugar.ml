@@ -29,6 +29,27 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     inline = fn.inline;
   }
 
+let lower_interface (name, methods) = (name, List.map desugar_proto methods)
+
+let impl_symbol cname (p : proto) =
+  mangle_name ~enclosing_class:cname p.fname
+    (TRef (RClass cname) :: p.args)
+    p.frtyp
+
+let impls_for_class interfaces (c : Typed.cdecl) =
+  let impl_for_interface name =
+    let methods = List.assoc name interfaces in
+    (c.cname, name, List.map (impl_symbol c.cname) methods)
+  in
+  List.map impl_for_interface c.impls
+
+let lower_interface_signature structs (p : proto) =
+  {
+    p with
+    args = List.map (fun ty -> fst (transform_ty ty structs)) p.args;
+    frtyp = fst (transform_ret_ty p.frtyp structs);
+  }
+
 let desugar_program (prog : Typed.program) : program =
   let (Prog (optimization_level, fns, cns, pns, interfaces)) = prog in
   let desugared_fns = List.map desugar_fn fns in
@@ -50,42 +71,12 @@ let desugar_program (prog : Typed.program) : program =
       (structs, []) initial_fn_list
   in
 
-  let interfaces =
-    List.map
-      (fun (name, methods) -> (name, List.map desugar_proto methods))
-      interfaces
-  in
-  let implementations =
-    List.concat_map
-      (fun (c : Typed.cdecl) ->
-        List.map
-          (fun name ->
-            let methods = List.assoc name interfaces in
-            let symbols =
-              List.map
-                (fun (p : proto) ->
-                  mangle_name ~enclosing_class:c.cname p.fname
-                    (TRef (RClass c.cname) :: p.args)
-                    p.frtyp)
-                methods
-            in
-            (c.cname, name, symbols))
-          c.impls)
-      cns
-  in
+  let interfaces = List.map lower_interface interfaces in
+  let impls = List.concat_map (impls_for_class interfaces) cns in
   let interfaces =
     List.map
       (fun (name, methods) ->
-        ( name,
-          List.map
-            (fun (p : proto) ->
-              {
-                p with
-                args =
-                  List.map (fun ty -> fst (transform_ty ty final_cs)) p.args;
-                frtyp = fst (transform_ret_ty p.frtyp final_cs);
-              })
-            methods ))
+        (name, List.map (lower_interface_signature final_cs) methods))
       interfaces
   in
   Prog
@@ -94,7 +85,7 @@ let desugar_program (prog : Typed.program) : program =
       final_cs,
       desugared_protos,
       interfaces,
-      implementations )
+      impls )
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)
