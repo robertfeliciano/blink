@@ -20,11 +20,11 @@ struct InterfaceDecl {
 };
 
 struct Program {
-    BlinkOptimizationLevel optimizationLevel;
-    std::vector<FDecl> functions;
-    std::vector<CDecl> classes;
-    std::vector<Proto> protos;
-    std::vector<GDecl> globals;
+    BlinkOptimizationLevel     optimizationLevel;
+    std::vector<FDecl>         functions;
+    std::vector<CDecl>         classes;
+    std::vector<Proto>         protos;
+    std::vector<GDecl>         globals;
     std::vector<InterfaceDecl> interfaces;
 };
 

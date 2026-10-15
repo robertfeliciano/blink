@@ -1,7 +1,6 @@
 #include <codegen/exp.h>
 #include <codegen/generator.h>
 #include <cstdio>
-
 #include <util/debug.h>
 
 llvm::Constant* ExpToLLVisitor::codegenConstant(const Exp& e) {
@@ -133,7 +132,7 @@ Value* ExpToLLVisitor::operator()(const EBop& e) {
     bool lhsUnsigned = isUnsignedIntTy(getExpTy(*e.left));
     bool rhsUnsigned = isUnsignedIntTy(getExpTy(*e.right));
 
-    bool bothUnsigned = lhsUnsigned && rhsUnsigned;
+    bool bothUnsigned  = lhsUnsigned && rhsUnsigned;
     bool floatOperands = lhs->getType()->isFloatingPointTy();
 
     auto addWrapFlags = [&](Value* inst) {
@@ -294,7 +293,7 @@ Value* ExpToLLVisitor::operator()(const EStr& e) {
         new llvm::GlobalVariable(*gen.mod, arrayTy, true, llvm::GlobalValue::PrivateLinkage, strConstant, varName);
 
     llvm::Constant* indices[] = {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0),
-                                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
+                                 llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0)};
     return llvm::ConstantExpr::getInBoundsGetElementPtr(arrayTy, globalStr, indices);
 }
 
@@ -328,24 +327,18 @@ Value* ExpToLLVisitor::operator()(const ECall& e) {
         llvm::AllocaInst* calleeSlot = it->second;
 
         // load function pointer
-        Value* calleePtr =
-            gen.builder->CreateLoad(
-                llvm::Type::getInt8PtrTy(*gen.ctxt),
-                calleeSlot,
-                calleeId + "_load");
+        Value* calleePtr = gen.builder->CreateLoad(llvm::Type::getInt8PtrTy(*gen.ctxt), calleeSlot, calleeId + "_load");
 
         llvm::Type* retTy = gen.typeGen.codegenValueTy(e.ty);
 
         // get function type
-        llvm::FunctionType* fnTy =
-            llvm::FunctionType::get(retTy, argTys, /*isVarArg=*/false);
+        llvm::FunctionType* fnTy = llvm::FunctionType::get(retTy, argTys, /*isVarArg=*/false);
 
         return gen.builder->CreateCall(fnTy, calleePtr, args, "indirect_call");
     }
 
     llvm_unreachable(("Unknown callee: " + calleeId).c_str());
 }
-
 
 Value* ExpToLLVisitor::operator()(const EIndex& e) {
     Value* elemPtr = gen.lvalueCreator.getArrayElemPtr(e);
@@ -368,7 +361,7 @@ Value* ExpToLLVisitor::operator()(const EArray& e) {
     Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
 
     llvm::Type* innerTy = arrTy->getArrayElementType();
-    bool isAggregate = e.ty.ref_ty->inner->tag == TyTag::TRef && e.ty.ref_ty->inner->ref_ty->tag == RefTyTag::RArray;
+    bool isAggregate    = e.ty.ref_ty->inner->tag == TyTag::TRef && e.ty.ref_ty->inner->ref_ty->tag == RefTyTag::RArray;
 
     llvm::DataLayout dl         = gen.mod->getDataLayout();
     Value*           size       = nullptr;
@@ -536,7 +529,7 @@ Value* ExpToLLVisitor::operator()(const ENull& e) {
     llvm::Type* result_type = gen.typeGen.codegenValueTy(e.ty);
     if (e.ty.tag == TyTag::TRef && e.ty.ref_ty->tag == RefTyTag::RInterface)
         return llvm::Constant::getNullValue(result_type);
-    auto*       pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
+    auto* pointer_type = llvm::dyn_cast<llvm::PointerType>(result_type);
     if (!pointer_type)
         throw std::runtime_error("Null expression must have a reference type");
 
@@ -550,9 +543,9 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
     if (!condition->getType()->isIntegerTy(1))
         throw std::runtime_error("Conditional expression condition must lower to i1");
 
-    llvm::Function* parent = gen.builder->GetInsertBlock()->getParent();
-    llvm::BasicBlock* then_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_then", parent);
-    llvm::BasicBlock* else_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_else", parent);
+    llvm::Function*   parent      = gen.builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* then_block  = llvm::BasicBlock::Create(*gen.ctxt, "conditional_then", parent);
+    llvm::BasicBlock* else_block  = llvm::BasicBlock::Create(*gen.ctxt, "conditional_else", parent);
     llvm::BasicBlock* merge_block = llvm::BasicBlock::Create(*gen.ctxt, "conditional_merge", parent);
 
     gen.builder->CreateCondBr(condition, then_block, else_block);
@@ -597,11 +590,11 @@ Value* ExpToLLVisitor::operator()(const EConditional& e) {
 
 Value* ExpToLLVisitor::operator()(const EInterfaceCast& e) {
     Value* object = gen.codegenExp(*e.expr);
-    auto table = gen.interfaceTables.find({e.cname, e.iname});
+    auto   table  = gen.interfaceTables.find({e.cname, e.iname});
     if (table == gen.interfaceTables.end())
         throw std::runtime_error("Missing interface implementation: " + e.cname + " impl " + e.iname);
     Value* value = llvm::UndefValue::get(gen.typeGen.getInterfaceType());
-    value = gen.builder->CreateInsertValue(value, object, {0}, "interface_object");
+    value        = gen.builder->CreateInsertValue(value, object, {0}, "interface_object");
     return gen.builder->CreateInsertValue(value, table->second, {1}, "interface_value");
 }
 

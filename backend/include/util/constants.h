@@ -63,13 +63,13 @@ namespace Constants {
     };
 
     enum StmtVariant {
-        STMT_Assn  = 0,
-        STMT_Decl  = 1,
-        STMT_Ret   = 2,
-        STMT_SCall = 3,
-        STMT_If    = 4,
-        STMT_While = 5,
-        STMT_Free  = 6,
+        STMT_Assn           = 0,
+        STMT_Decl           = 1,
+        STMT_Ret            = 2,
+        STMT_SCall          = 3,
+        STMT_If             = 4,
+        STMT_While          = 5,
+        STMT_Free           = 6,
         STMT_InterfaceSCall = 7
     };
 

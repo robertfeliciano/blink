@@ -3,7 +3,6 @@
 #include <codegen/exp.h>
 #include <codegen/generator.h>
 #include <codegen/lvalue.h>
-
 #include <util/print.h>
 
 Value* LValueCreator::codegenLValue(const Exp& e) {
@@ -80,7 +79,7 @@ Value* LValueCreator::getInterfaceFieldPtr(const EInterfaceProj& e) {
     Value* object   = gen.interfaceObject(receiver);
     Value* table    = gen.builder->CreateExtractValue(receiver, {1}, "interface_table");
     Value* entry    = gen.interfaceTableEntry(table, decl, 1, e.slot);
-    auto* offsetTy  = gen.mod->getDataLayout().getIntPtrType(*gen.ctxt);
+    auto*  offsetTy = gen.mod->getDataLayout().getIntPtrType(*gen.ctxt);
     Value* offset   = gen.builder->CreateLoad(offsetTy, entry, "interface_field_offset");
     return gen.builder->CreateInBoundsGEP(gen.builder->getInt8Ty(), object, offset, "interface_field_ptr");
 }

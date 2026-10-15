@@ -135,10 +135,10 @@ struct EInterfaceCast {
 };
 
 struct EInterfaceCall {
-    std::unique_ptr<Exp>               receiver;
-    unsigned                           slot;
+    std::unique_ptr<Exp>              receiver;
+    unsigned                          slot;
     std::vector<std::unique_ptr<Exp>> args;
-    Ty                                 ty;
+    Ty                                ty;
 };
 
 struct EInterfaceProj {
@@ -147,21 +147,8 @@ struct EInterfaceProj {
     Ty                   ty;
 };
 
-using ExpVariant = std::variant<EBool,
-                                EInt,
-                                EFloat,
-                                EStr,
-                                EId,
-                                ECall,
-                                EBop,
-                                EUop,
-                                EIndex,
-                                EArray,
-                                ECast,
-                                EProj,
-                                EObjInit,
-                                ENull,
-                                EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj>;
+using ExpVariant = std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj,
+                                EObjInit, ENull, EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj>;
 
 struct Exp {
     ExpVariant val;

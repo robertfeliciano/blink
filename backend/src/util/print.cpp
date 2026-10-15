@@ -433,8 +433,8 @@ std::string programToString(const Program& prog) {
     for (const auto& interface : prog.interfaces) {
         oss << "interface " << interface.iname << " {\n";
         for (const auto& field : interface.fields)
-            oss << indent(1) << (field.fconst ? "const " : "let ") << field.fieldName << ": "
-                << tyToString(field.ftyp) << ";\n";
+            oss << indent(1) << (field.fconst ? "const " : "let ") << field.fieldName << ": " << tyToString(field.ftyp)
+                << ";\n";
         for (const auto& proto : interface.protos)
             oss << indent(1) << protoToString(proto) << "\n";
         oss << "}\n\n";

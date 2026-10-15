@@ -61,12 +61,12 @@ llvm::StructType* Generator::interfaceTableType(const InterfaceDecl& decl) {
 }
 
 llvm::Value* Generator::interfaceTableEntry(llvm::Value* table, const InterfaceDecl& decl, unsigned section,
-                                          unsigned slot) {
+                                            unsigned slot) {
     if (section > 1 || slot >= (section == 0 ? decl.protos.size() : decl.fields.size()))
         throw std::runtime_error("Interface table slot is out of range");
     return builder->CreateInBoundsGEP(interfaceTableType(decl), table,
-                                     {builder->getInt32(0), builder->getInt32(section), builder->getInt32(slot)},
-                                     "interface_slot");
+                                      {builder->getInt32(0), builder->getInt32(section), builder->getInt32(slot)},
+                                      "interface_slot");
 }
 
 void Generator::codegenInterfaceTables(const Program& p) {
@@ -87,9 +87,9 @@ void Generator::codegenInterfaceTables(const Program& p) {
                 methods.push_back(method);
             }
             std::vector<llvm::Constant*> offsets;
-            auto*       structTy = structTypes.at(cdecl.cname);
-            const auto* layout = mod->getDataLayout().getStructLayout(structTy);
-            auto*       offsetTy = mod->getDataLayout().getIntPtrType(*ctxt);
+            auto*                        structTy = structTypes.at(cdecl.cname);
+            const auto*                  layout   = mod->getDataLayout().getStructLayout(structTy);
+            auto*                        offsetTy = mod->getDataLayout().getIntPtrType(*ctxt);
             for (const auto& field : decl.fields) {
                 unsigned index = classFieldIndex(cdecl, field.fieldName);
                 if (typeGen.codegenValueTy(cdecl.fields[index].ftyp) != typeGen.codegenValueTy(field.ftyp))
@@ -114,7 +114,7 @@ llvm::Value* Generator::interfaceObject(llvm::Value* value) {
 }
 
 llvm::Value* Generator::codegenInterfaceCall(const Exp& receiver, unsigned slot,
-                                            const std::vector<std::unique_ptr<Exp>>& args) {
+                                             const std::vector<std::unique_ptr<Exp>>& args) {
     const auto& decl   = interfaceDecl(receiver);
     const auto& protos = decl.protos;
     if (slot >= protos.size())
@@ -122,12 +122,12 @@ llvm::Value* Generator::codegenInterfaceCall(const Exp& receiver, unsigned slot,
     const Proto& proto = protos[slot];
     if (args.size() != proto.args.size())
         throw std::runtime_error("Interface method call has the wrong argument count");
-    auto* pointerTy = llvm::PointerType::getUnqual(*ctxt);
-    llvm::Value* value = codegenExp(receiver);
-    llvm::Value* object = interfaceObject(value);
-    llvm::Value* table = builder->CreateExtractValue(value, {1}, "interface_table");
-    llvm::Value* slotPtr = interfaceTableEntry(table, decl, 0, slot);
-    llvm::Value* method = builder->CreateLoad(pointerTy, slotPtr, "interface_method");
+    auto*                     pointerTy = llvm::PointerType::getUnqual(*ctxt);
+    llvm::Value*              value     = codegenExp(receiver);
+    llvm::Value*              object    = interfaceObject(value);
+    llvm::Value*              table     = builder->CreateExtractValue(value, {1}, "interface_table");
+    llvm::Value*              slotPtr   = interfaceTableEntry(table, decl, 0, slot);
+    llvm::Value*              method    = builder->CreateLoad(pointerTy, slotPtr, "interface_method");
     std::vector<llvm::Value*> values{object};
     for (size_t i = 0; i < args.size(); ++i) {
         values.push_back(codegenExp(*args[i]));
@@ -158,15 +158,14 @@ void Generator::configureTarget() {
     auto triple = llvm::sys::getDefaultTargetTriple();
     mod->setTargetTriple(triple);
 
-    std::string error;
+    std::string         error;
     const llvm::Target* target = llvm::TargetRegistry::lookupTarget(triple, error);
     if (target == nullptr) {
         throw std::runtime_error("Could not configure target " + triple + ": " + error);
     }
 
     llvm::TargetOptions targetOptions;
-    targetMachine.reset(
-        target->createTargetMachine(triple, "generic", "", targetOptions, llvm::Reloc::PIC_));
+    targetMachine.reset(target->createTargetMachine(triple, "generic", "", targetOptions, llvm::Reloc::PIC_));
     if (targetMachine == nullptr) {
         throw std::runtime_error("Could not create target machine for " + triple);
     }
@@ -207,10 +206,9 @@ void Generator::optimize(BlinkOptimizationLevel optimizationLevel) {
     LLVM's level-specific default pipelines are cumulative: each level
     contains every optimization LLVM considers appropriate up to that level.
     */
-    llvm::ModulePassManager mpm =
-        llvmLevel == llvm::OptimizationLevel::O0
-            ? passBuilder.buildO0DefaultPipeline(llvmLevel)
-            : passBuilder.buildPerModuleDefaultPipeline(llvmLevel);
+    llvm::ModulePassManager mpm = llvmLevel == llvm::OptimizationLevel::O0
+                                      ? passBuilder.buildO0DefaultPipeline(llvmLevel)
+                                      : passBuilder.buildPerModuleDefaultPipeline(llvmLevel);
     mpm.run(*mod, mam);
 }
 
