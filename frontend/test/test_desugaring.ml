@@ -23,6 +23,7 @@ let function_program body =
       ],
       [],
       [],
+      [],
       [] )
 
 let desugar_exn program =
@@ -34,7 +35,7 @@ let desugar_exn program =
            (Core.Error.to_string_hum error))
 
 let only_function_body = function
-  | DA.Prog (_, [ fn ], [], [], []) -> fn.body
+  | DA.Prog (_, [ fn ], [], [], [], []) -> fn.body
   | program ->
       assert_failure
         (Printf.sprintf "expected one function and no declarations:\n%s"
@@ -124,11 +125,19 @@ let test_class_method_extraction _ =
       methods = [ method_ ];
     }
   in
-  match desugar_exn (Prog (optimization_level, [], [ class_ ], [], [])) with
+  match desugar_exn (Prog (optimization_level, [], [ class_ ], [], [], [])) with
   | DA.Prog
       ( _,
         [ { fname; args = [ (DA.TRef (DA.RClass "Box"), "this") ]; _ } ],
-        [ { cname = "Box"; fields = [ { fieldName = "value"; _ } ]; _ } ],
+        [
+          {
+            cname = "Box";
+            fields = [ { fieldName = "value"; _ } ];
+            impls = [];
+            _;
+          };
+        ],
+        [],
         [],
         [] ) ->
       assert_bool "method name should be mangled" (fname <> "get")
@@ -153,6 +162,85 @@ let parse_and_type_exn source =
         (Printf.sprintf "test fixture did not type-check: %s"
            (Core.Error.to_string_hum error))
 
+let test_concrete_method_call_targets _ =
+  let source =
+    {|class Box {
+  let value: i32 = 0;
+  fun set(first: i32, second: i32) => void { value = first + second; }
+  fun add(amount: i32) => i32 { value += amount; return value; }
+}
+fun main() => i32 {
+  let box = new Box {}; box.set(10, 20); box.add(10); return box.add(2);
+}|}
+  in
+  let (DA.Prog (_, functions, _, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
+  let void_method =
+    List.find (fun (fn : DA.fdecl) -> fn.frtyp = DA.RetVoid) functions
+  in
+  let value_method =
+    List.find
+      (fun (fn : DA.fdecl) -> fn.fname <> "main" && fn.frtyp <> DA.RetVoid)
+      functions
+  in
+  match main.body with
+  | [
+   DA.Decl _;
+   DA.SCall (void_name, [ DA.Id ("box", _); _; _ ]);
+   DA.SCall (discarded_name, [ DA.Id ("box", _); _ ]);
+   DA.Ret (Some (DA.Call (expression_name, [ DA.Id ("box", _); _ ], _)));
+  ] ->
+      assert_equal ~msg:"void statement targets the extracted definition"
+        void_method.fname void_name;
+      assert_equal ~msg:"discarded-result statement targets the definition"
+        value_method.fname discarded_name;
+      assert_equal ~msg:"expression and statement use the same method target"
+        expression_name discarded_name
+  | body ->
+      assert_failure
+        (Printf.sprintf "unexpected concrete method lowering:\n%s"
+           (Printer.show_block body))
+
+let test_while_condition_setup source _ =
+  let (DA.Prog (_, functions, _, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let check = List.find (fun (fn : DA.fdecl) -> fn.fname = "check") functions in
+  match check.body with
+  | [ DA.Decl ("value", _, _, _); DA.While (DA.Bool true, loop_body); DA.Ret _ ]
+    ->
+      let rec split_setup setup = function
+        | DA.If (DA.Uop (DA.Not, _, DA.TBool), [ DA.Break ], []) :: body ->
+            (List.rev setup, body)
+        | statement :: rest -> split_setup (statement :: setup) rest
+        | [] -> assert_failure "condition must be checked before the loop body"
+      in
+      let setup, body = split_setup [] loop_body in
+      assert_bool "condition bindings are created inside the loop"
+        (List.exists (function DA.Decl _ -> true | _ -> false) setup);
+      assert_bool "original body follows the condition guard"
+        (match body with [ DA.Assn _ ] -> true | _ -> false)
+  | body ->
+      assert_failure
+        (Printf.sprintf "condition setup escaped its loop:\n%s"
+           (Printer.show_block body))
+
+let interface_while_source =
+  {|interface Test { fun below(value: i32) => bool; }
+fun check(test: Test) => i32 {
+  let value = 0; while test.below(value) { value += 1; } return value;
+}|}
+
+let lambda_while_source =
+  {|fun evaluate(test: () -> bool) => bool { return test(); }
+fun check() => i32 {
+  let value = 0;
+  while evaluate(fn[value]() -> bool { return value < 3; }) { value += 1; }
+  return value;
+}|}
+
 let test_optimization_level_propagation _ =
   let source = "fun main() => i32 { return 0; }" in
   let ast =
@@ -166,7 +254,7 @@ let test_optimization_level_propagation _ =
   let requested = Util.Optimization_level.O3 in
   let typed =
     match Typing.Type.type_prog ~optimization_level:requested ast with
-    | Ok (Typing.Typed_ast.Prog (actual, _, _, _, _) as typed) ->
+    | Ok (Typing.Typed_ast.Prog (actual, _, _, _, _, _) as typed) ->
         assert_equal ~msg:"type checker optimization level" requested actual;
         typed
     | Error error ->
@@ -175,7 +263,7 @@ let test_optimization_level_propagation _ =
              (Core.Error.to_string_hum error))
   in
   match desugar_exn typed with
-  | DA.Prog (actual, _, _, _, _) ->
+  | DA.Prog (actual, _, _, _, _, _) ->
       assert_equal ~msg:"desugarer optimization level" requested actual
 
 let test_inline_propagation _ =
@@ -183,7 +271,7 @@ let test_inline_propagation _ =
     "inline fun increment(value: i32) => i32 { return value + 1; }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, [ fn ], [], [], []) ->
+  | DA.Prog (_, [ fn ], [], [], [], []) ->
       assert_bool "desugaring should preserve inline functions" fn.inline
   | program ->
       assert_failure
@@ -229,11 +317,17 @@ let test_lambda_lifting _ =
      }"
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], []) ->
+  | DA.Prog (_, functions, classes, [], [], []) ->
       assert_bool "lambda should produce a lifted function"
         (List.length functions > 1);
       assert_bool "lambda should produce closure structs"
-        (List.length classes >= 2)
+        (List.length classes >= 2);
+      List.iter
+        (fun (class_ : DA.cdecl) ->
+          assert_equal
+            ~msg:"generated closure and environment structs have no impls" []
+            class_.impls)
+        classes
   | program ->
       assert_failure
         (Printf.sprintf "unexpected lambda lowering:\n%s"
@@ -255,10 +349,16 @@ let rec exp_contains_lambda (exp : DA.exp) =
       || exp_contains_lambda then_exp
       || List.exists stmt_contains_lambda else_block
       || exp_contains_lambda else_exp
-  | DA.Uop (_, exp, _) | DA.Cast (exp, _) | DA.Proj (exp, _, _) ->
+  | DA.Uop (_, exp, _)
+  | DA.Cast (exp, _)
+  | DA.Proj (exp, _, _)
+  | DA.InterfaceProj (exp, _, _) ->
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index
+  | DA.InterfaceCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
+  | DA.InterfaceCast (value, _, _) -> exp_contains_lambda value
   | DA.Bool _ | DA.Int _ | DA.Float _ | DA.Str _ | DA.Id _ | DA.Null _ -> false
 
 and stmt_contains_lambda (stmt : DA.stmt) =
@@ -267,6 +367,8 @@ and stmt_contains_lambda (stmt : DA.stmt) =
   | DA.Decl (_, _, init, _) -> exp_contains_lambda init
   | DA.Ret (Some exp) -> exp_contains_lambda exp
   | DA.Ret None -> false
+  | DA.InterfaceSCall (receiver, _, args, _) ->
+      exp_contains_lambda receiver || List.exists exp_contains_lambda args
   | DA.SCall (_, args) | DA.Free args -> List.exists exp_contains_lambda args
   | DA.If (cond, then_block, else_block) ->
       exp_contains_lambda cond
@@ -292,7 +394,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, classes, [], []) ->
+  | DA.Prog (_, functions, classes, [], [], []) ->
       let lifted_functions =
         List.filter
           (fun (fn : DA.fdecl) ->
@@ -335,7 +437,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], []) ->
+  | DA.Prog (_, functions, _, [], [], []) ->
       let main =
         match
           List.find_opt
@@ -378,6 +480,43 @@ fun main() => i32 {
         (Printf.sprintf "unexpected function reassignment lowering:\n%s"
            (Printer.show_desugared_program program))
 
+let test_free_preserves_source_order _ =
+  let source =
+    {|class Item {}
+class Holder { let item: Item = new Item {}; }
+fun main() => i32 {
+  let holder = new Holder { item = new Item {} };
+  let captured = 42;
+  let callback: (i32) -> i32 = fn[captured](value) { return captured + value; };
+  free holder.item, callback, holder;
+  return 0;
+}|}
+  in
+  let (DA.Prog (_, functions, _, _, _, _)) =
+    parse_and_type_exn source |> desugar_exn
+  in
+  let main = List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions in
+  let rec check_free = function
+    | DA.Decl (env, _, DA.Proj (DA.Id ("callback", _), "envptr", _), true)
+      :: DA.Free
+           [
+             DA.Proj (DA.Id ("holder", _), "item", _);
+             DA.Id (free_env, _);
+             DA.Id ("callback", _);
+             DA.Id ("holder", _);
+           ]
+      :: _
+      when env = free_env ->
+        ()
+    | _ :: rest -> check_free rest
+    | [] ->
+        assert_failure
+          ("free must preserve source order, with the closure environment \
+            before its closure:\n"
+          ^ Printer.show_block main.body)
+  in
+  check_free main.body
+
 let test_conditional_preserves_branch_local_preludes _ =
   let source =
     {|
@@ -391,7 +530,7 @@ fun main() => i32 {
 |}
   in
   match parse_and_type_exn source |> desugar_exn with
-  | DA.Prog (_, functions, _, [], []) -> (
+  | DA.Prog (_, functions, _, [], [], []) -> (
       let main =
         match
           List.find_opt
@@ -435,7 +574,7 @@ const original = "shared";
 fun main() => i32 { count += 1; return count; }|}
   in
   match desugar_exn (parse_and_type_exn source) with
-  | DA.Prog (_, [ fn ], [], [], globals) -> (
+  | DA.Prog (_, [ fn ], [], [], globals, []) -> (
       let find name =
         List.find (fun (g : DA.gdecl) -> g.gname = name) globals
       in
@@ -470,7 +609,7 @@ let test_generic_function_lowering _ =
     | Ok typed -> typed
     | Error e -> assert_failure (Core.Error.to_string_hum e)
   in
-  let (DA.Prog (_, fns, classes, _, _)) = desugar_exn typed in
+  let (DA.Prog (_, fns, classes, _, _, _)) = desugar_exn typed in
   let instances =
     List.filter
       (fun (fn : DA.fdecl) -> Core.String.is_prefix fn.fname ~prefix:"_BLG")
@@ -495,6 +634,12 @@ let suite =
          "global lowering" >:: test_global_lowering;
          "compound assignment" >:: test_compound_assignment;
          "projected call" >:: test_projected_call;
+         "concrete expression and statement method targets"
+         >:: test_concrete_method_call_targets;
+         "interface while condition setup remains inside the loop"
+         >:: test_while_condition_setup interface_while_source;
+         "lambda while condition setup remains inside the loop"
+         >:: test_while_condition_setup lambda_while_source;
          "for loop" >:: test_for_loop;
          "array foreach" >:: test_array_foreach;
          "class method extraction" >:: test_class_method_extraction;
@@ -505,6 +650,8 @@ let suite =
          "nested lambda lifting" >:: test_nested_lambda_lifting;
          "function reassignment projects current closure"
          >:: test_function_reassignment_projects_current_closure;
+         "free preserves source order and closure cleanup"
+         >:: test_free_preserves_source_order;
          "conditional preserves branch-local preludes"
          >:: test_conditional_preserves_branch_local_preludes;
          "parsed and typed programs" >::: pipeline_tests;

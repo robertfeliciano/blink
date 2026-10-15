@@ -14,6 +14,7 @@ let arithmetic () =
       [ function_ "main" [ DA.Ret (Some result) ] ],
       [],
       [],
+      [],
       [] )
 
 let function_call () =
@@ -26,7 +27,7 @@ let function_call () =
   let main =
     function_ "main" [ DA.Ret (Some (DA.Call ("double", [ int 21 ], i32))) ]
   in
-  DA.Prog (optimization_level, [ double; main ], [], [], [])
+  DA.Prog (optimization_level, [ double; main ], [], [], [], [])
 
 let array_index () =
   let array_ty = DA.TRef (DA.RArray (i32, 3)) in
@@ -37,7 +38,7 @@ let array_index () =
       DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
 
 let identity ty name =
   function_
@@ -89,6 +90,7 @@ let array_call () =
       ],
       [],
       [],
+      [],
       [] )
 
 let array_callback () =
@@ -132,6 +134,7 @@ let array_callback () =
       [ identity array_ty "array_identity"; apply; function_ "main" body ],
       [],
       [],
+      [],
       [] )
 
 let object_field () =
@@ -144,6 +147,7 @@ let object_field () =
         cname = "Box";
         fields = [ field "left"; field "right" ];
         annotations = [];
+        impls = [];
       }
   in
   let box_ty = DA.TRef (DA.RClass "Box") in
@@ -163,7 +167,7 @@ let object_field () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [ box ], [], [], [])
 
 let conditional () =
   let expression =
@@ -176,6 +180,7 @@ let conditional () =
   DA.Prog
     ( optimization_level,
       [ function_ "main" [ DA.Ret (Some expression) ] ],
+      [],
       [],
       [],
       [] )
@@ -197,7 +202,186 @@ let literal_values () =
                 i32 )));
     ]
   in
-  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [])
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
+
+let interface_dispatch () =
+  let box_ty = DA.TRef (DA.RClass "Box") in
+  let iface_ty = DA.TRef (DA.RInterface "Value") in
+  let box =
+    DA.
+      {
+        cname = "Box";
+        annotations = [];
+        impls = [ { iname = "Value"; methods = [ "box_get"; "box_set" ] } ];
+        fields = [ { prelude = []; fieldName = "n"; ftyp = i32; init = int 0 } ];
+      }
+  in
+  let receiver = DA.Id ("this", box_ty) in
+  let get =
+    function_
+      ~args:[ (box_ty, "this"); (i32, "extra") ]
+      "box_get"
+      [
+        DA.Ret
+          (Some
+             (DA.Bop
+                (DA.Add, DA.Proj (receiver, "n", i32), DA.Id ("extra", i32), i32)));
+      ]
+  in
+  let set =
+    DA.
+      {
+        annotations = [];
+        frtyp = RetVoid;
+        fname = "box_set";
+        args = [ (box_ty, "this"); (i32, "value") ];
+        inline = false;
+        body =
+          [ Assn (Proj (receiver, "n", i32), Id ("value", i32), i32); Ret None ];
+      }
+  in
+  let read =
+    function_
+      ~args:[ (iface_ty, "item") ]
+      "read"
+      [
+        DA.InterfaceSCall (DA.Id ("item", iface_ty), 1, [ int 20 ], DA.RetVoid);
+        DA.Ret
+          (Some
+             (DA.InterfaceCall (DA.Id ("item", iface_ty), 0, [ int 22 ], i32)));
+      ]
+  in
+  let main =
+    function_ "main"
+      [
+        DA.Decl ("box", box_ty, DA.ObjInit ("Box", []), false);
+        DA.Decl
+          ( "view",
+            iface_ty,
+            DA.InterfaceCast (DA.Id ("box", box_ty), "Box", "Value"),
+            false );
+        DA.Decl
+          ( "result",
+            i32,
+            DA.Call ("read", [ DA.Id ("view", iface_ty) ], i32),
+            false );
+        DA.Free [ DA.Id ("view", iface_ty) ];
+        DA.Ret (Some (DA.Id ("result", i32)));
+      ]
+  in
+  let protos =
+    [
+      DA.{ annotations = []; frtyp = RetVal i32; fname = "get"; args = [ i32 ] };
+      DA.{ annotations = []; frtyp = RetVoid; fname = "set"; args = [ i32 ] };
+    ]
+  in
+  DA.Prog
+    ( optimization_level,
+      [ get; set; read; main ],
+      [ box ],
+      [],
+      [],
+      [ DA.{ iname = "Value"; protos; fields = [] } ] )
+
+let interface_fields () =
+  let interface_ty = DA.TRef (DA.RInterface "Fields") in
+  let field fieldName ftyp init = DA.{ prelude = []; fieldName; ftyp; init } in
+  let enabled = field "enabled" DA.TBool (DA.Bool true) in
+  let count = field "count" i32 (int 0) in
+  let first =
+    DA.
+      {
+        cname = "First";
+        fields = [ enabled; count ];
+        annotations = [];
+        impls = [ { iname = "Fields"; methods = [] } ];
+      }
+  in
+  let second =
+    DA.
+      {
+        cname = "Second";
+        fields =
+          [
+            count;
+            field "padding" (TInt (TSigned Ti64)) (Int ("0", TSigned Ti64));
+            enabled;
+          ];
+        annotations = [];
+        impls = [ { iname = "Fields"; methods = [] } ];
+      }
+  in
+  let class_id name cname = DA.Id (name, DA.TRef (DA.RClass cname)) in
+  let view name = DA.Id (name, interface_ty) in
+  let projected name slot ty = DA.InterfaceProj (view name, slot, ty) in
+  let main =
+    function_ "main"
+      [
+        DA.Decl
+          ("first", DA.TRef (DA.RClass "First"), DA.ObjInit ("First", []), false);
+        DA.Decl
+          ( "second",
+            DA.TRef (DA.RClass "Second"),
+            DA.ObjInit ("Second", []),
+            false );
+        DA.Decl
+          ( "left",
+            interface_ty,
+            DA.InterfaceCast (class_id "first" "First", "First", "Fields"),
+            false );
+        DA.Decl
+          ( "right",
+            interface_ty,
+            DA.InterfaceCast (class_id "second" "Second", "Second", "Fields"),
+            false );
+        DA.Assn (projected "left" 0 i32, int 20, i32);
+        DA.Assn (projected "right" 0 i32, int 22, i32);
+        DA.If
+          ( DA.Uop
+              ( DA.Not,
+                DA.Bop
+                  ( DA.And,
+                    projected "left" 1 DA.TBool,
+                    projected "right" 1 DA.TBool,
+                    DA.TBool ),
+                DA.TBool ),
+            [ DA.Ret (Some (int 1)) ],
+            [] );
+        DA.If
+          ( DA.Bop
+              ( DA.Neq,
+                DA.Proj (class_id "second" "Second", "count", i32),
+                int 22,
+                DA.TBool ),
+            [ DA.Ret (Some (int 2)) ],
+            [] );
+        DA.Decl
+          ( "result",
+            i32,
+            DA.Bop
+              ( DA.Add,
+                DA.Proj (class_id "first" "First", "count", i32),
+                projected "right" 0 i32,
+                i32 ),
+            false );
+        DA.Free [ view "left"; view "right" ];
+        DA.Ret (Some (DA.Id ("result", i32)));
+      ]
+  in
+  let interface =
+    DA.
+      {
+        iname = "Fields";
+        protos = [];
+        fields =
+          [
+            { fieldName = "count"; ftyp = i32; fconst = false };
+            { fieldName = "enabled"; ftyp = TBool; fconst = true };
+          ];
+      }
+  in
+  DA.Prog
+    (optimization_level, [ main ], [ first; second ], [], [], [ interface ])
 
 let global ?(constant = false) name ty initial =
   DA.{ gname = name; gtyp = ty; ginit = initial; gconst = constant }
@@ -232,7 +416,8 @@ let global_storage () =
       [ bump; shadow; main ],
       [],
       [],
-      [ global "count" i32 (int 20) ] )
+      [ global "count" i32 (int 20) ],
+      [] )
 
 let global_string_aliases () =
   let ty = DA.TRef DA.RString in
@@ -257,7 +442,8 @@ let global_string_aliases () =
         global ~constant:true "alias" ty (id "original");
         global "copy" ty (id "alias");
         global ~constant:true "original" ty (DA.Str "shared");
-      ] )
+      ],
+      [] )
 
 let global_literals () =
   let signed = DA.TSigned DA.Ti128 in
@@ -335,7 +521,12 @@ let global_literals () =
       }
   in
   DA.Prog
-    (optimization_level, [ function_ "main" checks ], [], [ strcmp ], globals)
+    ( optimization_level,
+      [ function_ "main" checks ],
+      [],
+      [ strcmp ],
+      globals,
+      [] )
 
 let fixtures =
   [
@@ -350,6 +541,8 @@ let fixtures =
     ("object-field", object_field);
     ("conditional", conditional);
     ("literal-values", literal_values);
+    ("interface-dispatch", interface_dispatch);
+    ("interface-fields", interface_fields);
   ]
 
 let () =
@@ -366,8 +559,8 @@ let () =
           | "-O2" -> Util.Optimization_level.O2
           | option -> invalid_arg ("unknown optimization level: " ^ option)
       in
-      let (DA.Prog (_, fs, cs, ps, gs)) = build () in
-      DA.convert_caml_ast (DA.Prog (level, fs, cs, ps, gs))
+      let (DA.Prog (_, fs, cs, ps, gs, interfaces)) = build () in
+      DA.convert_caml_ast (DA.Prog (level, fs, cs, ps, gs, interfaces))
   | None ->
       Printf.eprintf "unknown backend fixture: %s\n" Sys.argv.(1);
       exit 2

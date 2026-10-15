@@ -1,0 +1,493 @@
+open OUnit2
+module DA = Desugaring.Desugared_ast
+
+let parse_exn source =
+  let lexbuf = Lexing.from_string source in
+  lexbuf.lex_curr_p <-
+    { lexbuf.lex_curr_p with pos_fname = "interface-fixture.bl" };
+  match Parsing.Parse.parse_prog lexbuf with
+  | Ok program -> program
+  | Error error -> assert_failure (Core.Error.to_string_hum error)
+
+let type_exn source =
+  match Typing.Type.type_prog (parse_exn source) with
+  | Ok program -> program
+  | Error error -> assert_failure (Core.Error.to_string_hum error)
+
+let positive name source = name >:: fun _ -> ignore (type_exn source)
+
+let negative ?(line = 1) name expected source =
+  name >:: fun _ ->
+  match Typing.Type.type_prog (parse_exn source) with
+  | Error error ->
+      let message = Core.Error.to_string_hum error in
+      List.iter
+        (fun substring ->
+          assert_bool
+            (Printf.sprintf "expected %S in diagnostic:\n%s" substring message)
+            (Core.String.is_substring message ~substring))
+        [
+          "Type Error:";
+          expected;
+          Printf.sprintf "interface-fixture.bl:%d:" line;
+        ]
+  | Ok _ -> assert_failure "expected interface type checking to fail"
+
+let contract = "interface I { fun value(input: i32) => i32; }\n"
+
+let implementation =
+  "class C impl I { fun value(other: i32) => i32 { return other; } }\n"
+
+let rejects_syntax source =
+  match Parsing.Parse.parse_prog (Lexing.from_string source) with
+  | Error _ -> ()
+  | Ok _ -> assert_failure ("expected invalid interface syntax: " ^ source)
+
+let field_suite =
+  "interface fields"
+  >::: [
+         ( "field declarations preserve order, constness, and source ranges"
+         >:: fun _ ->
+           match
+             parse_exn
+               "interface I {\n\
+                let count: i32;\n\
+                const label: string;\n\
+                fun value() => i32;\n\
+                }"
+           with
+           | Ast.Prog
+               (_, [ { elt = { declaration = Ast.Interface interface; _ }; _ } ])
+             ->
+               let fields = interface.elt.fields in
+               assert_equal [ "count"; "label" ]
+                 (List.map
+                    (fun (f : Ast.ifield Ast.node) -> f.elt.fieldName)
+                    fields);
+               assert_equal [ false; true ]
+                 (List.map
+                    (fun (f : Ast.ifield Ast.node) -> f.elt.fconst)
+                    fields);
+               List.iter
+                 (fun (f : Ast.ifield Ast.node) ->
+                   assert_bool "field location is preserved"
+                     (f.loc <> Util.Range.norange))
+                 fields
+           | _ -> assert_failure "expected an interface declaration" );
+         ( "fields need explicit types, no initializers, and precede methods"
+         >:: fun _ ->
+           List.iter rejects_syntax
+             [
+               "interface I { let count; }";
+               "interface I { const count; }";
+               "interface I { let count: i32 = 0; }";
+               "interface I { const count: i32 = 0; }";
+               "interface I { fun value() => i32; let count: i32; }";
+             ] );
+         positive "matching fields may infer their concrete types"
+           "interface I { let count: i32; const label: string; } class C impl \
+            I { let count = 0; const label = \"ok\"; }";
+         positive "readonly interface accepts a mutable concrete field"
+           "interface I { const count: i32; } class C impl I { let count = 0; }";
+         positive "interface fields can refer to interfaces and classes"
+           "class Box {} interface I { let box: Box; let peer: I; let values: \
+            [i32; 2]; } class C impl I { let box: Box = new Box {}; let peer: \
+            I; let values: [i32; 2]; }";
+         positive "readonly interface reference fields remain shallow"
+           "class Box { let count = 0; } interface I { const box: Box; const \
+            values: [i32; 2]; } fun update(item: I) => void { item.box.count \
+            += 1; item.values[0] = 2; }";
+         negative ~line:2 "required field must exist"
+           "missing interface field count"
+           "interface I { let count: i32; }\nclass C impl I {}";
+         negative ~line:2 "field types match exactly"
+           "field count type does not match"
+           "interface I { let count: i32; }\n\
+            class C impl I { let count: i64 = 0; }";
+         negative ~line:2
+           "mutable requirement rejects a constant concrete field"
+           "field count must be mutable"
+           "interface I { let count: i32; }\n\
+            class C impl I { const count = 0; }";
+         negative "duplicate interface field" "Duplicate interface member count"
+           "interface I { let count: i32; const count: i32; }";
+         negative "field and method cannot share a name"
+           "Duplicate interface member count"
+           "interface I { let count: i32; fun count() => i32; }";
+         negative "field type must be declared" "class undefined"
+           "interface I { let count: Missing; }";
+         negative "function fields require a method instead"
+           "Function fields are not supported; use an interface method"
+           "interface I { let callback: (i32) -> i32; }";
+         negative "readonly interface field cannot be assigned"
+           "constant field count"
+           "interface I { const count: i32; } fun bad(item: I) => void { \
+            item.count = 1; }";
+         negative "readonly interface field cannot use compound assignment"
+           "constant field count"
+           "interface I { const count: i32; } fun bad(item: I) => void { \
+            item.count += 1; }";
+         negative "readonly array reference cannot be rebound"
+           "constant field values"
+           "interface I { const values: [i32; 2]; } fun bad(item: I) => void { \
+            item.values = [1, 2]; }";
+         ( "lowering keeps field slots separate from method slots" >:: fun _ ->
+           let typed =
+             type_exn
+               {|interface I {
+  let count: i32;
+  const label: string;
+  fun value() => i32;
+}
+class C impl I {
+  const label = "ok";
+  let count = 0;
+  fun value() => i32 { return count; }
+}
+fun read(item: I) => i32 { return item.count; }
+fun label(item: I) => string { return item.label; }
+fun call(item: I) => i32 { return item.value(); }
+fun write(item: I) => void { item.count = 42; }
+|}
+           in
+           let (Typing.Typed_ast.Prog (_, _, _, _, _, typed_interfaces)) =
+             typed
+           in
+           let typed_fields = (List.hd typed_interfaces).fields in
+           assert_equal [ false; true ]
+             (List.map
+                (fun (field : Typing.Typed_ast.ifield) -> field.fconst)
+                typed_fields);
+           match Desugaring.Desugar.desugar_prog typed with
+           | Error error -> assert_failure (Core.Error.to_string_hum error)
+           | Ok (DA.Prog (_, functions, _, _, _, [ interface ])) ->
+               assert_equal [ "count"; "label" ]
+                 (List.map
+                    (fun (field : DA.ifield) -> field.fieldName)
+                    interface.fields);
+               assert_equal [ false; true ]
+                 (List.map
+                    (fun (field : DA.ifield) -> field.fconst)
+                    interface.fields);
+               let body name =
+                 (List.find (fun (fn : DA.fdecl) -> fn.fname = name) functions)
+                   .body
+               in
+               assert_bool "count reads field slot zero"
+                 (match List.rev (body "read") with
+                 | DA.Ret
+                     (Some
+                        (DA.InterfaceProj (_, 0, DA.TInt (DA.TSigned DA.Ti32))))
+                   :: _ ->
+                     true
+                 | _ -> false);
+               assert_bool "label reads field slot one"
+                 (match List.rev (body "label") with
+                 | DA.Ret (Some (DA.InterfaceProj (_, 1, DA.TRef DA.RString)))
+                   :: _ ->
+                     true
+                 | _ -> false);
+               assert_bool "method remains in method slot zero"
+                 (match List.rev (body "call") with
+                 | DA.Ret (Some (DA.InterfaceCall (_, 0, [], _))) :: _ -> true
+                 | _ -> false);
+               assert_bool "assignment targets an interface projection"
+                 (List.exists
+                    (function
+                      | DA.Assn (DA.InterfaceProj (_, 0, _), _, _) -> true
+                      | _ -> false)
+                    (body "write"))
+           | Ok _ -> assert_failure "expected one lowered interface" );
+       ]
+
+let suite =
+  "interfaces"
+  >::: [
+         field_suite;
+         ( "exported interface parsing and ranges" >:: fun _ ->
+           let (Ast.Prog (_, declarations)) =
+             parse_exn "export interface I { fun value(input: i32) => i32; }"
+           in
+           match declarations with
+           | [
+            {
+              elt =
+                { declaration = Ast.Interface interface; export_loc = Some _ };
+              loc;
+            };
+           ] ->
+               assert_equal "I" interface.elt.iname;
+               assert_equal 1 (List.length interface.elt.protos);
+               assert_bool "interface range is preserved"
+                 (loc <> Util.Range.norange);
+               assert_bool "prototype range is preserved"
+                 ((List.hd interface.elt.protos).loc <> Util.Range.norange)
+           | _ -> assert_failure "expected one exported interface" );
+         ( "interface bodies contain prototypes" >:: fun _ ->
+           match
+             Parsing.Parse.parse_prog
+               (Lexing.from_string
+                  "interface I { fun value() => i32 { return 1; } }")
+           with
+           | Error _ -> ()
+           | Ok _ -> assert_failure "interface method bodies must be rejected"
+         );
+         positive "matching signatures ignore parameter names"
+           (contract ^ implementation);
+         positive "additional concrete methods are allowed"
+           (contract
+          ^ "class C impl I { fun value(x: i32) => i32 { return x; } fun \
+             extra() => void {} }");
+         positive "interface declarations may follow implementers"
+           (implementation ^ contract);
+         positive "class arguments convert to interface parameters"
+           (contract ^ implementation
+          ^ "fun read(x: I) => i32 { return x.value(42); } fun main() => i32 { \
+             return read(new C {}); }");
+         positive "interface methods can refer to interfaces"
+           "interface I { fun other(value: I) => I; } class C impl I { fun \
+            other(value: I) => I { return value; } }";
+         positive "generic identity retains interface types and global methods"
+           "const base: i32 = 40; interface I { fun value() => i32; } class C \
+            impl I { fun value() => i32 { return base + 2; } } fun \
+            identity<T>(value: T) => T { return value; } fun main() => i32 { \
+            let item: I = new C {}; return identity(item).value(); }";
+         negative ~line:2 "missing method" "missing interface method value"
+           (contract ^ "class C impl I {}");
+         negative ~line:2 "wrong parameter count" "signature does not match I"
+           (contract ^ "class C impl I { fun value() => i32 { return 0; } }");
+         negative ~line:2 "wrong parameter type" "signature does not match I"
+           (contract
+          ^ "class C impl I { fun value(x: i64) => i32 { return 0; } }");
+         negative "parameter order matters" "signature does not match I"
+           "interface I { fun value(a: i32, b: bool) => i32; } class C impl I \
+            { fun value(a: bool, b: i32) => i32 { return b; } }";
+         negative ~line:2 "wrong return type" "signature does not match I"
+           (contract
+          ^ "class C impl I { fun value(x: i32) => i64 { return 0; } }");
+         negative "void return mismatch" "signature does not match I"
+           "interface I { fun value() => void; } class C impl I { fun value() \
+            => i32 { return 0; } }";
+         negative "unknown interface" "Unknown interface Missing"
+           "class C impl Missing {}";
+         negative "class is not an interface" "Unknown interface I"
+           "class I {} class C impl I {}";
+         negative "duplicate interface" "Duplicate interface or class I"
+           "interface I {} interface I {}";
+         negative "duplicate interface method"
+           "Duplicate interface member value"
+           "interface I { fun value() => i32; fun value() => i32; }";
+         negative "duplicate implementation" "Duplicate implemented interface I"
+           "interface I {} class C impl I, I {}";
+         negative "interfaces cannot be constructed"
+           "Cannot construct interface"
+           "interface I {} fun main() => i32 { let item = new I {}; return 0; }";
+         negative ~line:2 "matching methods do not imply implementation"
+           "Expected implementing class for interface I"
+           (contract
+          ^ "class C { fun value(x: i32) => i32 { return x; } } fun read(x: I) \
+             => i32 { return x.value(1); } fun main() => i32 { return read(new \
+             C {}); }");
+         negative "different interface types are incompatible"
+           "Expected implementing class for interface I"
+           "interface I {} interface J {} class C impl I, J {} fun take(x: I) \
+            => void {} fun bad(x: J) => void { take(x); }";
+         negative "interface has no concrete fields"
+           "Interface I has no member method field"
+           "interface I {} fun read(x: I) => i32 { return x.field; }";
+         negative "interface expression call needs all arguments"
+           "invalid number of arguments supplied"
+           "interface I { fun value(x: i32) => i32; } fun bad(item: I) => i32 \
+            { return item.value(); }";
+         negative "interface expression call rejects extra arguments"
+           "invalid number of arguments supplied"
+           "interface I { fun value(x: i32) => i32; } fun bad(item: I) => i32 \
+            { return item.value(1, 2); }";
+         negative "interface statement call needs all arguments"
+           "invalid number of arguments supplied"
+           "interface I { fun set(x: i32) => void; } fun bad(item: I) => void \
+            { item.set(); }";
+         negative "interface statement call rejects extra arguments"
+           "invalid number of arguments supplied"
+           "interface I { fun set(x: i32) => void; } fun bad(item: I) => void \
+            { item.set(1, 2); }";
+         negative "interface methods cannot be used as values"
+           "Interface methods must be called directly"
+           "interface I { fun value(x: i32) => i32; } fun bad(item: I) => void \
+            { let method: (i32) -> i32 = item.value; }";
+         negative "interface signature unknown type" "class undefined"
+           "interface I { fun value(x: Missing) => i32; }";
+         negative "array casts cannot change interface representation"
+           "Cannot cast"
+           "interface I {} class C impl I {} fun bad(items: [C; 1]) => [I; 1] \
+            { return items as [I; 1]; }";
+         negative "nested array casts cannot change interface representation"
+           "Cannot cast"
+           "interface I {} class C impl I {} fun bad(items: [[C; 1]; 1]) => \
+            [[I; 1]; 1] { return items as [[I; 1]; 1]; }";
+         negative "interface casts cannot recover an unchecked concrete class"
+           "Cannot cast"
+           "interface I {} class C impl I {} fun bad(item: I) => C { return \
+            item as C; }";
+         negative "function casts cannot change interface return representation"
+           "Cannot cast"
+           "interface I {} class C impl I {} fun bad(make: () -> C) => () -> I \
+            { return make as (() -> I); }";
+         ( "implementations belong to each concrete class" >:: fun _ ->
+           let typed =
+             type_exn
+               {|interface I { fun first() => i32; fun second() => i32; }
+interface J { fun second() => i32; }
+class C impl J, I {
+  fun second() => i32 { return 2; }
+  fun first() => i32 { return 1; }
+}
+class D impl I {
+  fun first() => i32 { return 3; }
+  fun second() => i32 { return 4; }
+}
+class Plain {}
+fun main() => i32 {
+  let captured = 40;
+  let callback: (i32) -> i32 = fn[captured](x) { return captured + x; };
+  return callback(2);
+}|}
+           in
+           match Desugaring.Desugar.desugar_prog typed with
+           | Error error -> assert_failure (Core.Error.to_string_hum error)
+           | Ok (DA.Prog (_, functions, classes, _, _, _)) ->
+               let class_named name =
+                 List.find
+                   (fun (class_ : DA.cdecl) -> class_.cname = name)
+                   classes
+               in
+               let method_symbol cname result =
+                 let method_ =
+                   List.find
+                     (fun (fn : DA.fdecl) ->
+                       match (fn.args, fn.body) with
+                       | ( (DA.TRef (DA.RClass owner), "this") :: [],
+                           [ DA.Ret (Some (DA.Int (value, _))) ] ) ->
+                           owner = cname && value = string_of_int result
+                       | _ -> false)
+                     functions
+                 in
+                 method_.fname
+               in
+               let c_first = method_symbol "C" 1 in
+               let c_second = method_symbol "C" 2 in
+               assert_equal
+                 ~msg:"class C keeps its impl order and interface method slots"
+                 DA.
+                   [
+                     { iname = "J"; methods = [ c_second ] };
+                     { iname = "I"; methods = [ c_first; c_second ] };
+                   ]
+                 (class_named "C").impls;
+               assert_equal ~msg:"class D refers to its own extracted methods"
+                 DA.
+                   [
+                     {
+                       iname = "I";
+                       methods = [ method_symbol "D" 3; method_symbol "D" 4 ];
+                     };
+                   ]
+                 (class_named "D").impls;
+               assert_equal ~msg:"ordinary classes have no impls" []
+                 (class_named "Plain").impls;
+               let generated =
+                 List.filter
+                   (fun (class_ : DA.cdecl) ->
+                     not (List.mem class_.cname [ "C"; "D"; "Plain" ]))
+                   classes
+               in
+               assert_bool "capturing lambda generates closure and environment"
+                 (List.length generated >= 2);
+               List.iter
+                 (fun (class_ : DA.cdecl) ->
+                   assert_equal ~msg:"generated classes have no impls" []
+                     class_.impls)
+                 generated );
+         ( "lowered interface tables, conversion, and call slots" >:: fun _ ->
+           let typed =
+             type_exn
+               "interface I { fun value(x: i32) => i32; fun set(x: i32) => \
+                void; } class C impl I { let n: i32 = 0; fun value(x: i32) => \
+                i32 { return n + x; } fun set(x: i32) => void { n = x; } } fun \
+                read(item: I) => i32 { item.set(20); return item.value(22); } \
+                fun main() => i32 { return read(new C {}); }"
+           in
+           assert_bool "typed printer includes the interface contract"
+             (Core.String.is_substring
+                (Typing.Pprint_typed_ast.show_typed_program typed)
+                ~substring:"interface I");
+           match Desugaring.Desugar.desugar_prog typed with
+           | Error error -> assert_failure (Core.Error.to_string_hum error)
+           | Ok
+               (DA.Prog
+                  ( _,
+                    functions,
+                    [
+                      ({ cname = "C"; impls = [ { iname = "I"; methods } ]; _ }
+                       as class_);
+                    ],
+                    _,
+                    _,
+                    [ { iname = "I"; protos; fields = [] } ] )) -> (
+               let printed_class =
+                 Desugaring.Pprint_desugared_ast.show_cdecl class_
+               in
+               List.iter
+                 (fun substring ->
+                   assert_bool "lowered class printer includes its impl table"
+                     (Core.String.is_substring printed_class ~substring))
+                 [ "name=C"; "impls=["; "I [" ];
+               assert_equal 2 (List.length protos);
+               assert_equal 2 (List.length methods);
+               let read =
+                 List.find (fun (fn : DA.fdecl) -> fn.fname = "read") functions
+               in
+               assert_bool "void method uses slot one"
+                 (List.exists
+                    (function
+                      | DA.InterfaceSCall
+                          ( DA.Id (_, DA.TRef (DA.RInterface "I")),
+                            1,
+                            [ _ ],
+                            DA.RetVoid ) ->
+                          true
+                      | _ -> false)
+                    read.body);
+               assert_bool "value method uses slot zero"
+                 (List.exists
+                    (function
+                      | DA.Ret
+                          (Some
+                             (DA.InterfaceCall
+                                ( DA.Id (_, DA.TRef (DA.RInterface "I")),
+                                  0,
+                                  [ _ ],
+                                  _ ))) ->
+                          true
+                      | _ -> false)
+                    read.body);
+               let main =
+                 List.find (fun (fn : DA.fdecl) -> fn.fname = "main") functions
+               in
+               match main.body with
+               | [
+                DA.Ret
+                  (Some
+                     (DA.Call
+                        ( "read",
+                          [ DA.InterfaceCast (DA.ObjInit ("C", _), "C", "I") ],
+                          _ )));
+               ] ->
+                   ()
+               | _ ->
+                   assert_failure
+                     "expected explicit concrete-to-interface conversion")
+           | Ok _ ->
+               assert_failure "expected interface and implementation metadata"
+         );
+       ]

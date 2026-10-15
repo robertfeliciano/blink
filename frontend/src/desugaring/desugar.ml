@@ -29,6 +29,40 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
     inline = fn.inline;
   }
 
+let lower_interface (i : Typed.idecl) : idecl =
+  {
+    iname = i.iname;
+    protos = List.map desugar_proto i.protos;
+    fields =
+      List.map
+        (fun (f : Typed.ifield) ->
+          {
+            fieldName = f.fieldName;
+            ftyp = convert_ty f.ftyp;
+            fconst = f.fconst;
+          })
+        i.fields;
+  }
+
+let impl_symbol cname (p : proto) =
+  mangle_name ~enclosing_class:cname p.fname
+    (TRef (RClass cname) :: p.args)
+    p.frtyp
+
+let impls_for_class interfaces (c : Typed.cdecl) =
+  let impl_for_interface name =
+    let interface = List.find (fun (i : idecl) -> i.iname = name) interfaces in
+    { iname = name; methods = List.map (impl_symbol c.cname) interface.protos }
+  in
+  List.map impl_for_interface c.impls
+
+let lower_interface_signature structs (p : proto) =
+  {
+    p with
+    args = List.map (fun ty -> fst (transform_ty ty structs)) p.args;
+    frtyp = fst (transform_ret_ty p.frtyp structs);
+  }
+
 let desugar_global (gn : Typed.gdecl) : gdecl =
   let prelude, ginit = desugar_exp gn.ginit in
   if prelude <> [] then
@@ -36,10 +70,14 @@ let desugar_global (gn : Typed.gdecl) : gdecl =
   { gname = gn.gname; gtyp = convert_ty gn.gtyp; ginit; gconst = gn.gconst }
 
 let desugar_program (prog : Typed.program) : program =
-  let (Prog (optimization_level, fns, cns, pns, gds)) = prog in
+  let (Prog (optimization_level, fns, cns, pns, gds, interfaces)) = prog in
   let desugared_fns = List.map desugar_fn fns in
   let desugared_protos = List.map desugar_proto pns in
-  let extracted_methods, structs = List.split (List.map desugar_class cns) in
+  let interfaces = List.map lower_interface interfaces in
+  let lower_class (c : Typed.cdecl) =
+    desugar_class ~impls:(impls_for_class interfaces c) c
+  in
+  let extracted_methods, structs = List.split (List.map lower_class cns) in
   let initial_fn_list = List.flatten extracted_methods @ desugared_fns in
   (* thread struct list and accumalte lifted functions while updating 
     fdecl body
@@ -56,12 +94,27 @@ let desugar_program (prog : Typed.program) : program =
       (structs, []) initial_fn_list
   in
 
+  let interfaces =
+    List.map
+      (fun (i : idecl) ->
+        {
+          i with
+          protos = List.map (lower_interface_signature final_cs) i.protos;
+          fields =
+            List.map
+              (fun (f : ifield) ->
+                { f with ftyp = fst (transform_ty f.ftyp final_cs) })
+              i.fields;
+        })
+      interfaces
+  in
   Prog
     ( optimization_level,
       final_fns,
       final_cs,
       desugared_protos,
-      List.map desugar_global gds )
+      List.map desugar_global gds,
+      interfaces )
 
 let desugar_prog (prog : Typed.program) : (program, Core.Error.t) result =
   try Ok (desugar_program prog)

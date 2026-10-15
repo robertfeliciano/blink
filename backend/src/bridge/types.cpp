@@ -76,6 +76,11 @@ RefTy convert_ref_ty(value v) {
                 ref.cname = std::string(String_val(Field(v, 0)));
                 break;
             }
+            case Constants::REFTY_Interface: {
+                ref.tag = RefTyTag::RInterface;
+                ref.cname = String_val(Field(v, 0));
+                break;
+            }
             case Constants::REFTY_Fun: {
                 ref.tag   = RefTyTag::RFun;
                 value tys = Field(v, 0);

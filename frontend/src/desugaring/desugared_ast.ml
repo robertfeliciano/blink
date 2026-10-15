@@ -12,6 +12,7 @@ and ref_ty =
   | RClass of id
   | RFun of ty list * ret_ty
   | RPtr of ty
+  | RInterface of id
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -59,6 +60,9 @@ type exp =
   | Lambda of (id * ty) list * (id * ty) list * ret_ty * block
   | Null of ty
   | Conditional of exp * (block * exp) * (block * exp) * ty
+  | InterfaceCast of exp * id * id
+  | InterfaceCall of exp * int * exp list * ty
+  | InterfaceProj of exp * int * ty
 
 and vdecl = id * ty * exp * bool
 
@@ -72,6 +76,7 @@ and stmt =
   | Free of exp list
   | Break
   | Continue
+  | InterfaceSCall of exp * int * exp list * ret_ty
 
 and block = stmt list
 
@@ -91,8 +96,18 @@ type proto = {
   args : ty list;
 }
 
+type ifield = { fieldName : id; ftyp : ty; fconst : bool }
+type idecl = { iname : id; protos : proto list; fields : ifield list }
+type impl = { iname : id; methods : id list }
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
-type cdecl = { cname : id; fields : field list; annotations : id list }
+
+type cdecl = {
+  cname : id;
+  fields : field list;
+  annotations : id list;
+  impls : impl list;
+}
+
 type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
 
 type program =
@@ -102,6 +117,7 @@ type program =
       * cdecl list
       * proto list
       * gdecl list
+      * idecl list
 [@@boxed]
 
 external convert_caml_ast : program -> unit = "convert_caml_ast"

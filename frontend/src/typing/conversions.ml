@@ -90,7 +90,8 @@ and convert_source_ref_ty (r : Typed_ast.ref_ty) : Ast.ref_ty =
   match r with
   | Typed_ast.RString -> Ast.RString
   | Typed_ast.RArray (t, sz) -> Ast.RArray (convert_source_ty t, Z.of_int sz)
-  | Typed_ast.RClass cn -> Ast.RClass (Ast.unqualified_name (Ast.no_loc cn))
+  | Typed_ast.RClass cn | Typed_ast.RInterface cn ->
+      Ast.RClass (Ast.unqualified_name (Ast.no_loc cn))
   | Typed_ast.RFun (tl, rt) ->
       Ast.RFun (List.map convert_source_ty tl, convert_source_ret_ty rt)
 

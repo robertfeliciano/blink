@@ -116,7 +116,7 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
   {
     annotations = annotations';
     cname;
-    impls;
+    impls = List.map resolved_class_name impls;
     fields = tfields;
     methods = tmethods;
   }
@@ -281,6 +281,163 @@ let reconcile_external_prototypes tc prototypes =
           false)
     prototypes
 
+let create_interface_ctxt tc declarations =
+  let tc =
+    List.fold_left
+      (fun tc (i : idecl node) ->
+        if
+          Option.is_some (lookup_interface_option i.elt.iname tc)
+          || Option.is_some (lookup_class_option i.elt.iname tc)
+        then type_error i ("Duplicate interface or class " ^ i.elt.iname ^ ".");
+        {
+          tc with
+          interfaces =
+            (i.elt.iname, { fields = []; methods = [] }) :: tc.interfaces;
+        })
+      tc declarations
+  in
+  List.fold_left
+    (fun tc (i : idecl node) ->
+      let seen = Hashtbl.create 8 in
+      let fields =
+        List.map
+          (fun (f : ifield node) ->
+            if Hashtbl.mem seen f.elt.fieldName then
+              type_error f
+                ("Duplicate interface member " ^ f.elt.fieldName ^ ".");
+            Hashtbl.add seen f.elt.fieldName ();
+            let ftyp = validate_and_convert_ty f tc f.elt.ftyp in
+            (match ftyp with
+            | Typed_ast.TRef (RFun _) ->
+                type_error f
+                  "Function fields are not supported; use an interface method."
+            | _ -> ());
+            Typed_ast.
+              { fieldName = f.elt.fieldName; ftyp; fconst = f.elt.fconst })
+          i.elt.fields
+      in
+      let methods =
+        List.map
+          (fun (p : proto node) ->
+            if p.elt.type_params <> [] then
+              type_error p "Generic interface methods are not supported.";
+            if Hashtbl.mem seen p.elt.fname then
+              type_error p ("Duplicate interface member " ^ p.elt.fname ^ ".");
+            Hashtbl.add seen p.elt.fname ();
+            if p.elt.annotations <> [] then
+              type_error p "Interface prototypes cannot have annotations.";
+            let args, ret =
+              validate_and_convert_signature p tc p.elt.args p.elt.frtyp
+            in
+            (p.elt.fname, ret, args))
+          i.elt.protos
+      in
+      {
+        tc with
+        interfaces =
+          (i.elt.iname, { fields; methods })
+          :: List.remove_assoc i.elt.iname tc.interfaces;
+      })
+    tc declarations
+
+let validate_implementations tc classes =
+  List.fold_left
+    (fun tc (c : cdecl node) ->
+      let seen = Hashtbl.create 8 in
+      let method_names = Hashtbl.create 8 in
+      let field_names = Hashtbl.create 8 in
+      List.iter
+        (fun (f : vdecl node) ->
+          let name, _, _, _ = f.elt in
+          if Hashtbl.mem field_names name then
+            type_error f ("Duplicate class field " ^ name ^ ".");
+          Hashtbl.add field_names name ())
+        c.elt.fields;
+      List.iter
+        (fun (m : fdecl node) ->
+          if Hashtbl.mem method_names m.elt.fname then
+            type_error m ("Duplicate class method " ^ m.elt.fname ^ ".");
+          Hashtbl.add method_names m.elt.fname ())
+        c.elt.methods;
+      let names =
+        List.map
+          (fun name ->
+            let iname = resolved_class_name name in
+            if Hashtbl.mem seen iname then
+              type_error name ("Duplicate implemented interface " ^ iname ^ ".");
+            Hashtbl.add seen iname ();
+            let required =
+              match lookup_interface_option iname tc with
+              | Some info -> info.methods
+              | None -> type_error name ("Unknown interface " ^ iname ^ ".")
+            in
+            List.iter
+              (fun (method_name, ret, args) ->
+                match
+                  List.find_opt
+                    (fun (m : fdecl node) ->
+                      m.elt.fname = method_name && m.elt.fname <> c.elt.cname)
+                    c.elt.methods
+                with
+                | None ->
+                    type_error c
+                      ("Class " ^ c.elt.cname ^ " is missing interface method "
+                     ^ method_name ^ " from " ^ iname ^ ".")
+                | Some method_node ->
+                    let actual_args, actual_ret =
+                      validate_and_convert_signature method_node tc
+                        method_node.elt.args method_node.elt.frtyp
+                    in
+                    if
+                      not
+                        (lists_equal_exact equal_ty (List.map fst args)
+                           (List.map fst actual_args)
+                        && equal_ret_ty ret actual_ret)
+                    then
+                      type_error method_node
+                        ("Interface method " ^ method_name
+                       ^ " signature does not match " ^ iname ^ "."))
+              required;
+            iname)
+          c.elt.impls
+      in
+      { tc with implementations = (c.elt.cname, names) :: tc.implementations })
+    tc classes
+
+let validate_impl_fields tc classes =
+  List.iter
+    (fun (c : cdecl node) ->
+      List.iter
+        (fun name ->
+          let iname = resolved_class_name name in
+          let info = Option.get (lookup_interface_option iname tc) in
+          List.iter
+            (fun (required : Typed_ast.ifield) ->
+              match lookup_field_option c.elt.cname required.fieldName tc with
+              | None ->
+                  type_error c
+                    ("Class " ^ c.elt.cname ^ " is missing interface field "
+                   ^ required.fieldName ^ " from " ^ iname ^ ".")
+              | Some (actual, is_const) ->
+                  let field =
+                    List.find
+                      (fun (f : vdecl node) ->
+                        let n, _, _, _ = f.elt in
+                        n = required.fieldName)
+                      c.elt.fields
+                  in
+                  if not (equal_ty actual required.ftyp) then
+                    type_error field
+                      ("Interface field " ^ required.fieldName
+                     ^ " type does not match " ^ iname ^ ".");
+                  if is_const && not required.fconst then
+                    type_error field
+                      ("Interface field " ^ required.fieldName
+                     ^ " must be mutable to implement " ^ iname ^ "."))
+            info.fields)
+        c.elt.impls)
+    classes
+
 (* Globals are resolved independently of source order. Initializers are typed
    with the referenced declarations' types before folding their values. *)
 let type_globals tc declarations =
@@ -304,6 +461,7 @@ let type_globals tc declarations =
         Hashtbl.mem pending name
         || Option.is_some (lookup_option name tc)
         || Option.is_some (lookup_class_option name tc)
+        || Option.is_some (lookup_interface_option name tc)
         || Option.is_some (lookup_generic_option name tc)
       then type_error node ("Duplicate declaration " ^ name ^ ".");
       Option.iter
@@ -554,14 +712,17 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   let fns = List.map Ast.bind_fdecl_params fns in
   let pns = List.map Ast.bind_proto_params pns in
   let class_names = create_class_name_ctxt Tctxt.empty cns in
-  let class_names = create_generic_ctxt class_names fns pns in
+  let interfaces = Ast.interface_declarations prog in
+  let interface_ctxt = create_interface_ctxt class_names interfaces in
+  let generic_ctxt = create_generic_ctxt interface_ctxt fns pns in
   let fns =
     List.filter (fun (fn : fdecl node) -> fn.elt.type_params = []) fns
   in
   let pns =
     List.filter (fun (pn : proto node) -> pn.elt.type_params = []) pns
   in
-  let class_headers = create_class_header_ctxt class_names cns in
+  let class_headers = create_class_header_ctxt generic_ctxt cns in
+  let class_headers = validate_implementations class_headers cns in
   let pns = reconcile_external_prototypes class_headers pns in
   let pc = create_proto_ctxt class_headers pns in
   let fc = create_fn_ctxt pc fns in
@@ -570,6 +731,7 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   (* Field defaults may call module functions too. Collect every function header
      before checking initializers, just as we do before checking function bodies. *)
   let fc, classes_with_fields = create_class_ctxt fc cns in
+  validate_impl_fields fc cns;
   let typed_classes =
     List.map
       (fun (class_node, fields) -> type_class fc fields class_node)
@@ -586,7 +748,21 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   let typed_funs = List.map (type_fn fc) fns in
   let typed_funs = typed_funs @ type_generic_instances fc in
   Prog
-    (optimization_level, typed_funs, typed_classes, typed_protos, typed_globals)
+    ( optimization_level,
+      typed_funs,
+      typed_classes,
+      typed_protos,
+      typed_globals,
+      List.map
+        (fun (i : idecl node) ->
+          Typed_ast.
+            {
+              iname = i.elt.iname;
+              protos = List.map (type_proto fc) i.elt.protos;
+              fields =
+                (Option.get (lookup_interface_option i.elt.iname fc)).fields;
+            })
+        interfaces )
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =

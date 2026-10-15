@@ -93,10 +93,10 @@ They are ignored and should not be committed.
 The module implementation lives in `frontend/src/modules/` as the standalone
 `blink.modules` library. DFS loads a dependency-first graph with cycle detection.
 Per-file name resolution enforces exports and lexical scope before combining
-declarations for typing. Module-owned symbols, classes, and globals have stable
-internal identities; entry `main` and `@C` symbols retain exact names. Shared C
-signatures are reconciled by typing. Import/export metadata stays in the frontend;
-globals cross the native FFI as ordinary resolved declarations.
+declarations for typing. Module-owned symbols, classes, interfaces, and globals
+have stable internal identities; entry `main` and `@C` symbols retain exact names.
+Shared C signatures are reconciled by typing. Import/export metadata stays in the
+frontend; globals cross the native FFI as ordinary resolved declarations.
 See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
 for a runnable example, and `runtime/stdlib/io.bl` for bootstrap `std.io` using libc.
 Module interfaces are inferred from `.ml`, without module `.mli` files.
@@ -116,8 +116,8 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
-- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, prototypes, and
-  compilation-local generic state.
+- `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
+  prototypes, and compilation-local generic state.
 - `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
   specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
@@ -139,6 +139,22 @@ limits of 4096 instances and 128 entries in a requesting chain. Generic prototyp
 require matching definitions; generic methods, classes, main and @C declarations
 are unsupported. Dependent bodies are checked only when instantiated.
 
+Language interfaces declare required fields and method prototypes; classes opt
+in with `impl` and must supply same-name, exactly typed fields and methods with
+exactly matching ordered parameter and return types. Interface fields have
+explicit types and no initializers. Mutable requirements need mutable fields;
+read-only requirements can match mutable or constant fields. Validate field
+requirements after class field types are inferred. Interfaces support `export`
+and qualified imported names. Typing inserts class-to-interface conversions,
+and lowering supplies ordered method tables and
+interface calls. See `docs/interfaces.md` and `examples/interfaces/`.
+Runtime interface values contain an object pointer and a shared method-table
+pointer, passed as an LLVM aggregate. Shared tables contain ordered method
+pointers and field byte offsets for each concrete class/interface pair.
+Conversions preserve object identity and
+do not allocate a wrapper. Keep interface value types distinct from class and
+array types whose LLVM values are pointers.
+
 ### Desugaring
 
 - `frontend/src/desugaring/desugared_ast.ml` defines the backend-facing AST.
@@ -157,7 +173,14 @@ The final program includes the selected optimization level and global
 declarations. Globals support scalar and string storage with constant
 initializers; typing resolves constant dependencies and rejects cycles before
 lowering. Runtime global initialization and aggregate/function globals remain
-unsupported. The desugared program's fifth field is its `gdecl` list.
+unsupported. The desugared program's fifth field is its `gdecl` list and its
+sixth field is its interface `idecl` list. Each desugared class owns an `impls`
+list of interface names and ordered method symbols. Classes without interfaces,
+including generated closure and environment structs, use `impls = []`.
+Interface `idecl` records carry their field requirements after the name and
+method prototypes. Field slots and method slots are independent. Interface
+projections lower to a receiver, field slot, and value type, with receiver
+evaluation preserved through assignments and lambda lifting.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities
@@ -210,6 +233,7 @@ The generated module targets the build host and uses position-independent code.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
+- `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
 - `frontend/test/e2e.ml` compiles source text through the complete pipeline.
 - `frontend/test/backend_tests.ml` tests bridge/codegen with constructed ASTs.
 - `frontend/test/backend_fixture_compiler.ml` builds those backend fixtures.

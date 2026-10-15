@@ -626,7 +626,7 @@ let test_matching_prototype_and_definition _ =
     \     fun main() => i32 { return identity(7); }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [], []) -> ()
+  | Typed.Prog (_, _, _, [], [], []) -> ()
   | _ -> assert_failure "resolved prototype should not be emitted"
 
 let test_matching_void_prototype_and_definition _ =
@@ -654,7 +654,7 @@ let test_external_prototype_is_defined _ =
     "@C fun external(value: i32) => void;\n     fun main() => i32 { return 0; }"
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, [ _ ], []) -> ()
+  | Typed.Prog (_, _, _, [ _ ], [], []) -> ()
   | _ -> assert_failure "external prototype should be emitted"
 
 let test_declared_source_types_are_validated _ =
@@ -829,7 +829,8 @@ let empty: string;
 fun main() => i32 { count = result as i32; return count; }|}
   in
   match type_program_exn source with
-  | Typed.Prog (_, _, _, _, globals) -> (
+  | Typed.Prog (_, _, _, _, globals, interfaces) -> (
+      assert_equal ~msg:"global-only fixture has no interfaces" [] interfaces;
       let find name =
         List.find (fun (g : Typed.gdecl) -> g.gname = name) globals
       in
@@ -1077,7 +1078,7 @@ let test_generic_instances _ =
        i64 = identity(1); return a + b; }"
   in
   let instances program =
-    let (Typed.Prog (_, fns, _, _, _)) = program in
+    let (Typed.Prog (_, fns, _, _, _, _)) = program in
     List.filter
       (fun (fn : Typed.fdecl) -> string_starts_with ~prefix:"_BLG" fn.fname)
       fns

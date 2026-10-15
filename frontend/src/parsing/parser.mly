@@ -106,9 +106,10 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 // %token WHERE     /* where */
 %token IMPORT EXPORT
 // %token ENABLE    /* enable */
+%token INTERFACE
 %token CLASS     /* class */
 %token FREE       /* free */
-%token IMPLS     /* impls */
+%token IMPLS     /* impl */
 // %token GLOBAL    /* global */
 %token QMARK     /* ? */
 %token AS        /* as */
@@ -165,6 +166,7 @@ tdecl_body:
   | f=fdecl { { elt = { declaration = Function f; export_loc = None }; loc = f.loc } }
   | c=cdecl { { elt = { declaration = Class c; export_loc = None }; loc = c.loc } }
   | p=pdecl { { elt = { declaration = Prototype p; export_loc = None }; loc = p.loc } }
+  | i=idecl { { elt = { declaration = Interface i; export_loc = None }; loc = i.loc } }
 
 tdecl:
   | d=tdecl_body { d }
@@ -234,13 +236,19 @@ cdecl:
   | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
       { (loc $symbolstartpos $endpos { annotations; cname; impls; fields; methods }) }
 
-impls_spec:
-  | IMPLS ids=id_ne_list { ids }
-  | { [] }
+idecl:
+  | INTERFACE iname=IDENT LBRACE fields=list(ifield) protos=list(pdecl) RBRACE
+      { loc $startpos $endpos { iname; protos; fields } }
 
-id_ne_list:
-  | id=IDENT { [id] }
-  | id=IDENT COMMA rest=id_ne_list { id :: rest }
+ifield:
+  | LET fieldName=IDENT ftyp=ty_spec SEMI
+      { loc $startpos $endpos { fieldName; ftyp; fconst = false } }
+  | CONST fieldName=IDENT ftyp=ty_spec SEMI
+      { loc $startpos $endpos { fieldName; ftyp; fconst = true } }
+
+impls_spec:
+  | IMPLS ids=separated_nonempty_list(COMMA, qualified_name) { ids }
+  | { [] }
 
 field_list:
   | /* empty */ { [] }

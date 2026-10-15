@@ -163,7 +163,7 @@ type field = { fieldName : id; ftyp : ty; init : exp node option }
 type cdecl = {
   annotations : annotation list;
   cname : id;
-  impls : id list;
+  impls : qualified_name node list;
   fields : vdecl node list;
   methods : fdecl node list;
 }
@@ -176,12 +176,15 @@ type proto = {
   args : (ty * id) list;
 }
 
+type ifield = { fieldName : id; ftyp : ty; fconst : bool }
+type idecl = { iname : id; protos : proto node list; fields : ifield node list }
 type import = { path : qualified_name node; alias : id node option }
 
 type top_level_decl =
   | Function of fdecl node
   | Class of cdecl node
   | Prototype of proto node
+  | Interface of idecl node
   | Global of gdecl node
 
 type top_level = { declaration : top_level_decl; export_loc : Range.t option }
@@ -197,6 +200,7 @@ let partition_declarations (Prog (_, declarations)) =
       | Function fn -> (fn :: functions, classes, prototypes, globals)
       | Class cn -> (functions, cn :: classes, prototypes, globals)
       | Prototype pn -> (functions, classes, pn :: prototypes, globals)
+      | Interface _ -> (functions, classes, prototypes, globals)
       | Global gn -> (functions, classes, prototypes, gn :: globals))
     declarations ([], [], [], [])
 
@@ -296,6 +300,14 @@ let bind_proto_params (pn : proto node) =
           | RetVal t -> RetVal (ty t));
       };
   }
+
+let interface_declarations (Prog (_, declarations)) =
+  List.filter_map
+    (fun item ->
+      match item.elt.declaration with
+      | Interface value -> Some value
+      | _ -> None)
+    declarations
 
 (* Utility for indentation *)
 let indent n = String.make (n * 2) ' '
@@ -607,7 +619,8 @@ let show_cdecl ?(lvl = 0)
      %s\n\
      %s]}"
     (show_annotations annotations)
-    (indent lvl) cname (String.concat ", " impls)
+    (indent lvl) cname
+    (String.concat ", " (List.map show_qualified_name impls))
     (indent (lvl + 1))
     fields_s
     (indent (lvl + 1))
@@ -628,6 +641,16 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Function fn -> show_decl ~lvl:1 fn
     | Class cn -> show_cdecl ~lvl:1 cn
     | Prototype pn -> show_proto ~lvl:1 pn
+    | Interface value ->
+        "interface " ^ value.elt.iname ^ " { "
+        ^ String.concat "; "
+            (List.map
+               (fun (f : ifield node) ->
+                 (if f.elt.fconst then "const " else "let ")
+                 ^ f.elt.fieldName ^ ": " ^ show_ty f.elt.ftyp)
+               value.elt.fields
+            @ List.map show_proto value.elt.protos)
+        ^ " }"
     | Global { elt = { gname; gtyp; ginit; gconst }; _ } ->
         show_vdecl ~lvl:1 (gname, gtyp, ginit, gconst)
   in

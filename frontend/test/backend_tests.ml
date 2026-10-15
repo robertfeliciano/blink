@@ -15,6 +15,8 @@ let fixtures =
     { name = "object-field"; expected_exit = 44 };
     { name = "conditional"; expected_exit = 42 };
     { name = "literal-values"; expected_exit = 42 };
+    { name = "interface-dispatch"; expected_exit = 42 };
+    { name = "interface-fields"; expected_exit = 42 };
   ]
 
 let test_fixture ?(optimization = "-O0") fixture test_context =
@@ -50,7 +52,10 @@ let suite =
   >::: List.concat_map
          (fun fixture ->
            let levels =
-             if fixture.name = "array-call" || fixture.name = "array-callback"
+             if
+               fixture.name = "array-call"
+               || fixture.name = "array-callback"
+               || fixture.name = "interface-fields"
              then [ "-O0"; "-O2" ]
              else [ "-O0" ]
            in

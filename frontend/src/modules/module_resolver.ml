@@ -5,7 +5,7 @@ open Ast
 open Module_model
 module Names = Set.Make (String)
 
-type kind = Function_kind | Class_kind | Global_kind
+type kind = Function_kind | Class_kind | Interface_kind | Global_kind
 type symbol = { identity : string; kind : kind; public : bool }
 
 type scope = {
@@ -23,6 +23,7 @@ let declaration_info = function
   | Function fn -> (fn.elt.fname, Function_kind, fn.elt.annotations)
   | Prototype pn -> (pn.elt.fname, Function_kind, pn.elt.annotations)
   | Class cn -> (cn.elt.cname, Class_kind, cn.elt.annotations)
+  | Interface value -> (value.elt.iname, Interface_kind, [])
   | Global gn -> (gn.elt.gname, Global_kind, [])
 
 let make_scope entry source =
@@ -135,7 +136,7 @@ let resolve graph : (program, diagnostic) result =
           fail node ("Binding " ^ name ^ " conflicts with an import alias.");
         Names.add name locals
       in
-      let class_name name =
+      let nominal_name ?required name =
         let symbol =
           match name.elt.qualifiers with
           | [] -> local_symbol name name.elt.name.elt
@@ -144,8 +145,16 @@ let resolve graph : (program, diagnostic) result =
               fail name
                 "Class types must use a direct import alias (alias.Class)."
         in
-        if symbol.kind <> Class_kind then
-          fail name (show_qualified_name name ^ " is not a class.");
+        if
+          (symbol.kind <> Class_kind && symbol.kind <> Interface_kind)
+          ||
+          match required with
+          | Some kind -> symbol.kind <> kind
+          | None -> false
+        then
+          fail name
+            (show_qualified_name name
+           ^ " is not the required class or interface type.");
         {
           name with
           elt =
@@ -156,7 +165,7 @@ let resolve graph : (program, diagnostic) result =
         }
       in
       let rec ty = function
-        | TRef (RClass name) -> TRef (RClass (class_name name))
+        | TRef (RClass name) -> TRef (RClass (nominal_name name))
         | TRef (RArray (element, size)) -> TRef (RArray (ty element, size))
         | TRef (RFun (args, ret)) -> TRef (RFun (List.map ty args, ret_ty ret))
         | TRef (RGeneric (name, args)) ->
@@ -177,7 +186,7 @@ let resolve graph : (program, diagnostic) result =
                ^ " is not a value; select an exported member.")
           | Id name ->
               let symbol = local_symbol node name in
-              if symbol.kind = Class_kind then
+              if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (name
                  ^ " is a class, not a function or value; use new or a typed \
@@ -186,7 +195,7 @@ let resolve graph : (program, diagnostic) result =
           | Proj ({ elt = Id alias; _ }, member)
             when Hashtbl.mem scope.aliases alias ->
               let symbol = imported_symbol node alias member in
-              if symbol.kind = Class_kind then
+              if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (alias ^ "." ^ member
                  ^ " is a class, not a function or value; use new or a typed \
@@ -201,7 +210,7 @@ let resolve graph : (program, diagnostic) result =
           | Cast (value, target) -> Cast (recurse value, ty target)
           | ObjInit (name, fields) ->
               ObjInit
-                ( class_name name,
+                ( nominal_name ~required:Class_kind name,
                   List.map (fun (field, value) -> (field, recurse value)) fields
                 )
           | Conditional (test, yes, no) ->
@@ -351,6 +360,38 @@ let resolve graph : (program, diagnostic) result =
                         frtyp = ret_ty value.elt.frtyp;
                       };
                   }
+            | Interface value ->
+                Interface
+                  {
+                    value with
+                    elt =
+                      {
+                        iname = identity;
+                        fields =
+                          List.map
+                            (fun (field : ifield node) ->
+                              {
+                                field with
+                                elt =
+                                  { field.elt with ftyp = ty field.elt.ftyp };
+                              })
+                            value.elt.fields;
+                        protos =
+                          List.map
+                            (fun (p : proto node) ->
+                              {
+                                p with
+                                elt =
+                                  {
+                                    p.elt with
+                                    args = args p.elt.args;
+                                    frtyp = ret_ty p.elt.frtyp;
+                                    annotations = annotations p.elt.annotations;
+                                  };
+                              })
+                            value.elt.protos;
+                      };
+                  }
             | Class value ->
                 let fields =
                   List.fold_left
@@ -376,8 +417,11 @@ let resolve graph : (program, diagnostic) result =
                     value with
                     elt =
                       {
-                        value.elt with
                         cname = identity;
+                        impls =
+                          List.map
+                            (nominal_name ~required:Interface_kind)
+                            value.elt.impls;
                         annotations = annotations value.elt.annotations;
                         fields =
                           List.map

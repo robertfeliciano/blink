@@ -22,6 +22,43 @@ let base_op = function
   | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
+let expression_ty = function
+  | D.Bool _ -> D.TBool
+  | Int (_, int_ty) -> D.TInt int_ty
+  | Float (_, float_ty) -> D.TFloat float_ty
+  | Str _ -> D.TRef RString
+  | ObjInit (name, _) -> D.TRef (RClass name)
+  | Lambda (_, args, ret, _) -> D.TRef (RFun (List.map snd args, ret))
+  | Id (_, ty)
+  | Call (_, _, ty)
+  | Bop (_, _, _, ty)
+  | Uop (_, _, ty)
+  | Array (_, ty)
+  | Cast (_, ty)
+  | Proj (_, _, ty)
+  | Index (_, _, ty)
+  | Conditional (_, _, _, ty)
+  | InterfaceCall (_, _, _, ty)
+  | InterfaceProj (_, _, ty) ->
+      ty
+  | InterfaceCast (_, _, name) -> D.TRef (RInterface name)
+  | Null ty -> ty
+
+let rec has_interface_field = function
+  | Typed.InterfaceProj _ -> true
+  | Typed.Proj (receiver, _, _, _) -> has_interface_field receiver
+  | Typed.Index (receiver, index, _, _) ->
+      has_interface_field receiver || has_interface_field index
+  | Typed.Call (callee, args, _, _) ->
+      has_interface_field callee || List.exists has_interface_field args
+  | Typed.Bop (_, left, right, _) ->
+      has_interface_field left || has_interface_field right
+  | Typed.Uop (_, value, _) | Typed.Cast (value, _) -> has_interface_field value
+  | Typed.Conditional (test, yes, no, _) ->
+      has_interface_field test || has_interface_field yes
+      || has_interface_field no
+  | _ -> false
+
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
   | Assn (lhs, op, rhs, t) when op <> Eq ->
@@ -29,8 +66,14 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let lhs_stmts, lhs' = desugar_exp lhs in
       let rhs_stmts, rhs' = desugar_exp ~rhs_assn:true rhs in
       let t' = convert_ty t in
-      let bop = D.Bop (op', lhs', rhs', t') in
-      lhs_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
+      let value_stmts, previous =
+        if has_interface_field lhs then
+          let name = gensym "field_value" in
+          ([ D.Decl (name, t', lhs', true) ], D.Id (name, t'))
+        else ([], lhs')
+      in
+      let bop = D.Bop (op', previous, rhs', t') in
+      lhs_stmts @ value_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
   | Assn (lhs, _eq, rhs, t) ->
       let lhs_stmts, lhs' = desugar_exp lhs in
       let rhs_stmts, rhs' = desugar_exp rhs in
@@ -133,13 +176,17 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | While (cond, body) ->
       let cstmts, cond' = desugar_exp cond in
       let body' = desugar_block body in
-      cstmts @ [ While (cond', body') ]
+      [ lower_while cstmts cond' body' ]
+  | SCall (InterfaceMethod (receiver, slot, _), args, types, ret) ->
+      let setup, receiver, args =
+        desugar_interface_application receiver args types
+      in
+      setup @ [ D.InterfaceSCall (receiver, slot, args, convert_ret_ty ret) ]
   | SCall (Proj (inst, pname, cname, _t), args, types, ret) ->
-      let istmts, inst' = desugar_exp inst in
-      let dtypes, dret = (List.map convert_ty types, convert_ret_ty ret) in
-      let args_stmts, args' = List.map desugar_exp args |> flatten in
-      let mangled = mangle_name ~enclosing_class:cname pname dtypes dret in
-      istmts @ args_stmts @ [ SCall (mangled, inst' :: args') ]
+      let setup, name, args =
+        desugar_method_application inst pname cname args types ret
+      in
+      setup @ [ D.SCall (name, args) ]
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
@@ -188,7 +235,8 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       (s, D.Uop (convert_unop op, e', convert_ty ty))
   | Index (arr, idx, ty, iter_ty) ->
       let sa, arr' =
-        if is_lvalue arr then
+        if is_lvalue arr || has_interface_field arr || has_interface_field idx
+        then
           let stmts_arr, d_arr = desugar_exp arr in
           let lvalue_typ = convert_ty iter_ty in
           let tmp_id = gensym "lval" in
@@ -197,16 +245,36 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
         else desugar_exp arr
       in
       let si, idx' = desugar_exp idx in
-      (sa @ si, D.Index (arr', idx', convert_ty ty))
+      if has_interface_field arr || has_interface_field idx then
+        let name = gensym "field_index" in
+        let idx_ty = expression_ty idx' in
+        ( sa @ si @ [ D.Decl (name, idx_ty, idx', true) ],
+          D.Index (arr', D.Id (name, idx_ty), convert_ty ty) )
+      else (sa @ si, D.Index (arr', idx', convert_ty ty))
   | Array (elems, ty) ->
       let ss, elems' = List.map desugar_exp elems |> flatten in
       (ss, D.Array (elems', convert_ty ty))
+  | InterfaceCast (receiver, cname, iname) ->
+      let ss, receiver = desugar_exp receiver in
+      (ss, D.InterfaceCast (receiver, cname, iname))
+  | InterfaceProj (receiver, slot, ty) ->
+      let setup, receiver = desugar_exp receiver in
+      let receiver_ty = expression_ty receiver in
+      let name = gensym "interface_receiver" in
+      ( setup @ [ D.Decl (name, receiver_ty, receiver, true) ],
+        D.InterfaceProj (D.Id (name, receiver_ty), slot, convert_ty ty) )
+  | InterfaceMethod _ -> desugar_error "Interface method value requires a call."
+  | Call (InterfaceMethod (receiver, slot, _), args, types, ty) ->
+      let setup, receiver, args =
+        desugar_interface_application receiver args types
+      in
+      (setup, D.InterfaceCall (receiver, slot, args, convert_ty ty))
   | Cast (e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Cast (e', convert_ty ty))
   | Proj (inst, field, cname, t) ->
       let s, inst' =
-        if is_lvalue inst then
+        if is_lvalue inst || has_interface_field inst then
           let stmts_inst, d_inst = desugar_exp inst in
           let lvalue_typ = D.TRef (RClass cname) in
           let tmp_id = gensym "lval" in
@@ -224,17 +292,12 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
           ([], []) fields
       in
       (List.flatten stmts, D.ObjInit (cn, fields'))
-  | Call (Proj (inst, pname, cname, t), args, tys, ty) ->
+  | Call (Proj (inst, pname, cname, _t), args, tys, ty) ->
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
-      let si, inst' = desugar_exp inst in
-      let sa, args' = List.map desugar_exp args |> flatten in
-      let _t' = convert_ty t in
-      let dtys, dty = (List.map convert_ty tys, convert_ty ty) in
-      let first_ty = D.TRef (RClass cname) in
-      let mangled_name =
-        mangle_name ~enclosing_class:cname pname (first_ty :: dtys) (RetVal dty)
+      let setup, name, args =
+        desugar_method_application inst pname cname args tys (RetVal ty)
       in
-      (si @ sa, D.Call (mangled_name, inst' :: args', convert_ty ty))
+      (setup, D.Call (name, args, convert_ty ty))
   | Call (fn, args, tys, ty) -> (
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
@@ -313,5 +376,37 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             (true_stmts, when_true'),
             (false_stmts, when_false'),
             convert_ty ty ) )
+
+and desugar_method_application receiver name cname args types ret =
+  let receiver_setup, receiver = desugar_exp receiver in
+  let argument_setup, args = List.map desugar_exp args |> flatten in
+  let name =
+    mangle_name ~enclosing_class:cname name
+      (D.TRef (RClass cname) :: List.map convert_ty types)
+      (convert_ret_ty ret)
+  in
+  (receiver_setup @ argument_setup, name, receiver :: args)
+
+and desugar_interface_application receiver args types =
+  (* Freeze each value before closure conversion can hoist a later argument's
+     setup. Full calls preserve receiver-first, left-to-right evaluation. *)
+  let setup, receiver = desugar_exp receiver in
+  let receiver_ty = expression_ty receiver in
+  let receiver_name = gensym "interface_receiver" in
+  let arguments =
+    List.map2
+      (fun arg ty ->
+        let setup, value = desugar_exp arg in
+        let ty = convert_ty ty in
+        let name = gensym "interface_arg" in
+        (setup @ [ D.Decl (name, ty, value, true) ], (name, ty)))
+      args types
+  in
+  let argument_setup, bindings = List.split arguments in
+  ( setup
+    @ [ D.Decl (receiver_name, receiver_ty, receiver, true) ]
+    @ List.concat argument_setup,
+    D.Id (receiver_name, receiver_ty),
+    List.map (fun (name, ty) -> D.Id (name, ty)) bindings )
 
 and desugar_block (b : Typed.block) : D.block = List.concat_map desugar_stmt b

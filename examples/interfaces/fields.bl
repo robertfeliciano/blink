@@ -1,0 +1,35 @@
+interface Counter {
+    let count: i32;
+    const label: string;
+    fun value() => i32;
+}
+
+class First impl Counter {
+    const label = "first";
+    let count = 10;
+    fun value() => i32 { return count; }
+}
+
+class Second impl Counter {
+    let count = 20;
+    let padding: bool = false;
+    const label = "second";
+    fun value() => i32 { return count; }
+}
+
+fun increment(counter: Counter) => i32 {
+    counter.count += 1;
+    return counter.value();
+}
+
+fun main() => i32 {
+    let first = new First {};
+    let second = new Second {};
+    let left: Counter = first;
+    let right: Counter = second;
+    let total = increment(left) + increment(right);
+    let aliases = first.count == 11 and second.count == 21;
+    free first, second;
+    if aliases and total == 32 { return 0; }
+    return 1;
+}

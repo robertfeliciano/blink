@@ -30,6 +30,7 @@ let rec show_ref_ty = function
   | RString -> "string"
   | RArray (t, sz) -> Printf.sprintf "%s_x_%d" (show_ty t) sz
   | RClass cn -> Printf.sprintf "%s" cn
+  | RInterface name -> "interface " ^ name
   | RFun (tys, r) -> (
       String.concat "_" (List.map show_ty tys)
       ^
@@ -141,6 +142,15 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "ObjInit(%s, [\n%s\n%s])" cn fs (indent lvl)
+  | InterfaceCall (receiver, slot, args, ty) ->
+      Printf.sprintf "InterfaceCall(%s, %d, [%s], %s)" (show_exp receiver) slot
+        (String.concat ", " (List.map show_exp args))
+        (show_ty ty)
+  | InterfaceProj (receiver, slot, ty) ->
+      Printf.sprintf "InterfaceProj(%s, %d, %s)" (show_exp receiver) slot
+        (show_ty ty)
+  | InterfaceCast (receiver, cname, iname) ->
+      "InterfaceCast(" ^ show_exp receiver ^ ", " ^ cname ^ ", " ^ iname ^ ")"
   | Conditional (cond, (true_block, when_true), (false_block, when_false), ty)
     ->
       Printf.sprintf "Conditional(%s, ([%s], %s), ([%s], %s), %s)"
@@ -174,6 +184,10 @@ and show_stmt ?(lvl = 0) = function
         match eo with None -> "None" | Some e -> show_exp ~lvl:(lvl + 1) e
       in
       Printf.sprintf "%sRet(%s)" (indent lvl) e_s
+  | InterfaceSCall (receiver, slot, args, ret) ->
+      Printf.sprintf "InterfaceSCall(%s, %d, [%s], %s)" (show_exp receiver) slot
+        (String.concat ", " (List.map show_exp args))
+        (show_ret_ty ret)
   | SCall (fn, args) ->
       let args_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) args)
@@ -243,22 +257,32 @@ let show_field ?(lvl = 0) { prelude; fieldName; ftyp; init } =
     fieldName (show_ty ftyp)
     (show_exp ~lvl:(lvl + 1) init)
 
-let show_cdecl ?(lvl = 0) { cname; fields; annotations } =
+let show_impl ?(lvl = 0) { iname; methods } =
+  indent lvl ^ iname ^ " [" ^ String.concat ", " methods ^ "]"
+
+let show_cdecl ?(lvl = 0) { cname; fields; annotations; impls } =
   let fields_s =
     String.concat ";\n" (List.map (fun f -> show_field ~lvl:(lvl + 1) f) fields)
   in
   let anno_s =
     String.concat "\n" (List.map (show_annotation ~lvl:(lvl + 1)) annotations)
   in
-  Printf.sprintf "%s[\n%s\n%s]cdecl{name=%s; \n%sfields=[\n%s];\n}"
+  let impls_s =
+    String.concat ";\n" (List.map (show_impl ~lvl:(lvl + 1)) impls)
+  in
+  Printf.sprintf
+    "%s[\n%s\n%s]cdecl{name=%s; \n%sfields=[\n%s];\n%simpls=[\n%s];\n}"
     (indent (lvl + 1))
     anno_s
     (indent (lvl + 1))
     cname
     (indent (lvl + 1))
     fields_s
+    (indent (lvl + 1))
+    impls_s
 
-let show_desugared_program (Prog (optimization_level, fns, cns, pns, gds)) =
+let show_desugared_program
+    (Prog (optimization_level, fns, cns, pns, gds, interfaces)) =
   let globals_s =
     String.concat "\n"
       (List.map
@@ -270,9 +294,27 @@ let show_desugared_program (Prog (optimization_level, fns, cns, pns, gds)) =
   let cns_s = String.concat "\n" (List.map (show_cdecl ~lvl:1) cns) in
   let pn_s = String.concat "\n" (List.map (show_proto ~lvl:1) pns) in
   let fns_s = String.concat "\n" (List.map (show_fdecl ~lvl:1) fns) in
+  let interfaces_s =
+    String.concat "\n"
+      (List.map
+         (fun { iname; protos; fields } ->
+           "interface " ^ iname ^ " {\n"
+           ^ String.concat "\n"
+               (List.map
+                  (fun (f : ifield) ->
+                    (if f.fconst then "const " else "let ")
+                    ^ f.fieldName ^ ": " ^ show_ty f.ftyp)
+                  fields
+               @ List.map (show_proto ~lvl:1) protos)
+           ^ "\n}")
+         interfaces)
+  in
   Printf.sprintf
     "Program{optimization=%s;\n\
      Globals{\n\
+     %s\n\
+     }\n\
+     Interfaces{\n\
      %s\n\
      }\n\
      Classes{\n\
@@ -285,4 +327,4 @@ let show_desugared_program (Prog (optimization_level, fns, cns, pns, gds)) =
      %s\n\
      }}"
     (Util.Optimization_level.to_string optimization_level)
-    globals_s cns_s pn_s fns_s
+    globals_s interfaces_s cns_s pn_s fns_s

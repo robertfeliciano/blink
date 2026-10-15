@@ -14,16 +14,28 @@ type class_ctxt =
  
 *)
 
+type interface_info = { fields : ifield list; methods : method_header list }
+
 type t = {
   generics : Generics.t option;
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
+  interfaces : (id * interface_info) list;
+  implementations : (id * id list) list;
   protos : ctxt; (* id -> type and defined_yet *)
 }
 
 let empty =
-  { generics = None; locals = []; globals = []; classes = []; protos = [] }
+  {
+    generics = None;
+    locals = [];
+    globals = [];
+    classes = [];
+    protos = [];
+    interfaces = [];
+    implementations = [];
+  }
 
 let show_tys tctxt =
   String.concat "\n"
@@ -98,6 +110,29 @@ let lookup_method_option c_name m_name c =
   match lookup_class_option c_name c with
   | None -> None
   | Some (_fields, methods) -> lookup_method_aux m_name methods
+
+let lookup_interface_option id c = List.assoc_opt id c.interfaces
+
+let implements cname iname c =
+  match List.assoc_opt cname c.implementations with
+  | Some names -> List.mem iname names
+  | None -> false
+
+let lookup_interface_method_option iname mname c =
+  match lookup_interface_option iname c with
+  | None -> None
+  | Some { methods; _ } ->
+      List.find_opt
+        (fun (_, (name, _, _)) -> name = mname)
+        (List.mapi (fun slot method_ -> (slot, method_)) methods)
+
+let lookup_interface_field_option iname fname c =
+  match lookup_interface_option iname c with
+  | None -> None
+  | Some { fields; _ } ->
+      List.find_opt
+        (fun (_, (field : ifield)) -> field.fieldName = fname)
+        (List.mapi (fun slot field -> (slot, field)) fields)
 
 (* Locals and class fields keep precedence over generic top-level names. *)
 let lookup_generic_option id c =

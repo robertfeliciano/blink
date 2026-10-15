@@ -16,5 +16,6 @@ class LValueCreator {
 
     Value* codegenLValue(const Exp& e);
     Value* getStructFieldPtr(const EProj& e);
+    Value* getInterfaceFieldPtr(const EInterfaceProj& e);
     Value* getArrayElemPtr(const EIndex& e);
 };

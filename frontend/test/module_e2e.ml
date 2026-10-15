@@ -48,6 +48,76 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "imported interface fields, globals, and generic values"
+             [
+               ( "contracts.bl",
+                 "export interface Counter { let count: i32; const label: \
+                  string; } export const seed: i32 = 40; export fun \
+                  identity<T>(value: T) => T { return value; }" );
+               ( "storage.bl",
+                 {|import contracts;
+export class Storage impl contracts.Counter {
+  const label = "shared";
+  let padding: bool = false;
+  let count = contracts.seed;
+}
+export fun make() => contracts.Counter { return new Storage {}; }
+|}
+               );
+               ( "main.bl",
+                 {|import contracts; import storage;
+@C fun strcmp(left: string, right: string) => i32;
+fun main() => i32 {
+  let item = storage.make();
+  let alias = contracts.identity(item);
+  let callback: (contracts.Counter) -> contracts.Counter = contracts.identity;
+  callback(alias).count += 2;
+  if strcmp(item.label, "shared") != 0 { return 1; }
+  let result = item.count;
+  free callback, item;
+  return result;
+}|}
+               );
+             ];
+           native "imported generic interfaces and global methods"
+             [
+               ( "contracts.bl",
+                 "export const base: i32 = 40; export interface I { fun \
+                  value() => i32; } export fun identity<T>(value: T) => T { \
+                  return value; }" );
+               ( "main.bl",
+                 {|import contracts;
+class C impl contracts.I {
+  fun value() => i32 { return contracts.base + 2; }
+}
+fun main() => i32 {
+  let item: contracts.I = new C {};
+  let echoed = contracts.identity(item);
+  let result = echoed.value();
+  free echoed;
+  return result;
+}|}
+               );
+             ];
+           native "exported interface runtime dispatch"
+             [
+               ( "contracts.bl",
+                 "export interface I { fun value() => i32; } export fun \
+                  read(item: I) => i32 { return item.value(); }" );
+               ( "first.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 20; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "second.bl",
+                 "import contracts; export class C impl contracts.I { fun \
+                  value() => i32 { return 22; } } export fun make() => \
+                  contracts.I { return new C {}; }" );
+               ( "main.bl",
+                 "import contracts; import first; import second; fun main() => \
+                  i32 { let a: contracts.I = first.make(); let b: contracts.I \
+                  = second.make(); let result = contracts.read(a) + \
+                  contracts.read(b); free a, b; return result; }" );
+             ];
            native "generic imports private helpers and callbacks"
              [
                ( "helper.bl",

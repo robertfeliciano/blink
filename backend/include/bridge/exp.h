@@ -127,21 +127,28 @@ struct EConditional {
     Ty                                 ty;
 };
 
-using ExpVariant = std::variant<EBool,
-                                EInt,
-                                EFloat,
-                                EStr,
-                                EId,
-                                ECall,
-                                EBop,
-                                EUop,
-                                EIndex,
-                                EArray,
-                                ECast,
-                                EProj,
-                                EObjInit,
-                                ENull,
-                                EConditional>;
+struct EInterfaceCast {
+    std::unique_ptr<Exp> expr;
+    std::string          cname;
+    std::string          iname;
+    Ty                   ty;
+};
+
+struct EInterfaceCall {
+    std::unique_ptr<Exp>              receiver;
+    unsigned                          slot;
+    std::vector<std::unique_ptr<Exp>> args;
+    Ty                                ty;
+};
+
+struct EInterfaceProj {
+    std::unique_ptr<Exp> receiver;
+    unsigned             slot;
+    Ty                   ty;
+};
+
+using ExpVariant = std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj,
+                                EObjInit, ENull, EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj>;
 
 struct Exp {
     ExpVariant val;

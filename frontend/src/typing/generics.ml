@@ -89,15 +89,15 @@ and match_ret_ty ?(fill = false) node bindings ret actual =
 (* A generic callback can connect still-unbound parameters in its receiver's
    signature. Each side keeps its own bindings, even when parameter names match.
    Only concrete types enter either set of bindings. *)
-let match_patterns node bindings ty callback_ty =
+let match_patterns ~convert_ty node bindings ty callback_ty =
   let callback_bindings = ref [] in
   let rec match_pair ty callback_ty =
     if not (unresolved !bindings ty) then
       match_ty node callback_bindings callback_ty
-        (Conversions.convert_ty (subst_ty !bindings ty))
+        (convert_ty (subst_ty !bindings ty))
     else if not (unresolved !callback_bindings callback_ty) then
       match_ty node bindings ty
-        (Conversions.convert_ty (subst_ty !callback_bindings callback_ty))
+        (convert_ty (subst_ty !callback_bindings callback_ty))
     else
       match (ty, callback_ty) with
       | TRef (RArray (ty, sz)), TRef (RArray (callback_ty, callback_sz)) ->
@@ -156,6 +156,7 @@ let rec encode_ty ty =
   | T.TInt _ | T.TFloat _ -> Printer.show_ty ty
   | T.TRef T.RString -> "s"
   | T.TRef (T.RClass cn) -> "c" ^ length_and_name cn
+  | T.TRef (T.RInterface name) -> "i" ^ length_and_name name
   | T.TRef (T.RArray (ty, sz)) ->
       "a" ^ string_of_int sz ^ "_" ^ length_and_name (encode_ty ty)
   | T.TRef (T.RFun (args, ret)) ->
@@ -170,10 +171,11 @@ and encode_ret = function
   | T.RetVoid -> "v"
   | T.RetVal ty -> "r" ^ length_and_name (encode_ty ty)
 
-let request state (node : 'a Ast.node) (fn : fdecl node) bindings =
+let request ~convert_ty ~convert_ret_ty state (node : 'a Ast.node)
+    (fn : fdecl node) bindings =
   let tys =
     List.map
-      (fun p -> Conversions.convert_ty (subst_ty bindings (TParam p)))
+      (fun p -> convert_ty (subst_ty bindings (TParam p)))
       fn.elt.type_params
   in
   let fname =
@@ -199,12 +201,8 @@ let request state (node : 'a Ast.node) (fn : fdecl node) bindings =
           );
       let fn = map_fdecl_types (subst_ty bindings) fn in
       let fn = { fn with elt = { fn.elt with fname; type_params = [] } } in
-      let args =
-        List.map (fun (ty, _) -> Conversions.convert_ty ty) fn.elt.args
-      in
-      let ty =
-        T.TRef (T.RFun (args, Conversions.convert_ret_ty fn.elt.frtyp))
-      in
+      let args = List.map (fun (ty, _) -> convert_ty ty) fn.elt.args in
+      let ty = T.TRef (T.RFun (args, convert_ret_ty fn.elt.frtyp)) in
       let instance = { fn; ty; origins } in
       state.instances := (fname, instance) :: !(state.instances);
       Queue.add instance state.pending;

@@ -128,7 +128,8 @@ rule read = parse
   | "enable" { ENABLE } *)
   | "class" { CLASS }
   | "free"   { FREE }
-  (* | "impls" { IMPLS } *)
+  | "impl" { IMPLS }
+  | "interface" { INTERFACE }
   (* | "global" { GLOBAL } *)
   | "?" { QMARK }
   | "as" { AS }

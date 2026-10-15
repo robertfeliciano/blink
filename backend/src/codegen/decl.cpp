@@ -7,13 +7,9 @@
 
 void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
     std::vector<llvm::Type*> argTys;
-    for (auto& arg : fn.args) {
-        const Ty& argTy = arg.first;
-
-        argTys.push_back(gen.codegenValueType(argTy));
-    }
-
-    llvm::Type* llRetTy = gen.codegenRetType(fn.frtyp);
+    for (auto& arg : fn.args)
+        argTys.push_back(gen.typeGen.codegenValueTy(arg.first));
+    llvm::Type* llRetTy = gen.typeGen.codegenValueRetTy(fn.frtyp);
 
     llvm::FunctionType* ftyp = llvm::FunctionType::get(llRetTy, argTys, false);
 
@@ -37,11 +33,9 @@ void DeclToLLVisitor::codegenFunctionProto(const FDecl& fn) {
 
 void DeclToLLVisitor::codegenProto(const Proto& p) {
     std::vector<llvm::Type*> argTys;
-    for (auto& argTy : p.args) {
-        argTys.push_back(gen.codegenValueType(argTy));
-    }
-
-    llvm::Type* llRetTy = gen.codegenRetType(p.frtyp);
+    for (auto& argTy : p.args)
+        argTys.push_back(gen.typeGen.codegenValueTy(argTy));
+    llvm::Type* llRetTy = gen.typeGen.codegenValueRetTy(p.frtyp);
 
     bool C_fun = (std::find(p.annotations.begin(), p.annotations.end(), "C") != p.annotations.end());
 
@@ -138,7 +132,7 @@ void DeclToLLVisitor::codegenCDecl(const CDecl& cd) {
     llvmFields.reserve(cd.fields.size());
 
     for (auto& fld : cd.fields) {
-        llvmFields.push_back(gen.codegenValueType(fld.ftyp));
+        llvmFields.push_back(gen.typeGen.codegenValueTy(fld.ftyp));
     }
 
     llvm::StructType* st = llvm::StructType::create(*gen.ctxt, cd.cname);

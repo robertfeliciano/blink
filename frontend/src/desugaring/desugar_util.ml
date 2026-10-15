@@ -10,6 +10,15 @@ let flatten pairs =
   let stmts, exps = List.split pairs in
   (List.flatten stmts, exps)
 
+let lower_while setup condition body =
+  match setup with
+  | [] -> D.While (condition, body)
+  | _ ->
+      (* Condition setup belongs to every check, including checks reached by
+         continue. Use the existing loop and break constructs to preserve it. *)
+      let stop = D.If (D.Uop (D.Not, condition, D.TBool), [ D.Break ], []) in
+      D.While (D.Bool true, setup @ (stop :: body))
+
 let counter = ref 0
 
 let gensym sfx =
@@ -26,7 +35,9 @@ let desugar_annotation ((i, el) : T.annotation) =
   | id, Some _ -> id
   | id, None -> id
 
-let is_lvalue = function T.Index _ | T.Proj _ -> true | _ -> false
+let is_lvalue = function
+  | T.Index _ | T.Proj _ | T.InterfaceProj _ -> true
+  | _ -> false
 
 let get_zero (ty : D.ty) : D.exp =
   match ty with
@@ -54,6 +65,7 @@ let rec mangle_ty = function
   | D.TInt i -> mangle_int i
   | D.TFloat f -> mangle_float f
   | D.TRef (RClass cname) -> len_and_name cname
+  | D.TRef (RInterface name) -> "I" ^ len_and_name name
   | D.TRef RString -> "str"
   | D.TRef (RArray (t, sz)) -> show_ty t ^ "x" ^ Int.to_string sz
   | D.TRef (RFun (tys, r)) ->
@@ -112,7 +124,7 @@ let create_lambda_struct (cname : string) (arg_tys : D.ty list) (rty : D.ret_ty)
       init = Null fptr_ty;
     }
   in
-  { cname; fields = [ env_field; fptr_field ]; annotations = [] }
+  { cname; fields = [ env_field; fptr_field ]; annotations = []; impls = [] }
 
 let rec create_default_init t =
   match t with
@@ -126,7 +138,7 @@ let rec create_default_init t =
       (* D.Call (Id (default_constructor, TRef (RClass cname)), [], TRef (RClass cname)) *)
   | D.TRef (RFun _) -> desugar_error "Default functions not allowed."
   (* | D.TRef (RGeneric _) -> type_error stmt_n "Generic default init to come some" *)
-  | D.TRef (RPtr _) -> Null t
+  | D.TRef (RPtr _) | D.TRef (RInterface _) -> Null t
   | D.TRef (RArray (t, sz)) ->
       let lst = List.init sz (fun _ -> create_default_init t) in
       let t' = D.TRef (RArray (t, sz)) in

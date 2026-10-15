@@ -297,12 +297,35 @@ Exp convert_exp(value v) {
             auto else_value   = std::make_unique<Exp>(convert_exp(Field(else_branch, 1)));
             Ty   ty           = convert_ty(Field(v, 3));
 
-            result.val = EConditional{std::move(condition),
-                                      std::move(then_prelude),
-                                      std::move(then_value),
-                                      std::move(else_prelude),
-                                      std::move(else_value),
-                                      std::move(ty)};
+            result.val = EConditional{std::move(condition),    std::move(then_prelude), std::move(then_value),
+                                      std::move(else_prelude), std::move(else_value),   std::move(ty)};
+            break;
+        }
+        case Constants::EXP_InterfaceCast: {
+            auto        expr  = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            std::string cname = String_val(Field(v, 1));
+            std::string iname = String_val(Field(v, 2));
+            Ty          ty;
+            ty.tag           = TyTag::TRef;
+            ty.ref_ty        = std::make_unique<RefTy>();
+            ty.ref_ty->tag   = RefTyTag::RInterface;
+            ty.ref_ty->cname = iname;
+            result.val       = EInterfaceCast{std::move(expr), cname, iname, std::move(ty)};
+            break;
+        }
+        case Constants::EXP_InterfaceCall: {
+            auto                              receiver = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            unsigned                          slot     = Int_val(Field(v, 1));
+            std::vector<std::unique_ptr<Exp>> args;
+            for (value xs = Field(v, 2); xs != Val_emptylist; xs = Field(xs, 1))
+                args.push_back(std::make_unique<Exp>(convert_exp(Field(xs, 0))));
+            result.val = EInterfaceCall{std::move(receiver), slot, std::move(args), convert_ty(Field(v, 3))};
+            break;
+        }
+        case Constants::EXP_InterfaceProj: {
+            auto     receiver = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            unsigned slot     = Int_val(Field(v, 1));
+            result.val        = EInterfaceProj{std::move(receiver), slot, convert_ty(Field(v, 2))};
             break;
         }
         default: {

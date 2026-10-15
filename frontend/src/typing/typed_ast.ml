@@ -11,6 +11,7 @@ and ref_ty =
   | RArray of ty * int
   | RClass of id
   | RFun of ty list * ret_ty
+  | RInterface of id
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -81,6 +82,9 @@ type exp =
       * block (* scope, args + types, ret type, body *)
   | Null of ref_ty
   | Conditional of exp * exp * exp * ty
+  | InterfaceCast of exp * id * id
+  | InterfaceMethod of exp * int * ty
+  | InterfaceProj of exp * int * ty
 
 and vdecl = id * ty * exp * bool
 (* and ldecl = id * ref_ty * exp *)
@@ -140,6 +144,8 @@ type proto = {
 }
 
 type gdecl = { gname : id; gtyp : ty; ginit : exp; gconst : bool }
+type ifield = { fieldName : id; ftyp : ty; fconst : bool }
+type idecl = { iname : id; protos : proto list; fields : ifield list }
 
 type program =
   | Prog of
@@ -148,3 +154,4 @@ type program =
       * cdecl list
       * proto list
       * gdecl list
+      * idecl list

@@ -63,6 +63,15 @@ llvm::Type* TypeToLLGenerator::codegenValueTy(const Ty& ty) {
     return codegenTy(ty);
 }
 
+llvm::Type* TypeToLLGenerator::codegenValueRetTy(const RetTy& ty) {
+    return ty.tag == RetTyTag::RetVoid ? llvm::Type::getVoidTy(*gen.ctxt) : codegenValueTy(*ty.val);
+}
+
+llvm::StructType* TypeToLLGenerator::getInterfaceType() {
+    auto* ptr = llvm::PointerType::getUnqual(*gen.ctxt);
+    return llvm::StructType::get(*gen.ctxt, {ptr, ptr});
+}
+
 llvm::Type* TypeToLLGenerator::codegenRetTy(const RetTy& rty) {
     switch (rty.tag) {
         case RetTyTag::RetVoid:
@@ -83,6 +92,9 @@ llvm::Type* TypeToLLGenerator::codegenRefTy(const RefTy& rt) {
         case RefTyTag::RClass:
             return getClassType(rt.cname);
 
+        case RefTyTag::RInterface:
+            return getInterfaceType();
+
         case RefTyTag::RFun:
             return getFunctionPointerType(rt);
 
@@ -98,7 +110,10 @@ llvm::Type* TypeToLLGenerator::getStaticArrayType(const RefTy& rt) {
     if (!rt.inner)
         throw std::runtime_error("Array type missing inner type");
 
-    llvm::Type* elemTy = codegenTy(*rt.inner);
+    // Nested arrays use contiguous inline storage; class references use pointers.
+    llvm::Type* elemTy = rt.inner->tag == TyTag::TRef && rt.inner->ref_ty->tag == RefTyTag::RArray
+                            ? codegenTy(*rt.inner)
+                            : codegenValueTy(*rt.inner);
 
     if (rt.size < 0)
         throw std::runtime_error("Static array size must be non-negative");
@@ -126,7 +141,7 @@ llvm::Type* TypeToLLGenerator::getFunctionPointerType(const RefTy& rt) {
     for (auto& a : rt.args)
         argTys.push_back(codegenValueTy(a));
 
-    llvm::Type* retTy = gen.codegenRetType(rt.ret);
+    llvm::Type* retTy = codegenValueRetTy(rt.ret);
 
     llvm::FunctionType* fty = llvm::FunctionType::get(retTy, argTys, false);
 

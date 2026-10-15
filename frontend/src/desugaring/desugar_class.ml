@@ -36,7 +36,7 @@ let desugar_fields fs : D.field list =
       D.{ prelude = stmts; fieldName; ftyp = convert_ty ftyp; init = init' })
     fs
 
-let desugar_class (c : cdecl) : D.fdecl list * D.cdecl =
+let desugar_class ~impls (c : cdecl) : D.fdecl list * D.cdecl =
   let desugared_methods =
     List.map (fun m -> desugar_method m c.cname) c.methods
   in
@@ -45,4 +45,5 @@ let desugar_class (c : cdecl) : D.fdecl list * D.cdecl =
       cname = c.cname;
       fields = desugar_fields c.fields;
       annotations = List.map desugar_annotation c.annotations;
+      impls;
     } )
