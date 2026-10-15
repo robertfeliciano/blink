@@ -58,12 +58,14 @@ compiler phase boundaries, tests and the future C++ runtime milestone.
 
 ## Interfaces
 
-Interfaces declare method prototypes. A class explicitly implements an interface
-with `impl` and must define every declared method with exactly the same parameter
-types, in the same order, and the same return type. Parameter names may differ.
+Interfaces declare field requirements and method prototypes. A class explicitly
+implements an interface with `impl` and must define every declared method with
+exactly the same parameter types, in the same order, and the same return type.
+Parameter names may differ.
 
 ```blink
 export interface Reading {
+    let value: i32;
     fun read() => i32;
 }
 
@@ -85,7 +87,11 @@ changes made through its methods remain visible through the original reference.
 Interfaces can be exported and imported like classes, including qualified types
 and implementations such as `class Sensor impl contracts.Reading`. A class can
 implement multiple interfaces with a comma-separated list. Interfaces contain
-prototypes only; they cannot be instantiated or contain fields or method bodies.
+field requirements and method prototypes; they cannot be instantiated or contain
+initializers or method bodies. Required fields have explicit types and must
+match class fields exactly. A `let` requirement needs a mutable field; a `const`
+requirement exposes a field read-only. Field access through an interface reads
+or updates the original object's storage, including for reference-valued fields.
 
 See [the interface guide](docs/interfaces.md) for runtime representation and
 ownership details.

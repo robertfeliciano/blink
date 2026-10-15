@@ -349,7 +349,10 @@ let rec exp_contains_lambda (exp : DA.exp) =
       || exp_contains_lambda then_exp
       || List.exists stmt_contains_lambda else_block
       || exp_contains_lambda else_exp
-  | DA.Uop (_, exp, _) | DA.Cast (exp, _) | DA.Proj (exp, _, _) ->
+  | DA.Uop (_, exp, _)
+  | DA.Cast (exp, _)
+  | DA.Proj (exp, _, _)
+  | DA.InterfaceProj (exp, _, _) ->
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->
       exp_contains_lambda collection || exp_contains_lambda index

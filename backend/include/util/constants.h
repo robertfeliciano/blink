@@ -31,7 +31,8 @@ namespace Constants {
         EXP_Null          = 14,
         EXP_Conditional   = 15,
         EXP_InterfaceCast = 16,
-        EXP_InterfaceCall = 17
+        EXP_InterfaceCall = 17,
+        EXP_InterfaceProj = 18
     };
 
     enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1, UNOP_BNeg = 2 };

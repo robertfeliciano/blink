@@ -262,6 +262,9 @@ struct ExpToStringVisitor {
         }
         return out + ")";
     }
+    std::string operator()(const EInterfaceProj& e) const {
+        return expToString(*e.receiver) + ".field" + std::to_string(e.slot);
+    }
     std::string operator()(const EConditional& e) const {
         auto branchToString = [](const std::vector<std::shared_ptr<Stmt>>& prelude, const Exp& value) {
             std::string res;
@@ -429,6 +432,9 @@ std::string programToString(const Program& prog) {
     }
     for (const auto& interface : prog.interfaces) {
         oss << "interface " << interface.iname << " {\n";
+        for (const auto& field : interface.fields)
+            oss << indent(1) << (field.fconst ? "const " : "let ") << field.fieldName << ": "
+                << tyToString(field.ftyp) << ";\n";
         for (const auto& proto : interface.protos)
             oss << indent(1) << protoToString(proto) << "\n";
         oss << "}\n\n";

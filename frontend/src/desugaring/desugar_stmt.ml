@@ -22,18 +22,42 @@ let base_op = function
   | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
-let interface_receiver_ty = function
-  | D.Id (_, ty)
+let expression_ty = function
+  | D.Bool _ -> D.TBool
+  | Int (_, int_ty) -> D.TInt int_ty
+  | Float (_, float_ty) -> D.TFloat float_ty
+  | Str _ -> D.TRef RString
+  | ObjInit (name, _) -> D.TRef (RClass name)
+  | Lambda (_, args, ret, _) -> D.TRef (RFun (List.map snd args, ret))
+  | Id (_, ty)
   | Call (_, _, ty)
+  | Bop (_, _, _, ty)
+  | Uop (_, _, ty)
+  | Array (_, ty)
   | Cast (_, ty)
   | Proj (_, _, ty)
   | Index (_, _, ty)
   | Conditional (_, _, _, ty)
-  | InterfaceCall (_, _, _, ty) ->
+  | InterfaceCall (_, _, _, ty)
+  | InterfaceProj (_, _, ty) ->
       ty
   | InterfaceCast (_, _, name) -> D.TRef (RInterface name)
   | Null ty -> ty
-  | _ -> desugar_error "Cannot determine interface receiver type."
+
+let rec has_interface_field = function
+  | Typed.InterfaceProj _ -> true
+  | Typed.Proj (receiver, _, _, _) -> has_interface_field receiver
+  | Typed.Index (receiver, index, _, _) ->
+      has_interface_field receiver || has_interface_field index
+  | Typed.Call (callee, args, _, _) ->
+      has_interface_field callee || List.exists has_interface_field args
+  | Typed.Bop (_, left, right, _) ->
+      has_interface_field left || has_interface_field right
+  | Typed.Uop (_, value, _) | Typed.Cast (value, _) -> has_interface_field value
+  | Typed.Conditional (test, yes, no, _) ->
+      has_interface_field test || has_interface_field yes
+      || has_interface_field no
+  | _ -> false
 
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
@@ -42,8 +66,14 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let lhs_stmts, lhs' = desugar_exp lhs in
       let rhs_stmts, rhs' = desugar_exp ~rhs_assn:true rhs in
       let t' = convert_ty t in
-      let bop = D.Bop (op', lhs', rhs', t') in
-      lhs_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
+      let value_stmts, previous =
+        if has_interface_field lhs then
+          let name = gensym "field_value" in
+          ([ D.Decl (name, t', lhs', true) ], D.Id (name, t'))
+        else ([], lhs')
+      in
+      let bop = D.Bop (op', previous, rhs', t') in
+      lhs_stmts @ value_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
   | Assn (lhs, _eq, rhs, t) ->
       let lhs_stmts, lhs' = desugar_exp lhs in
       let rhs_stmts, rhs' = desugar_exp rhs in
@@ -205,7 +235,8 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       (s, D.Uop (convert_unop op, e', convert_ty ty))
   | Index (arr, idx, ty, iter_ty) ->
       let sa, arr' =
-        if is_lvalue arr then
+        if is_lvalue arr || has_interface_field arr || has_interface_field idx
+        then
           let stmts_arr, d_arr = desugar_exp arr in
           let lvalue_typ = convert_ty iter_ty in
           let tmp_id = gensym "lval" in
@@ -214,13 +245,24 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
         else desugar_exp arr
       in
       let si, idx' = desugar_exp idx in
-      (sa @ si, D.Index (arr', idx', convert_ty ty))
+      if has_interface_field arr || has_interface_field idx then
+        let name = gensym "field_index" in
+        let idx_ty = expression_ty idx' in
+        ( sa @ si @ [ D.Decl (name, idx_ty, idx', true) ],
+          D.Index (arr', D.Id (name, idx_ty), convert_ty ty) )
+      else (sa @ si, D.Index (arr', idx', convert_ty ty))
   | Array (elems, ty) ->
       let ss, elems' = List.map desugar_exp elems |> flatten in
       (ss, D.Array (elems', convert_ty ty))
   | InterfaceCast (receiver, cname, iname) ->
       let ss, receiver = desugar_exp receiver in
       (ss, D.InterfaceCast (receiver, cname, iname))
+  | InterfaceProj (receiver, slot, ty) ->
+      let setup, receiver = desugar_exp receiver in
+      let receiver_ty = expression_ty receiver in
+      let name = gensym "interface_receiver" in
+      ( setup @ [ D.Decl (name, receiver_ty, receiver, true) ],
+        D.InterfaceProj (D.Id (name, receiver_ty), slot, convert_ty ty) )
   | InterfaceMethod _ -> desugar_error "Interface method value requires a call."
   | Call (InterfaceMethod (receiver, slot, _), args, types, ty) ->
       let setup, receiver, args =
@@ -232,7 +274,7 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       (s, D.Cast (e', convert_ty ty))
   | Proj (inst, field, cname, t) ->
       let s, inst' =
-        if is_lvalue inst then
+        if is_lvalue inst || has_interface_field inst then
           let stmts_inst, d_inst = desugar_exp inst in
           let lvalue_typ = D.TRef (RClass cname) in
           let tmp_id = gensym "lval" in
@@ -349,7 +391,7 @@ and desugar_interface_application receiver args types =
   (* Freeze each value before closure conversion can hoist a later argument's
      setup. Full calls preserve receiver-first, left-to-right evaluation. *)
   let setup, receiver = desugar_exp receiver in
-  let receiver_ty = interface_receiver_ty receiver in
+  let receiver_ty = expression_ty receiver in
   let receiver_name = gensym "interface_receiver" in
   let arguments =
     List.map2

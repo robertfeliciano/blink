@@ -1,5 +1,6 @@
 #include <codegen/decl.h>
 #include <codegen/generator.h>
+#include <llvm/IR/DataLayout.h>
 
 Generator::Generator()
     : ctxt(std::make_unique<llvm::LLVMContext>()), builder(std::make_unique<llvm::IRBuilder<>>(*ctxt)),
@@ -39,11 +40,40 @@ llvm::FunctionType* Generator::codegenInterfaceMethodType(const Proto& proto) {
     return llvm::FunctionType::get(typeGen.codegenValueRetTy(proto.frtyp), params, false);
 }
 
+unsigned Generator::classFieldIndex(const CDecl& decl, const std::string& field) const {
+    for (unsigned i = 0; i < decl.fields.size(); ++i)
+        if (decl.fields[i].fieldName == field)
+            return i;
+    throw std::runtime_error("Unknown field: " + decl.cname + "." + field);
+}
+
+const InterfaceDecl& Generator::interfaceDecl(const Exp& receiver) const {
+    const Ty& ty = ExpToLLVisitor::getExpTy(receiver);
+    if (ty.tag != TyTag::TRef || ty.ref_ty->tag != RefTyTag::RInterface)
+        throw std::runtime_error("Interface receiver does not have interface type");
+    return *interfaceEnv.at(ty.ref_ty->cname);
+}
+
+llvm::StructType* Generator::interfaceTableType(const InterfaceDecl& decl) {
+    auto* methods = llvm::ArrayType::get(llvm::PointerType::getUnqual(*ctxt), decl.protos.size());
+    auto* offsets = llvm::ArrayType::get(mod->getDataLayout().getIntPtrType(*ctxt), decl.fields.size());
+    return llvm::StructType::get(*ctxt, {methods, offsets});
+}
+
+llvm::Value* Generator::interfaceTableEntry(llvm::Value* table, const InterfaceDecl& decl, unsigned section,
+                                          unsigned slot) {
+    if (section > 1 || slot >= (section == 0 ? decl.protos.size() : decl.fields.size()))
+        throw std::runtime_error("Interface table slot is out of range");
+    return builder->CreateInBoundsGEP(interfaceTableType(decl), table,
+                                     {builder->getInt32(0), builder->getInt32(section), builder->getInt32(slot)},
+                                     "interface_slot");
+}
+
 void Generator::codegenInterfaceTables(const Program& p) {
-    auto* pointerTy = llvm::PointerType::getUnqual(*ctxt);
     for (const auto& cdecl : p.classes) {
         for (const auto& impl : cdecl.impls) {
-            const auto& protos = interfaceEnv.at(impl.iname)->protos;
+            const auto& decl   = *interfaceEnv.at(impl.iname);
+            const auto& protos = decl.protos;
             if (protos.size() != impl.methods.size())
                 throw std::runtime_error("Interface method table has the wrong number of methods");
             std::vector<llvm::Constant*> methods;
@@ -56,9 +86,23 @@ void Generator::codegenInterfaceTables(const Program& p) {
                     throw std::runtime_error("Interface implementation ABI mismatch: " + impl.methods[slot]);
                 methods.push_back(method);
             }
-            auto* tableType = llvm::ArrayType::get(pointerTy, methods.size());
+            std::vector<llvm::Constant*> offsets;
+            auto*       structTy = structTypes.at(cdecl.cname);
+            const auto* layout = mod->getDataLayout().getStructLayout(structTy);
+            auto*       offsetTy = mod->getDataLayout().getIntPtrType(*ctxt);
+            for (const auto& field : decl.fields) {
+                unsigned index = classFieldIndex(cdecl, field.fieldName);
+                if (typeGen.codegenValueTy(cdecl.fields[index].ftyp) != typeGen.codegenValueTy(field.ftyp))
+                    throw std::runtime_error("Interface field ABI mismatch: " + cdecl.cname + "." + field.fieldName);
+                offsets.push_back(llvm::ConstantInt::get(offsetTy, layout->getElementOffset(index)));
+            }
+            auto* tableType = interfaceTableType(decl);
+            auto* methodArray =
+                llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(tableType->getElementType(0)), methods);
+            auto* offsetArray =
+                llvm::ConstantArray::get(llvm::cast<llvm::ArrayType>(tableType->getElementType(1)), offsets);
             auto* table = new llvm::GlobalVariable(*mod, tableType, true, llvm::GlobalValue::PrivateLinkage,
-                                                   llvm::ConstantArray::get(tableType, methods),
+                                                   llvm::ConstantStruct::get(tableType, {methodArray, offsetArray}),
                                                    "blink.interface.table." + std::to_string(interfaceTables.size()));
             interfaceTables.emplace(std::make_pair(cdecl.cname, impl.iname), table);
         }
@@ -71,10 +115,8 @@ llvm::Value* Generator::interfaceObject(llvm::Value* value) {
 
 llvm::Value* Generator::codegenInterfaceCall(const Exp& receiver, unsigned slot,
                                             const std::vector<std::unique_ptr<Exp>>& args) {
-    const Ty& receiverTy = getExpTy(receiver);
-    if (receiverTy.tag != TyTag::TRef || receiverTy.ref_ty->tag != RefTyTag::RInterface)
-        throw std::runtime_error("Interface call receiver does not have interface type");
-    const auto& protos = interfaceEnv.at(receiverTy.ref_ty->cname)->protos;
+    const auto& decl   = interfaceDecl(receiver);
+    const auto& protos = decl.protos;
     if (slot >= protos.size())
         throw std::runtime_error("Interface method slot is out of range");
     const Proto& proto = protos[slot];
@@ -84,7 +126,7 @@ llvm::Value* Generator::codegenInterfaceCall(const Exp& receiver, unsigned slot,
     llvm::Value* value = codegenExp(receiver);
     llvm::Value* object = interfaceObject(value);
     llvm::Value* table = builder->CreateExtractValue(value, {1}, "interface_table");
-    llvm::Value* slotPtr = builder->CreateInBoundsGEP(pointerTy, table, builder->getInt64(slot), "interface_slot");
+    llvm::Value* slotPtr = interfaceTableEntry(table, decl, 0, slot);
     llvm::Value* method = builder->CreateLoad(pointerTy, slotPtr, "interface_method");
     std::vector<llvm::Value*> values{object};
     for (size_t i = 0; i < args.size(); ++i) {

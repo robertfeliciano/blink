@@ -601,8 +601,17 @@ and type_projection (expected : Typed_ast.ty option) (tc : Tctxt.t)
           type_error projection
             ("Class " ^ class_id ^ " has no member field " ^ field))
   | Typed_ast.TRef (RInterface iname) -> (
-      match Tctxt.lookup_interface_method_option iname field tc with
-      | Some _ ->
+      match Tctxt.lookup_interface_field_option iname field tc with
+      | Some (slot, info) ->
+          check_expected_ty expected info.ftyp projection;
+          {
+            exp = Typed_ast.InterfaceProj (typed_obj, slot, info.ftyp);
+            ty = info.ftyp;
+            is_const = info.fconst;
+          }
+      | None
+        when Option.is_some
+               (Tctxt.lookup_interface_method_option iname field tc) ->
           type_error projection
             "Interface methods must be called directly; method values are not \
              supported."

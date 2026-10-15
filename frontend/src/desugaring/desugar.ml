@@ -30,7 +30,19 @@ let desugar_fn (fn : Typed.fdecl) : fdecl =
   }
 
 let lower_interface (i : Typed.idecl) : idecl =
-  { iname = i.iname; protos = List.map desugar_proto i.protos }
+  {
+    iname = i.iname;
+    protos = List.map desugar_proto i.protos;
+    fields =
+      List.map
+        (fun (f : Typed.ifield) ->
+          {
+            fieldName = f.fieldName;
+            ftyp = convert_ty f.ftyp;
+            fconst = f.fconst;
+          })
+        i.fields;
+  }
 
 let impl_symbol cname (p : proto) =
   mangle_name ~enclosing_class:cname p.fname
@@ -88,6 +100,11 @@ let desugar_program (prog : Typed.program) : program =
         {
           i with
           protos = List.map (lower_interface_signature final_cs) i.protos;
+          fields =
+            List.map
+              (fun (f : ifield) ->
+                { f with ftyp = fst (transform_ty f.ftyp final_cs) })
+              i.fields;
         })
       interfaces
   in

@@ -281,7 +281,107 @@ let interface_dispatch () =
       [ box ],
       [],
       [],
-      [ DA.{ iname = "Value"; protos } ] )
+      [ DA.{ iname = "Value"; protos; fields = [] } ] )
+
+let interface_fields () =
+  let interface_ty = DA.TRef (DA.RInterface "Fields") in
+  let field fieldName ftyp init = DA.{ prelude = []; fieldName; ftyp; init } in
+  let enabled = field "enabled" DA.TBool (DA.Bool true) in
+  let count = field "count" i32 (int 0) in
+  let first =
+    DA.
+      {
+        cname = "First";
+        fields = [ enabled; count ];
+        annotations = [];
+        impls = [ { iname = "Fields"; methods = [] } ];
+      }
+  in
+  let second =
+    DA.
+      {
+        cname = "Second";
+        fields =
+          [
+            count;
+            field "padding" (TInt (TSigned Ti64)) (Int ("0", TSigned Ti64));
+            enabled;
+          ];
+        annotations = [];
+        impls = [ { iname = "Fields"; methods = [] } ];
+      }
+  in
+  let class_id name cname = DA.Id (name, DA.TRef (DA.RClass cname)) in
+  let view name = DA.Id (name, interface_ty) in
+  let projected name slot ty = DA.InterfaceProj (view name, slot, ty) in
+  let main =
+    function_ "main"
+      [
+        DA.Decl
+          ("first", DA.TRef (DA.RClass "First"), DA.ObjInit ("First", []), false);
+        DA.Decl
+          ( "second",
+            DA.TRef (DA.RClass "Second"),
+            DA.ObjInit ("Second", []),
+            false );
+        DA.Decl
+          ( "left",
+            interface_ty,
+            DA.InterfaceCast (class_id "first" "First", "First", "Fields"),
+            false );
+        DA.Decl
+          ( "right",
+            interface_ty,
+            DA.InterfaceCast (class_id "second" "Second", "Second", "Fields"),
+            false );
+        DA.Assn (projected "left" 0 i32, int 20, i32);
+        DA.Assn (projected "right" 0 i32, int 22, i32);
+        DA.If
+          ( DA.Uop
+              ( DA.Not,
+                DA.Bop
+                  ( DA.And,
+                    projected "left" 1 DA.TBool,
+                    projected "right" 1 DA.TBool,
+                    DA.TBool ),
+                DA.TBool ),
+            [ DA.Ret (Some (int 1)) ],
+            [] );
+        DA.If
+          ( DA.Bop
+              ( DA.Neq,
+                DA.Proj (class_id "second" "Second", "count", i32),
+                int 22,
+                DA.TBool ),
+            [ DA.Ret (Some (int 2)) ],
+            [] );
+        DA.Decl
+          ( "result",
+            i32,
+            DA.Bop
+              ( DA.Add,
+                DA.Proj (class_id "first" "First", "count", i32),
+                projected "right" 0 i32,
+                i32 ),
+            false );
+        DA.Free [ view "left"; view "right" ];
+        DA.Ret (Some (DA.Id ("result", i32)));
+      ]
+  in
+  let interface =
+    DA.
+      {
+        iname = "Fields";
+        protos = [];
+        fields =
+          [
+            { fieldName = "count"; ftyp = i32; fconst = false };
+            { fieldName = "enabled"; ftyp = TBool; fconst = true };
+          ];
+      }
+  in
+  DA.Prog
+    (optimization_level, [ main ], [ first; second ], [], [], [ interface ])
 
 let global ?(constant = false) name ty initial =
   DA.{ gname = name; gtyp = ty; ginit = initial; gconst = constant }
@@ -442,6 +542,7 @@ let fixtures =
     ("conditional", conditional);
     ("literal-values", literal_values);
     ("interface-dispatch", interface_dispatch);
+    ("interface-fields", interface_fields);
   ]
 
 let () =

@@ -605,6 +605,187 @@ let test_underapplication (name, source) test_context =
 let interface_fixtures =
   [
     {
+      name = "interface-mutable-reference-fields-rebind-original-storage";
+      source =
+        {|@C fun strcmp(left: string, right: string) => i32;
+interface Child { let value: i32; }
+class Leaf impl Child { let value = 0; }
+class Box { let value = 0; }
+interface Mutable {
+  let name: string;
+  let values: [i32; 2];
+  let box: Box;
+  let child: Child;
+}
+class Storage impl Mutable {
+  let child: Child = null;
+  let box: Box = null;
+  let values: [i32; 2] = [0, 0];
+  let name = "old";
+}
+fun replace(target: Mutable, name: string, values: [i32; 2], box: Box,
+            child: Child) => void {
+  target.name = name;
+  target.values = values;
+  target.box = box;
+  target.child = child;
+}
+fun main() => i32 {
+  let storage = new Storage {}; let target: Mutable = storage;
+  let box = new Box {}; let leaf = new Leaf {}; let values = [0, 0];
+  replace(target, "new", values, box, leaf);
+  if strcmp(storage.name, "new") != 0 { return 1; }
+  if storage.box != box { return 2; }
+  target.box.value = 20;
+  target.child.value = 21;
+  target.values[1] = 1;
+  if storage.child.value != 21 or storage.values[1] != 1 { return 3; }
+  if values[1] != 1 { return 4; }
+  let result = box.value + leaf.value + values[1];
+  free storage, box, leaf;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-fields-use-concrete-layout-and-method-slots";
+      source =
+        {|@C fun strcmp(left: string, right: string) => i32;
+interface State {
+  let count: i32;
+  let enabled: bool;
+  let weight: f64;
+  let ratio: f32;
+  const label: string;
+  fun value() => i32;
+}
+class First impl State {
+  let enabled = false;
+  let count = 10;
+  const label = "first";
+  let ratio: f32 = 0.0;
+  let weight: f64 = 0.5;
+  fun value() => i32 { return count + (weight as i32); }
+}
+class Second impl State {
+  let weight: f64 = 0.5;
+  let label = "second";
+  let ratio: f32 = 0.0;
+  let count = 10;
+  let enabled = false;
+  fun value() => i32 { return count + (weight as i32); }
+}
+fun update(item: State) => i32 {
+  item.count += 10;
+  item.enabled = not item.enabled;
+  item.weight += 0.5;
+  item.ratio = 1.25;
+  return item.value();
+}
+fun main() => i32 {
+  let first = new First {}; let second = new Second {};
+  let left: State = first; let right: State = second;
+  let result = update(left) + update(right);
+  if first.count != 20 or second.count != 20 { return 1; }
+  if not first.enabled or not right.enabled { return 2; }
+  if left.weight != 1.0 or second.ratio != 1.25 { return 3; }
+  if strcmp(left.label, "first") != 0 { return 4; }
+  if strcmp(right.label, "second") != 0 { return 5; }
+  free first, second;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-field-only-nested-references-and-shallow-const";
+      source =
+        {|interface Child { let value: i32; }
+class Leaf impl Child { let value = 10; }
+class Box { let count = 10; }
+interface Holder {
+  const box: Box;
+  const peer: Child;
+  const values: [i32; 2];
+  let selected: Child;
+}
+class Storage impl Holder {
+  let selected: Child;
+  const values: [i32; 2] = [1, 2];
+  const peer: Child = null;
+  const box: Box = new Box {};
+}
+fun main() => i32 {
+  let box = new Box {}; let leaf = new Leaf {};
+  let peer: Child = leaf;
+  let storage = new Storage { box = box, peer = peer, selected = peer };
+  let holder: Holder = storage;
+  holder.box.count += 10;
+  holder.peer.value += 5;
+  holder.values[1] += 5;
+  let replacement = new Leaf { value = 42 };
+  holder.selected = replacement;
+  if box.count != 20 or leaf.value != 15 { return 1; }
+  if storage.values[1] != 7 { return 2; }
+  if storage.selected.value != 42 { return 3; }
+  let result = holder.selected.value;
+  free storage, box, leaf, replacement;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "interface-field-receiver-index-and-rhs-evaluated-once";
+      source =
+        {|let order = 0;
+class Box { let count = 10; }
+interface State { let count: i32; const values: [i32; 2]; let box: Box; }
+class Storage impl State {
+  let count = 0; const values: [i32; 2] = [0, 0]; let box = new Box {};
+}
+fun receiver(item: State) => State { order = order * 10 + 1; return item; }
+fun index() => i32 { order = order * 10 + 2; return 1; }
+fun rhs() => i32 { order = order * 10 + 3; return 7; }
+fun makeFn(item: State) => () -> i32 {
+  item.count = 100; item.values[1] = 100;
+  return fn[]() { return 2; };
+}
+fun swapBox(item: State, other: Box) => () -> i32 {
+  item.box = other;
+  return fn[]() { return 2; };
+}
+fun main() => i32 {
+  let storage = new Storage {}; let item: State = storage;
+  receiver(item).count = rhs();
+  if order != 13 or storage.count != 7 { return 1; }
+  order = 0;
+  receiver(item).count += rhs();
+  if order != 13 or storage.count != 14 { return 2; }
+  order = 0;
+  receiver(item).values[index()] += rhs();
+  if order != 123 or storage.values[1] != 7 { return 3; }
+  let get: () -> State = fn[item]() { return receiver(item); };
+  order = 0;
+  get().count += rhs();
+  if order != 13 or storage.count != 21 { return 4; }
+  order = 0;
+  get().values[index()] = rhs();
+  if order != 123 or storage.values[1] != 7 { return 5; }
+  storage.count = 10; order = 0;
+  get().count += makeFn(item)();
+  if order != 1 or storage.count != 12 { return 6; }
+  storage.values[1] = 7; order = 0;
+  get().values[index()] += makeFn(item)();
+  if order != 12 or storage.values[1] != 9 { return 7; }
+  let original = storage.box; let other = new Box { count = 100 };
+  order = 0;
+  (true ? get().box : get().box).count += swapBox(item, other)();
+  if order != 1 or original.count != 12 or other.count != 100 { return 8; }
+  free get, original, other, storage;
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
       name = "interface-generic-values-and-global-methods";
       source =
         {|const base: i32 = 40;

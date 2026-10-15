@@ -167,6 +167,9 @@ let rec show_exp ?(lvl = 0) = function
   | InterfaceMethod (receiver, slot, ty) ->
       Printf.sprintf "InterfaceMethod(%s, %d, %s)" (show_exp receiver) slot
         (show_ty ty)
+  | InterfaceProj (receiver, slot, ty) ->
+      Printf.sprintf "InterfaceProj(%s, %d, %s)" (show_exp receiver) slot
+        (show_ty ty)
   | InterfaceCast (receiver, cname, iname) ->
       "InterfaceCast(" ^ show_exp receiver ^ ", " ^ cname ^ ", " ^ iname ^ ")"
   | Conditional (cond, when_true, when_false, ty) ->
@@ -353,9 +356,15 @@ let show_typed_program
   let interfaces_s =
     String.concat "\n"
       (List.map
-         (fun { iname; protos } ->
+         (fun { iname; protos; fields } ->
            "interface " ^ iname ^ " {\n"
-           ^ String.concat "\n" (List.map (show_proto ~lvl:1) protos)
+           ^ String.concat "\n"
+               (List.map
+                  (fun (f : ifield) ->
+                    (if f.fconst then "const " else "let ")
+                    ^ f.fieldName ^ ": " ^ show_ty f.ftyp)
+                  fields
+               @ List.map (show_proto ~lvl:1) protos)
            ^ "\n}")
          interfaces)
   in

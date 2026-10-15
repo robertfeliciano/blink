@@ -38,9 +38,172 @@ let contract = "interface I { fun value(input: i32) => i32; }\n"
 let implementation =
   "class C impl I { fun value(other: i32) => i32 { return other; } }\n"
 
+let rejects_syntax source =
+  match Parsing.Parse.parse_prog (Lexing.from_string source) with
+  | Error _ -> ()
+  | Ok _ -> assert_failure ("expected invalid interface syntax: " ^ source)
+
+let field_suite =
+  "interface fields"
+  >::: [
+         ( "field declarations preserve order, constness, and source ranges"
+         >:: fun _ ->
+           match
+             parse_exn
+               "interface I {\n\
+                let count: i32;\n\
+                const label: string;\n\
+                fun value() => i32;\n\
+                }"
+           with
+           | Ast.Prog
+               (_, [ { elt = { declaration = Ast.Interface interface; _ }; _ } ])
+             ->
+               let fields = interface.elt.fields in
+               assert_equal [ "count"; "label" ]
+                 (List.map
+                    (fun (f : Ast.ifield Ast.node) -> f.elt.fieldName)
+                    fields);
+               assert_equal [ false; true ]
+                 (List.map
+                    (fun (f : Ast.ifield Ast.node) -> f.elt.fconst)
+                    fields);
+               List.iter
+                 (fun (f : Ast.ifield Ast.node) ->
+                   assert_bool "field location is preserved"
+                     (f.loc <> Util.Range.norange))
+                 fields
+           | _ -> assert_failure "expected an interface declaration" );
+         ( "fields need explicit types, no initializers, and precede methods"
+         >:: fun _ ->
+           List.iter rejects_syntax
+             [
+               "interface I { let count; }";
+               "interface I { const count; }";
+               "interface I { let count: i32 = 0; }";
+               "interface I { const count: i32 = 0; }";
+               "interface I { fun value() => i32; let count: i32; }";
+             ] );
+         positive "matching fields may infer their concrete types"
+           "interface I { let count: i32; const label: string; } class C impl \
+            I { let count = 0; const label = \"ok\"; }";
+         positive "readonly interface accepts a mutable concrete field"
+           "interface I { const count: i32; } class C impl I { let count = 0; }";
+         positive "interface fields can refer to interfaces and classes"
+           "class Box {} interface I { let box: Box; let peer: I; let values: \
+            [i32; 2]; } class C impl I { let box: Box = new Box {}; let peer: \
+            I; let values: [i32; 2]; }";
+         positive "readonly interface reference fields remain shallow"
+           "class Box { let count = 0; } interface I { const box: Box; const \
+            values: [i32; 2]; } fun update(item: I) => void { item.box.count \
+            += 1; item.values[0] = 2; }";
+         negative ~line:2 "required field must exist"
+           "missing interface field count"
+           "interface I { let count: i32; }\nclass C impl I {}";
+         negative ~line:2 "field types match exactly"
+           "field count type does not match"
+           "interface I { let count: i32; }\n\
+            class C impl I { let count: i64 = 0; }";
+         negative ~line:2
+           "mutable requirement rejects a constant concrete field"
+           "field count must be mutable"
+           "interface I { let count: i32; }\n\
+            class C impl I { const count = 0; }";
+         negative "duplicate interface field" "Duplicate interface member count"
+           "interface I { let count: i32; const count: i32; }";
+         negative "field and method cannot share a name"
+           "Duplicate interface member count"
+           "interface I { let count: i32; fun count() => i32; }";
+         negative "field type must be declared" "class undefined"
+           "interface I { let count: Missing; }";
+         negative "function fields require a method instead"
+           "Function fields are not supported; use an interface method"
+           "interface I { let callback: (i32) -> i32; }";
+         negative "readonly interface field cannot be assigned"
+           "constant field count"
+           "interface I { const count: i32; } fun bad(item: I) => void { \
+            item.count = 1; }";
+         negative "readonly interface field cannot use compound assignment"
+           "constant field count"
+           "interface I { const count: i32; } fun bad(item: I) => void { \
+            item.count += 1; }";
+         negative "readonly array reference cannot be rebound"
+           "constant field values"
+           "interface I { const values: [i32; 2]; } fun bad(item: I) => void { \
+            item.values = [1, 2]; }";
+         ( "lowering keeps field slots separate from method slots" >:: fun _ ->
+           let typed =
+             type_exn
+               {|interface I {
+  let count: i32;
+  const label: string;
+  fun value() => i32;
+}
+class C impl I {
+  const label = "ok";
+  let count = 0;
+  fun value() => i32 { return count; }
+}
+fun read(item: I) => i32 { return item.count; }
+fun label(item: I) => string { return item.label; }
+fun call(item: I) => i32 { return item.value(); }
+fun write(item: I) => void { item.count = 42; }
+|}
+           in
+           let (Typing.Typed_ast.Prog (_, _, _, _, _, typed_interfaces)) =
+             typed
+           in
+           let typed_fields = (List.hd typed_interfaces).fields in
+           assert_equal [ false; true ]
+             (List.map
+                (fun (field : Typing.Typed_ast.ifield) -> field.fconst)
+                typed_fields);
+           match Desugaring.Desugar.desugar_prog typed with
+           | Error error -> assert_failure (Core.Error.to_string_hum error)
+           | Ok (DA.Prog (_, functions, _, _, _, [ interface ])) ->
+               assert_equal [ "count"; "label" ]
+                 (List.map
+                    (fun (field : DA.ifield) -> field.fieldName)
+                    interface.fields);
+               assert_equal [ false; true ]
+                 (List.map
+                    (fun (field : DA.ifield) -> field.fconst)
+                    interface.fields);
+               let body name =
+                 (List.find (fun (fn : DA.fdecl) -> fn.fname = name) functions)
+                   .body
+               in
+               assert_bool "count reads field slot zero"
+                 (match List.rev (body "read") with
+                 | DA.Ret
+                     (Some
+                        (DA.InterfaceProj (_, 0, DA.TInt (DA.TSigned DA.Ti32))))
+                   :: _ ->
+                     true
+                 | _ -> false);
+               assert_bool "label reads field slot one"
+                 (match List.rev (body "label") with
+                 | DA.Ret (Some (DA.InterfaceProj (_, 1, DA.TRef DA.RString)))
+                   :: _ ->
+                     true
+                 | _ -> false);
+               assert_bool "method remains in method slot zero"
+                 (match List.rev (body "call") with
+                 | DA.Ret (Some (DA.InterfaceCall (_, 0, [], _))) :: _ -> true
+                 | _ -> false);
+               assert_bool "assignment targets an interface projection"
+                 (List.exists
+                    (function
+                      | DA.Assn (DA.InterfaceProj (_, 0, _), _, _) -> true
+                      | _ -> false)
+                    (body "write"))
+           | Ok _ -> assert_failure "expected one lowered interface" );
+       ]
+
 let suite =
   "interfaces"
   >::: [
+         field_suite;
          ( "exported interface parsing and ranges" >:: fun _ ->
            let (Ast.Prog (_, declarations)) =
              parse_exn "export interface I { fun value(input: i32) => i32; }"
@@ -112,7 +275,7 @@ let suite =
          negative "duplicate interface" "Duplicate interface or class I"
            "interface I {} interface I {}";
          negative "duplicate interface method"
-           "Duplicate interface method value"
+           "Duplicate interface member value"
            "interface I { fun value() => i32; fun value() => i32; }";
          negative "duplicate implementation" "Duplicate implemented interface I"
            "interface I {} class C impl I, I {}";
@@ -270,7 +433,7 @@ fun main() => i32 {
                     ],
                     _,
                     _,
-                    [ { iname = "I"; protos } ] )) -> (
+                    [ { iname = "I"; protos; fields = [] } ] )) -> (
                let printed_class =
                  Desugaring.Pprint_desugared_ast.show_cdecl class_
                in

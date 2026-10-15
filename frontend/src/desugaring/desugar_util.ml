@@ -35,7 +35,9 @@ let desugar_annotation ((i, el) : T.annotation) =
   | id, Some _ -> id
   | id, None -> id
 
-let is_lvalue = function T.Index _ | T.Proj _ -> true | _ -> false
+let is_lvalue = function
+  | T.Index _ | T.Proj _ | T.InterfaceProj _ -> true
+  | _ -> false
 
 let get_zero (ty : D.ty) : D.exp =
   match ty with

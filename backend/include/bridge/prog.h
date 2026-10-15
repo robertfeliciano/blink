@@ -7,9 +7,16 @@
 
 enum class BlinkOptimizationLevel { O0, O1, O2, O3 };
 
+struct InterfaceField {
+    std::string fieldName;
+    Ty          ftyp;
+    bool        fconst;
+};
+
 struct InterfaceDecl {
-    std::string        iname;
-    std::vector<Proto> protos;
+    std::string                 iname;
+    std::vector<Proto>          protos;
+    std::vector<InterfaceField> fields;
 };
 
 struct Program {

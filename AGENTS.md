@@ -139,13 +139,19 @@ limits of 4096 instances and 128 entries in a requesting chain. Generic prototyp
 require matching definitions; generic methods, classes, main and @C declarations
 are unsupported. Dependent bodies are checked only when instantiated.
 
-Language interfaces declare method prototypes; classes opt in with `impl` and
-must define each method with exactly matching ordered parameter and return
-types. Interfaces support `export` and qualified imported names. Typing inserts
-class-to-interface conversions, and lowering supplies ordered method tables and
+Language interfaces declare required fields and method prototypes; classes opt
+in with `impl` and must supply same-name, exactly typed fields and methods with
+exactly matching ordered parameter and return types. Interface fields have
+explicit types and no initializers. Mutable requirements need mutable fields;
+read-only requirements can match mutable or constant fields. Validate field
+requirements after class field types are inferred. Interfaces support `export`
+and qualified imported names. Typing inserts class-to-interface conversions,
+and lowering supplies ordered method tables and
 interface calls. See `docs/interfaces.md` and `examples/interfaces/`.
 Runtime interface values contain an object pointer and a shared method-table
-pointer, passed as an LLVM aggregate. Conversions preserve object identity and
+pointer, passed as an LLVM aggregate. Shared tables contain ordered method
+pointers and field byte offsets for each concrete class/interface pair.
+Conversions preserve object identity and
 do not allocate a wrapper. Keep interface value types distinct from class and
 array types whose LLVM values are pointers.
 
@@ -171,6 +177,10 @@ unsupported. The desugared program's fifth field is its `gdecl` list and its
 sixth field is its interface `idecl` list. Each desugared class owns an `impls`
 list of interface names and ordered method symbols. Classes without interfaces,
 including generated closure and environment structs, use `impls = []`.
+Interface `idecl` records carry their field requirements after the name and
+method prototypes. Field slots and method slots are independent. Interface
+projections lower to a receiver, field slot, and value type, with receiver
+evaluation preserved through assignments and lambda lifting.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
 
 ### Utilities

@@ -237,8 +237,14 @@ cdecl:
       { (loc $symbolstartpos $endpos { annotations; cname; impls; fields; methods }) }
 
 idecl:
-  | INTERFACE iname=IDENT LBRACE protos=list(pdecl) RBRACE
-      { loc $startpos $endpos { iname; protos } }
+  | INTERFACE iname=IDENT LBRACE fields=list(ifield) protos=list(pdecl) RBRACE
+      { loc $startpos $endpos { iname; protos; fields } }
+
+ifield:
+  | LET fieldName=IDENT ftyp=ty_spec SEMI
+      { loc $startpos $endpos { fieldName; ftyp; fconst = false } }
+  | CONST fieldName=IDENT ftyp=ty_spec SEMI
+      { loc $startpos $endpos { fieldName; ftyp; fconst = true } }
 
 impls_spec:
   | IMPLS ids=separated_nonempty_list(COMMA, qualified_name) { ids }

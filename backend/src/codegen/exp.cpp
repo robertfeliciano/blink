@@ -608,3 +608,8 @@ Value* ExpToLLVisitor::operator()(const EInterfaceCast& e) {
 Value* ExpToLLVisitor::operator()(const EInterfaceCall& e) {
     return gen.codegenInterfaceCall(*e.receiver, e.slot, e.args);
 }
+
+Value* ExpToLLVisitor::operator()(const EInterfaceProj& e) {
+    Value* address = gen.lvalueCreator.getInterfaceFieldPtr(e);
+    return gen.builder->CreateLoad(gen.typeGen.codegenValueTy(e.ty), address, "interface_field");
+}

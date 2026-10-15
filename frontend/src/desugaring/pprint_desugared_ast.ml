@@ -146,6 +146,9 @@ let rec show_exp ?(lvl = 0) = function
       Printf.sprintf "InterfaceCall(%s, %d, [%s], %s)" (show_exp receiver) slot
         (String.concat ", " (List.map show_exp args))
         (show_ty ty)
+  | InterfaceProj (receiver, slot, ty) ->
+      Printf.sprintf "InterfaceProj(%s, %d, %s)" (show_exp receiver) slot
+        (show_ty ty)
   | InterfaceCast (receiver, cname, iname) ->
       "InterfaceCast(" ^ show_exp receiver ^ ", " ^ cname ^ ", " ^ iname ^ ")"
   | Conditional (cond, (true_block, when_true), (false_block, when_false), ty)
@@ -294,9 +297,15 @@ let show_desugared_program
   let interfaces_s =
     String.concat "\n"
       (List.map
-         (fun { iname; protos } ->
+         (fun { iname; protos; fields } ->
            "interface " ^ iname ^ " {\n"
-           ^ String.concat "\n" (List.map (show_proto ~lvl:1) protos)
+           ^ String.concat "\n"
+               (List.map
+                  (fun (f : ifield) ->
+                    (if f.fconst then "const " else "let ")
+                    ^ f.fieldName ^ ": " ^ show_ty f.ftyp)
+                  fields
+               @ List.map (show_proto ~lvl:1) protos)
            ^ "\n}")
          interfaces)
   in

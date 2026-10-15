@@ -176,7 +176,8 @@ type proto = {
   args : (ty * id) list;
 }
 
-type idecl = { iname : id; protos : proto node list }
+type ifield = { fieldName : id; ftyp : ty; fconst : bool }
+type idecl = { iname : id; protos : proto node list; fields : ifield node list }
 type import = { path : qualified_name node; alias : id node option }
 
 type top_level_decl =
@@ -642,7 +643,13 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Prototype pn -> show_proto ~lvl:1 pn
     | Interface value ->
         "interface " ^ value.elt.iname ^ " { "
-        ^ String.concat "; " (List.map show_proto value.elt.protos)
+        ^ String.concat "; "
+            (List.map
+               (fun (f : ifield node) ->
+                 (if f.elt.fconst then "const " else "let ")
+                 ^ f.elt.fieldName ^ ": " ^ show_ty f.elt.ftyp)
+               value.elt.fields
+            @ List.map show_proto value.elt.protos)
         ^ " }"
     | Global { elt = { gname; gtyp; ginit; gconst }; _ } ->
         show_vdecl ~lvl:1 (gname, gtyp, ginit, gconst)

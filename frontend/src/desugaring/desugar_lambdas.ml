@@ -486,6 +486,12 @@ and lift_lambdas_from_exps (cs : cdecl list)
   | Cast _ as ce ->
       (* cannot cast lambdas *)
       (cs, [], [], None, None, ce, None)
+  | InterfaceProj (e, slot, ty) ->
+      let ty', nc_opt = transform_ty ty cs in
+      let ecs, efs, ess, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
+      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let cs' = add_cdecls ecs ncs in
+      (cs', efs, ess, None, None, InterfaceProj (e', slot, ty'), None)
   | Proj (e, i, ty) ->
       let ty', nc_opt = transform_ty ty cs in
       let ecs, efs, ess, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in

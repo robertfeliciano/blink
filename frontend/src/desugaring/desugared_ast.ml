@@ -62,6 +62,7 @@ type exp =
   | Conditional of exp * (block * exp) * (block * exp) * ty
   | InterfaceCast of exp * id * id
   | InterfaceCall of exp * int * exp list * ty
+  | InterfaceProj of exp * int * ty
 
 and vdecl = id * ty * exp * bool
 
@@ -95,7 +96,8 @@ type proto = {
   args : ty list;
 }
 
-type idecl = { iname : id; protos : proto list }
+type ifield = { fieldName : id; ftyp : ty; fconst : bool }
+type idecl = { iname : id; protos : proto list; fields : ifield list }
 type impl = { iname : id; methods : id list }
 type field = { prelude : stmt list; fieldName : id; ftyp : ty; init : exp }
 

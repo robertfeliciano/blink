@@ -367,6 +367,15 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         iname = identity;
+                        fields =
+                          List.map
+                            (fun (field : ifield node) ->
+                              {
+                                field with
+                                elt =
+                                  { field.elt with ftyp = ty field.elt.ftyp };
+                              })
+                            value.elt.fields;
                         protos =
                           List.map
                             (fun (p : proto node) ->

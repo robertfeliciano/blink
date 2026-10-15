@@ -48,6 +48,37 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "imported interface fields, globals, and generic values"
+             [
+               ( "contracts.bl",
+                 "export interface Counter { let count: i32; const label: \
+                  string; } export const seed: i32 = 40; export fun \
+                  identity<T>(value: T) => T { return value; }" );
+               ( "storage.bl",
+                 {|import contracts;
+export class Storage impl contracts.Counter {
+  const label = "shared";
+  let padding: bool = false;
+  let count = contracts.seed;
+}
+export fun make() => contracts.Counter { return new Storage {}; }
+|}
+               );
+               ( "main.bl",
+                 {|import contracts; import storage;
+@C fun strcmp(left: string, right: string) => i32;
+fun main() => i32 {
+  let item = storage.make();
+  let alias = contracts.identity(item);
+  let callback: (contracts.Counter) -> contracts.Counter = contracts.identity;
+  callback(alias).count += 2;
+  if strcmp(item.label, "shared") != 0 { return 1; }
+  let result = item.count;
+  free callback, item;
+  return result;
+}|}
+               );
+             ];
            native "imported generic interfaces and global methods"
              [
                ( "contracts.bl",

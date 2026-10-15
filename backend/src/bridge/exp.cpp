@@ -326,6 +326,12 @@ Exp convert_exp(value v) {
             result.val = EInterfaceCall{std::move(receiver), slot, std::move(args), convert_ty(Field(v, 3))};
             break;
         }
+        case Constants::EXP_InterfaceProj: {
+            auto receiver = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            unsigned slot = Int_val(Field(v, 1));
+            result.val = EInterfaceProj{std::move(receiver), slot, convert_ty(Field(v, 2))};
+            break;
+        }
         default: {
             throw std::runtime_error("Unsupported exp variant in bridge conversion");
         }

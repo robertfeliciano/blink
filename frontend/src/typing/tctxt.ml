@@ -14,12 +14,14 @@ type class_ctxt =
  
 *)
 
+type interface_info = { fields : ifield list; methods : method_header list }
+
 type t = {
   generics : Generics.t option;
   locals : ctxt;
   globals : ctxt;
   classes : class_ctxt;
-  interfaces : (id * method_header list) list;
+  interfaces : (id * interface_info) list;
   implementations : (id * id list) list;
   protos : ctxt; (* id -> type and defined_yet *)
 }
@@ -119,10 +121,18 @@ let implements cname iname c =
 let lookup_interface_method_option iname mname c =
   match lookup_interface_option iname c with
   | None -> None
-  | Some methods ->
+  | Some { methods; _ } ->
       List.find_opt
         (fun (_, (name, _, _)) -> name = mname)
         (List.mapi (fun slot method_ -> (slot, method_)) methods)
+
+let lookup_interface_field_option iname fname c =
+  match lookup_interface_option iname c with
+  | None -> None
+  | Some { fields; _ } ->
+      List.find_opt
+        (fun (_, (field : ifield)) -> field.fieldName = fname)
+        (List.mapi (fun slot field -> (slot, field)) fields)
 
 (* Locals and class fields keep precedence over generic top-level names. *)
 let lookup_generic_option id c =

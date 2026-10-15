@@ -141,6 +141,12 @@ struct EInterfaceCall {
     Ty                                 ty;
 };
 
+struct EInterfaceProj {
+    std::unique_ptr<Exp> receiver;
+    unsigned             slot;
+    Ty                   ty;
+};
+
 using ExpVariant = std::variant<EBool,
                                 EInt,
                                 EFloat,
@@ -155,7 +161,7 @@ using ExpVariant = std::variant<EBool,
                                 EProj,
                                 EObjInit,
                                 ENull,
-                                EConditional, EInterfaceCast, EInterfaceCall>;
+                                EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj>;
 
 struct Exp {
     ExpVariant val;

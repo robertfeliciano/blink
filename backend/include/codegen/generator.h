@@ -56,6 +56,10 @@ struct Generator {
     std::vector<llvm::BasicBlock*> continueTargets;
 
     llvm::FunctionType* codegenInterfaceMethodType(const Proto& proto);
+    llvm::StructType* interfaceTableType(const InterfaceDecl& decl);
+    llvm::Value* interfaceTableEntry(llvm::Value* table, const InterfaceDecl& decl, unsigned section, unsigned slot);
+    const InterfaceDecl& interfaceDecl(const Exp& receiver) const;
+    unsigned classFieldIndex(const CDecl& decl, const std::string& field) const;
     void codegenInterfaceTables(const Program& p);
     llvm::Value* codegenInterfaceCall(const Exp& receiver, unsigned slot,
                                      const std::vector<std::unique_ptr<Exp>>& args);
