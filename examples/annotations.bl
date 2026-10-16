@@ -1,32 +1,27 @@
-@C
-fun puts(a: string);
+@C fun puts(message: string);
 
 class Point {
-    let x: i32; 
+    let x: i32;
     let y: i32;
 
-    inline fun midpt(other: Point) => Point {
-        let x' = (x + other.x)/2;
-        let y' = (y + other.y)/2;
-        puts("Creating midpoint struct");
-        return new Point { x = x', y = y' };
+    inline fun midpoint(other: Point) => Point {
+        return new Point {
+            x = (this.x + other.x) / 2,
+            y = (this.y + other.y) / 2
+        };
     }
 }
 
-fun midpt(a: i32, b: i32) => i32 { 
-    return (a + b) / 2;
+inline fun midpoint(left: i32, right: i32) => i32 {
+    return (left + right) / 2;
 }
 
 fun main() => i32 {
-    puts("Hello, World!");
-    let p = new Point { x = 10, y = 10 };
-    let p2 = new Point { x = 20, y = 20 };
-
-    let o' = midpt(10, 0);
-    let mp = p.midpt(p2);
-
-    let retVal = mp.x + o';
-    free p, p2, mp;
-
-    return retVal;
+    puts("Hello from Blink!");
+    let first = new Point { x = 10, y = 10 };
+    let second = new Point { x = 20, y = 20 };
+    let middle = first.midpoint(second);
+    let result = middle.x + midpoint(10, 0);
+    free first, second, middle;
+    return result;
 }

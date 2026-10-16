@@ -1,0 +1,15 @@
+interface Reading {
+    fun read() => i32;
+}
+
+class Concrete impl Reading {
+    let value: i32 = 42;
+    fun read() => i32 { return this.value; }
+}
+
+fun main() => i32 {
+    let obj: Reading = new Concrete { value = 42 };
+    let result = obj.read();
+    free obj;
+    return result;
+}

@@ -1,0 +1,9 @@
+fun apply_once(f: (i32, i32) -> i32, left: i32, right: i32) => i32 {
+    let result = f(left, right);
+    free f;
+    return result;
+}
+
+fun main() => i32 {
+    return apply_once(fn(left, right) { return left + right; }, 40, 2);
+}

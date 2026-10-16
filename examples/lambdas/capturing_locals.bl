@@ -1,0 +1,10 @@
+fun main() => i32 {
+    let scale = 10;
+    let offset = 2;
+    let transform: (i32) -> i32 = fn[scale, offset](value) {
+        return value * scale + offset;
+    };
+    let result = transform(4);
+    free transform;
+    return result;
+}

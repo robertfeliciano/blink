@@ -1,188 +1,62 @@
 # Blink
-and you'll miss it...
 
-## Imports and modules
+#### ...and you'll miss it
 
-Each `.bl` file is a module. Imports introduce a local alias; only functions,
-function prototypes, classes, interfaces, and global variables marked `export`
-are accessible through it.
-Private declarations remain usable inside their defining file.
+Blink is a small, statically typed language that compiles to native code through
+LLVM. It combines type inference, generic functions, explicit lambda captures,
+and classes with interfaces. Each source file is a module, and `@C` declarations
+let you call C functions directly. Memory management is explicit with `free`.
 
 ```blink
-// geometry.bl
-export class Box { let value: i32 = 42; }
-
-// main.bl
-import geometry as shapes;
 import std.io;
 
-fun main() => i32 {
-    let box: shapes.Box = new shapes.Box {};
-    io.println("Hello modules!");
-    let result = box.value;
-    free box;
-    return result;
-}
-```
+@C fun abs(value: i32) => i32;
 
-```sh
-make
-./compile -O0 -stdlib-root runtime/stdlib examples/modules/main.bl
-./new_output.o
-```
-
-The project import root defaults to the entry file's directory. Pass
-`-module-root DIR` for a larger source tree: `import app.geometry;` maps to
-`DIR/app/geometry.bl`. `std.io` resolves only under `-stdlib-root DIR`, to
-`DIR/io.bl`. No standard-library path is hardcoded; specify it explicitly.
-Both options work with `blink` and `compile`, including from another directory.
-`std.io.println` uses libc `puts`, adds a newline, and returns its status.
-`std.math` provides `f64` math functions backed by libm: `sin`, `cos`, `tan`,
-`asin` (arcsine), `acos` (arccosine), `atan`, `atan2(y, x)`, `sinh`, `cosh`,
-`tanh`, `asinh`, `acosh`, `atanh`, `sqrt`, `cbrt`, and `hypot(x, y)`.
-Trigonometric angles are in radians. `ln(x)` is the natural logarithm, and
-`log(x, base)` computes `ln(x) / ln(base)`. After `import std.math;`, call
-functions such as `math.sqrt(9.0)` or `math.log(8.0, 2.0)`.
-The module also exports immutable `f64` constants: `pi`, `tau` (2π), `half_pi`,
-`quarter_pi`, `e`, `sqrt2`, `sqrt3`, `ln2`, and `ln10`. Use them through the
-import alias, for example `math.sin(math.half_pi)`.
-The `compile` helper links libm automatically.
-
-Imports must precede declarations. Aliases cannot be reused by declarations or
-local bindings. Import cycles, private-member access and imported `main`
-declarations are errors. Imports are not re-exported, and there are no
-wildcard imports, packages or runtime module initialization.
-
-The [module implementation notes](frontend/src/modules/README.md) describe
-compiler phase boundaries, tests and the future C++ runtime milestone.
-
-## Interfaces
-
-Interfaces declare field requirements and method prototypes. A class explicitly
-implements an interface with `impl` and must define every declared method with
-exactly the same parameter types, in the same order, and the same return type.
-Parameter names may differ.
-
-```blink
-export interface Reading {
-    let value: i32;
+interface Reading {
     fun read() => i32;
 }
 
 class Sensor impl Reading {
-    let value: i32 = 10;
+    let value: i32 = 0;
+
     fun read() => i32 { return this.value; }
 }
 
-fun read_value(source: Reading) => i32 {
-    return source.read();
+fun measure(source: Reading, transform: (i32) -> i32) => i32 {
+    return transform(abs(source.read()));
 }
-```
 
-An implementing class can be passed to an interface-typed parameter. Calls
-through the interface dispatch to the object's concrete implementation at
-runtime. Converting a class reference to an interface keeps the same object;
-changes made through its methods remain visible through the original reference.
-
-Interfaces can be exported and imported like classes, including qualified types
-and implementations such as `class Sensor impl contracts.Reading`. A class can
-implement multiple interfaces with a comma-separated list. Interfaces contain
-field requirements and method prototypes; they cannot be instantiated or contain
-initializers or method bodies. Required fields have explicit types and must
-match class fields exactly. A `let` requirement needs a mutable field; a `const`
-requirement exposes a field read-only. Field access through an interface reads
-or updates the original object's storage, including for reference-valued fields.
-
-See [the interface guide](docs/interfaces.md) for runtime representation and
-ownership details.
-
-The [interface example](examples/interfaces/main.bl) imports an exported
-interface, chooses between two implementing classes at runtime, and passes the
-result to a function accepting that interface:
-
-```sh
-./compile -O2 examples/interfaces/main.bl
-./new_output.o
-```
-
-## Global variables
-
-Declare globals with `let` or `const` outside functions. Globals are private
-unless marked `export`; access exported globals through the imported module's
-alias, just like functions:
-
-```blink
-// state.bl
-export let count: i32 = 40;
-export const limit: i32 = 100;
-export fun increment() => void { count += 1; }
-
-// main.bl
-import state;
 fun main() => i32 {
-    state.increment();
-    state.count += 1;
-    return state.count; // 42
+    let offset = 2;
+    let transform = fn[offset](value: i32) -> i32 {
+        return value * 10 + offset;
+    };
+    let sensor = new Sensor { value = -4 };
+    let result = measure(sensor, transform);
+    io.println("Blink!");
+    free sensor, transform;
+    return result;
 }
 ```
 
-Every import refers to the same variable, including when several modules import
-the same dependency. `let` globals can be reassigned through an import; `const`
-globals cannot. Locals and parameters can shadow globals. A lambda can access
-globals directly; explicitly capturing a global copies its current value using
-the existing capture rules.
-
-Globals support integer, floating-point, boolean and string types. Types may be
-inferred from initializers. Initializers must be literals (including negative
-numeric literals), integer constant expressions, or references to other constant
-globals. Forward references to constants are supported, including exported
-constants accessed through an import. Their declared or inferred types still
-apply; referring to a constant does not make it an untyped literal. Constant
-dependency cycles are errors.
-
-A typed `let` without an initializer uses the usual primitive default: zero,
-`false`, or the empty string. `const` requires an initializer. Runtime calls,
-reads of mutable globals during initialization, and array, class and function
-globals are unsupported. All globals are initialized before `main` and live for
-the duration of the program. String literals retain their existing static
-storage lifetime and must not be freed.
-
-## Develop with Docker
-
-The development image contains the complete Blink toolchain: OCaml 4.14.2,
-opam and the frontend packages, LLVM/Clang 16, CMake, and the native build
-dependencies. The repository is mounted into the container, so edits made on
-the host are immediately available inside it.
-
-Build the image and open a shell:
+Save this as `main.bl`, then run from the repository root:
 
 ```sh
-docker compose build
-docker compose run --rm dev
-```
-
-Then build and test Blink from the container shell:
-
-```sh
-make
-make test
-./compile -O2 examples/simple.bl
+./compile -O2 -stdlib-root runtime/stdlib main.bl
 ./new_output.o
+echo $?
 ```
 
-After changing source code, run `make` again. Rebuild the image only when the
-Dockerfile or `frontend/blink.opam` dependencies change:
+It prints `Blink!` and exits with `42`. The `compile` helper compiles and links
+an executable named `new_output.o` in the current directory.
 
-```sh
-docker compose build
-```
+Browse the [examples](examples/README.md) for more:
+[modules](examples/modules/README.md), [lambdas](examples/lambdas/README.md),
+[interfaces](examples/interfaces/README.md), and
+[generic functions](examples/generic_functions.bl).
 
-The container user defaults to UID/GID 1000 so generated files remain editable
-on most Linux hosts. If your IDs differ, pass them when building:
-
-```sh
-USER_ID=$(id -u) GROUP_ID=$(id -g) docker compose build
-```
+For a container-based toolchain, run `docker compose build` followed by
+`docker compose run --rm dev`. Run `make` and `make test` inside the container.
 
 ## How to build this project
 
@@ -226,155 +100,3 @@ sudo ninja install
 Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`. The compiler accepts `-O0`, `-O1`, `-O2`, and `-O3`; when omitted, `-O0` is used.
 
 To build the frontend, you can simply run `dune build` in `frontend/`. 
-
-### Tests
-
-Every push and pull request runs the complete test suite in GitHub Actions.
-The workflow builds the repository's development container and caches its
-BuildKit layers in GitHub's cache service. LLVM 16, OCaml 4.14.2, and OPAM
-dependencies are therefore rebuilt only when the Dockerfile or
-`frontend/blink.opam` changes.
-
-The CI image uses the same environment as local Docker development, so the
-commands exercised in CI are simply:
-
-```sh
-make
-make test
-```
-
-Run all frontend unit tests and compiler end-to-end tests from the repository
-root:
-
-```sh
-make test
-```
-
-For a quicker development loop, the suites can be run separately:
-
-```sh
-make test-unit
-make test-e2e
-make test-backend
-```
-
-The end-to-end suite checks parsing, type checking, and desugaring before it
-invokes the Blink compiler, lowers the generated LLVM IR with `llc`, links it
-with `clang`, and asserts the native program's exit status. Each case uses an
-OUnit-managed temporary directory, so generated `.ll` files, object files, and
-executables are removed automatically and never written into the repository.
-The end-to-end suite therefore requires the complete backend/LLVM toolchain;
-run `make` first after a clean checkout.
-
-The backend-only suite skips parsing, type checking, and desugaring. Its helper
-constructs `Desugared_ast.program` values directly in OCaml and passes them to
-the C++ bridge/code generator, then links and runs the result. This isolates
-bridge and LLVM codegen behavior while retaining the same temporary-directory
-cleanup and exit-status assertions as the full end-to-end suite.
-
-### How to Use Blink
-Take a look at the examples in `examples/`. You can compile a program to an
-executable using `./compile -O2 program.bl`, which will generate
-`new_output.o`. The optimization flag is optional and may appear before or
-after the filename; it defaults to `-O0`. Take a look at the compile script if
-you want to customize the final executable.
-
-Functions and methods can request LLVM inlining with the `inline` modifier:
-
-```blink
-inline fun add_one(value: i32) => i32 {
-  return value + 1;
-}
-```
-
-The modifier uses LLVM's always-inliner and is honored even when compiling with
-`-O0`.
-
-Conditional expressions use `condition ? when_true : when_false`. The
-condition must be `bool`, and only the selected branch is evaluated. They are
-right-associative and bind less tightly than binary operators, so nested
-expressions can be written without extra parentheses:
-
-```blink
-fun main() => i32 {
-  let score = 87;
-  let result = score >= 90 ? 1 : score >= 80 ? 2 : 3;
-  return result;
-}
-```
-
-Both branches must have compatible types. Blink applies its normal numeric
-promotion rules, and an assignment or explicit declaration type can provide
-the expected type for literals and other context-sensitive expressions.
-
-Function and method calls must supply exactly the declared number of arguments.
-Use a lambda with explicit captures to bind arguments for a later call:
-
-```blink
-fun add(left: i32, middle: i32, right: i32) => i32 {
-  return left + middle + right;
-}
-
-fun main() => i32 {
-  let ten = 10;
-  let add_ten: (i32, i32) -> i32 = fn[ten](middle, right) {
-    return add(ten, middle, right);
-  };
-  let result = add_ten(20, 12);
-  free add_ten;
-  return result;
-}
-```
-
-Free lambda closures when they are no longer needed.
-
-## Generic functions
-
-Functions can declare type parameters using angle brackets. Calls infer their
-concrete types from arguments and expected result types:
-
-```blink
-fun identity<T>(value: T) => T {
-    return value;
-}
-
-fun main() => i32 {
-    let value = identity(42);
-    let f: (i32) -> i32 = identity;
-    let result = f(value);
-    free f;
-    return result;
-}
-```
-
-Type parameters work in argument and return types, fixed-size arrays, function
-signatures, local annotations, and lambda signatures. A generic function passed
-as a callback is specialized from the receiving parameter's function type. An
-unresolved use, such as `let f = identity;`, requires an ordinary type annotation;
-there is no explicit type-argument syntax at call sites. Concrete arguments must
-agree on repeated type parameters. Context-dependent literals use inferred types
-before existing default literal types, and ordinary conversions apply after
-inference. Expected result types fill type parameters that arguments have not
-already determined.
-
-The frontend generates one concrete function per distinct combination of type
-arguments within each compilation. Recursive calls reuse registered signatures.
-Instances are shared across imports, and templates retain their defining module's
-private bindings. Generic prototypes require matching definitions; parameter names
-may differ between the prototype and definition.
-
-Bodies are type-checked for each requested instance. For example, `value + value`
-works when the inferred type supports addition and otherwise reports an error at
-the template body, with the requesting call locations. Unused templates are parsed
-and resolved, but their dependent bodies are not type-checked. Inference uses
-signatures and use-site context rather than guessing types from template bodies.
-Each compilation permits at most 4096 instances and an instantiation chain of 128;
-expanding recursion reports a specialization-limit diagnostic.
-
-Only top-level functions are generic in this release. Generic classes, methods,
-`main`, external `@C` functions, constraints, and compile-time value parameters are
-unsupported. Function values have concrete signatures; higher-rank polymorphic
-values and inference from later statements are unsupported. Existing restrictions
-on global initialization still apply. Specialization preserves the current calling
-and memory behavior, but additional instances can increase compile time and binary
-size. See `examples/generic_functions.bl` for functions, arrays, and callbacks.
