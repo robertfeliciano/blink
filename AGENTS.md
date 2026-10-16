@@ -122,15 +122,18 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
 - `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
   prototypes, and compilation-local generic state.
-- `frontend/src/typing/class_generics.ml` specializes generic classes before typing
-  concrete declarations; newly discovered classes rebuild compilation contexts.
-- `frontend/src/typing/generic_types.ml` shares specialization identities and
-  parameter/array validation between classes and functions.
-- `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
-  specialization identities, and pending instances.
+- `frontend/src/typing/generics/class_generics.ml` specializes generic classes
+  before typing concrete declarations; newly discovered classes rebuild compilation
+  contexts.
+- `frontend/src/typing/generics/generic_types.ml` shares specialization identities
+  and parameter/array validation between classes and functions.
+- `frontend/src/typing/generics/generics.ml` owns generic signature matching,
+  substitution, specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
-- `frontend/src/typing/dune` exposes the typing library.
+- `frontend/src/typing/dune` exposes the typing library and includes the
+  `generics/` subdirectory without adding another module namespace, so base typing
+  files can use `Generics`, `Class_generics`, and `Generic_types` directly.
 
 Type failures are reported with source locations through `type_error` helpers.
 Keep constness and class context intact when extending context operations.
