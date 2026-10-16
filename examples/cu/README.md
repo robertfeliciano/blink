@@ -1,6 +1,6 @@
-# CUDA array addition
+# CUDA examples
 
-This example adds two four-element `f64` arrays on an NVIDIA GPU and checks
+The vector example adds two four-element `f64` arrays on an NVIDIA GPU and checks
 that the result is `[11, 22, 33, 44]`. It requires the CUDA toolkit (`nvcc`), a
 CUDA-capable NVIDIA GPU with a working driver, and Blink's usual LLVM toolchain.
 
@@ -27,3 +27,40 @@ The example reports errors and exits nonzero if CUDA fails or any sum is wrong.
 The example Makefile links with `nvcc` to include the CUDA runtime. The ordinary
 `compile` helper only links standard host libraries, so use this target for the
 CUDA example. This is an optional module; ordinary Blink builds do not need CUDA.
+
+## cuBLAS GEMM with heap arrays
+
+`gemm.bl` passes two flat heap arrays and a heap output array to cuBLAS. Import
+`std.cu.blas` for `blink_cu_sgemm_2x3_3x4` (`f32`) or
+`blink_cu_dgemm_2x3_3x4` (`f64`). Both compute `C = alpha*A*B + beta*C`:
+
+- A: row-major 2-by-3 matrix, `[f32; 6]` or `[f64; 6]`.
+- B: row-major 3-by-4 matrix, 12 elements.
+- C: row-major 2-by-4 matrix, 8 elements, supplied by the caller.
+
+These shapes are fixed in the Blink API. Use `new [...]` to allocate the buffers
+on the heap and `free a, b, c;` after use. The wrapper retains no host pointers
+and finishes before returning. Inputs may share storage with the output.
+Return codes are zero on success, positive CUDA runtime errors, or negative
+cuBLAS errors. A failing operation's output should be discarded.
+
+The native implementation calls NVIDIA's `cublasSgemm` / `cublasDgemm` directly.
+It swaps the operands and dimensions to support row-major data without transpose
+kernels. There is no custom multiplication kernel. `beta = 0` skips uploading C.
+Each call creates a cuBLAS handle, allocates device memory, uploads inputs, runs
+GEMM, downloads C, and cleans up. Those costs dominate tiny matrices; this example
+verifies interop and does not promise a speedup for this small shape. Repeated
+large multiplies would benefit from a future API retaining device buffers and a
+handle across calls. `f32` is usually the appropriate throughput-oriented choice
+on Jetson hardware; the wrapper does not enable reduced-precision math modes.
+
+The build requires cuBLAS headers and libraries and links `-lcublas`:
+
+```sh
+make -C examples/cu run            # vector addition and heap-array SGEMM/DGEMM
+make -C examples/cu run OPT=-O2
+make -C examples/cu test           # SGEMM/DGEMM, scaling, aliasing, null errors
+```
+
+GPU execution needs access to NVIDIA device nodes. If compilation succeeds but
+execution fails inside a sandbox, run the generated binaries with GPU access.
