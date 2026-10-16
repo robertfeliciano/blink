@@ -53,7 +53,9 @@ let assert_nonempty_file filename =
 
 let compile_and_run ~expected_exit =
   assert_nonempty_file "new_output.ll";
-  assert_success "LLVM object generation"
+  (* llc verifies the input module while generating the object, so native tests
+     do not need a separate --filetype=null invocation. *)
+  assert_success "LLVM verification and object generation"
     "llc --filetype=obj --relocation-model=pic new_output.ll -o program.o";
   assert_nonempty_file "program.o";
   assert_success "native linking" "clang program.o -o program -lm";

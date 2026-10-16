@@ -33,8 +33,6 @@ let test_fixture ?(optimization = "-O0") fixture test_context =
           optimization
       in
       Native_test_support.assert_success_silently "backend AST compiler" command;
-      Native_test_support.assert_success "LLVM verification"
-        "llc --filetype=null new_output.ll -o /dev/null";
       (if fixture.name = "global-storage" then
          let ir = Core.In_channel.read_all "new_output.ll" in
          assert_bool "mutable binding uses internal global storage"

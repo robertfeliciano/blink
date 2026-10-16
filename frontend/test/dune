@@ -51,17 +51,7 @@
  (name e2e)
  (modules e2e)
  (deps ../src/blink.exe)
- (libraries
-  blink.parsing
-  blink.desugaring
-  blink.typing
-  test_support
-  call_arity_fixtures
-  ounit2
-  core
-  core_unix)
- (preprocess
-  (pps ppx_jane)))
+ (libraries test_support call_arity_fixtures ounit2 core core_unix))
 
 (executable
  (name backend_fixture_compiler)

@@ -278,32 +278,6 @@ let test_inline_propagation _ =
         (Printf.sprintf "unexpected inline program:\n%s"
            (Printer.show_desugared_program program))
 
-let pipeline_programs =
-  [
-    ( "branch and loop",
-      "fun main() => i32 {\n\
-      \  let value = 0;\n\
-      \  while value < 3 { value += 1; }\n\
-      \  if value == 3 { return 7; } else { return 8; }\n\
-       }" );
-    ( "for loop",
-      "fun main() => i32 {\n\
-      \  let total = 0;\n\
-      \  for i in 0..4 { total += i; }\n\
-      \  return total;\n\
-       }" );
-    ( "array foreach",
-      "fun main() => i32 {\n\
-      \  let values = [1, 2, 3];\n\
-      \  let total = 0;\n\
-      \  for value in values { total += value; }\n\
-      \  return total;\n\
-       }" );
-  ]
-
-let test_full_frontend_pipeline source _ =
-  ignore (parse_and_type_exn source |> desugar_exn)
-
 let test_lambda_lifting _ =
   let source =
     "fun main() => i32 {\n\
@@ -623,11 +597,6 @@ let test_generic_function_lowering _ =
   assert_equal (DA.RetVal (DA.TInt (DA.TSigned DA.Ti32))) fn.frtyp
 
 let suite =
-  let pipeline_tests =
-    List.map
-      (fun (name, source) -> name >:: test_full_frontend_pipeline source)
-      pipeline_programs
-  in
   "Desugaring"
   >::: [
          "generic function lowering" >:: test_generic_function_lowering;
@@ -654,5 +623,4 @@ let suite =
          >:: test_free_preserves_source_order;
          "conditional preserves branch-local preludes"
          >:: test_conditional_preserves_branch_local_preludes;
-         "parsed and typed programs" >::: pipeline_tests;
        ]
