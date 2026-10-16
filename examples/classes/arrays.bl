@@ -1,0 +1,18 @@
+class Point {
+    let x: i32 = 0;
+    let y: i32 = 0;
+}
+
+class List {
+    let values: [i32; 4] = [0, 0, 0, 0];
+}
+
+fun main() => i32 {
+    let list = new List { values = [1, 2, 3, 4] };
+    let first = new Point { x = 1, y = 2 };
+    let second = new Point { x = 3, y = 4 };
+    let points = [[first], [second]];
+    let result = list.values[2] + points[1][0].y;
+    free list, first, second;
+    return result;
+}

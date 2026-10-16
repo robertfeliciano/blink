@@ -1,0 +1,30 @@
+class Point {
+    let x: i32 = 0;
+    let y: i32 = 0;
+
+    fun set_x(value: i32) => void {
+        this.x = value;
+    }
+
+    fun midpoint(other: Point) => Point {
+        return new Point {
+            x = (this.x + other.x) / 2,
+            y = (this.y + other.y) / 2
+        };
+    }
+
+    fun sum_x(other: Point) => i32 {
+        return this.x + other.x;
+    }
+}
+
+fun main() => i32 {
+    let origin = new Point {};
+    let first = new Point { x = 10, y = 20 };
+    let second = new Point { x = 30, y = 40 };
+    origin.set_x(2);
+    let middle = first.midpoint(second);
+    let result = middle.sum_x(origin) + middle.y;
+    free origin, first, second, middle;
+    return result;
+}

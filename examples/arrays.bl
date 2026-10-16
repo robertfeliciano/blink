@@ -1,0 +1,12 @@
+fun increment(values: [i32; 4]) => [i32; 4] {
+    values[0] += 1;
+    return values;
+}
+
+fun main() => i32 {
+    let empty: [i32; 0] = [];
+    let values = increment([1, 2, 3, 4]);
+    let matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    return values[0] + matrix[2][2] + cube[1][1][1];
+}

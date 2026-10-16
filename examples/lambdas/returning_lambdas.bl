@@ -1,0 +1,10 @@
+fun make_adder(amount: i32) => (i32) -> i32 {
+    return fn[amount](value) { return value + amount; };
+}
+
+fun main() => i32 {
+    let add_ten = make_adder(10);
+    let result = add_ten(32);
+    free add_ten;
+    return result;
+}

@@ -62,7 +62,9 @@ AST debugging flags are `-print-ast`, `-print-typed-ast`, and
 - `compile` wraps `blink`, `llc`, and `clang` for native compilation.
 - `Dockerfile` defines the Debian, OCaml, Clang, and LLVM 16 toolchain.
 - `compose.yaml` mounts the checkout at `/workspace` in the dev container.
-- `examples/` contains sample Blink programs and feature demonstrations.
+- `examples/` contains consolidated standalone feature demonstrations and
+  `classes/`, `lambdas/`, `modules/`, and `interfaces/` topic folders.
+  `examples/README.md` indexes the runnable programs and expected results.
 - `tests/` contains additional `.bl` fixtures not wired into Dune directly.
 - `LICENSE` contains the project license.
 
@@ -298,13 +300,13 @@ Do not place hand-written `.ll`, `.s`, or `.o` files at the repository root.
 Compile a source file to LLVM IR:
 
 ```sh
-./blink -O0 examples/simple.bl
+./blink -O0 examples/basics.bl
 ```
 
 Compile and link a runnable native program:
 
 ```sh
-./compile -O2 examples/simple.bl
+./compile -O2 examples/basics.bl
 ./new_output.o
 ```
 

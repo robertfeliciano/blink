@@ -1,0 +1,21 @@
+fun fold_left(f: (i32, i32) -> i32, acc: i32, values: [i32; 4]) => i32 {
+    for value in values {
+        acc = f(acc, value);
+    }
+    return acc;
+}
+
+fun main() => i32 {
+    let values = [1, 2, 3, 4];
+    let sum: (i32, i32) -> i32 = fn(acc, value) {
+        return acc + value;
+    };
+    let append_digit: (i32, i32) -> i32 = fn(acc, value) {
+        return acc * 10 + value;
+    };
+    let total = fold_left(sum, 0, values);
+    let digits = fold_left(append_digit, 0, values);
+    free sum, append_digit;
+    if digits != 1234 { return 1; }
+    return total;
+}

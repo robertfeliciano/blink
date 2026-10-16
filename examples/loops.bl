@@ -1,0 +1,58 @@
+fun while_loop() => i32 {
+    let value = 0;
+    let total = 0;
+    while value < 5 {
+        total += value;
+        value += 1;
+    }
+    return total;
+}
+
+fun exclusive_range() => i32 {
+    let total = 0;
+    for value in 0..5 { total += value; }
+    return total;
+}
+
+fun inclusive_range() => i32 {
+    let total = 0;
+    for value in 0..=5 { total += value; }
+    return total;
+}
+
+fun stepped_range() => i32 {
+    let total = 0;
+    for value in 0..6 by 2 { total += value; }
+    return total;
+}
+
+fun foreach_loop() => i32 {
+    let values = [1, 2, 3, 4];
+    let total = 0;
+    for value in values { total += value; }
+    return total;
+}
+
+fun nested_loops() => i32 {
+    let count = 0;
+    for outer in 0..3 {
+        let inner = 0;
+        while inner < 5 {
+            inner += 1;
+            if inner == 2 { continue; }
+            if inner == 4 { break; }
+            count += 1;
+        }
+    }
+    return count;
+}
+
+fun main() => i32 {
+    if while_loop() != 10 { return 1; }
+    if exclusive_range() != 10 { return 2; }
+    if inclusive_range() != 15 { return 3; }
+    if stepped_range() != 6 { return 4; }
+    if foreach_loop() != 10 { return 5; }
+    if nested_loops() != 6 { return 6; }
+    return 42;
+}

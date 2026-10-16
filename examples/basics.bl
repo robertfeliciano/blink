@@ -1,0 +1,19 @@
+fun main() => i32 {
+    const base: u16 = 5 + 3 * 4;
+    let inferred = 10;
+    let widened = base as i32;
+    let decimal: f64 = inferred as f64;
+    let power = 2.0 ** (3 as f64);
+    let shifted = 1;
+    shifted <<= 2;
+    let result: i32;
+    if decimal > 5.0 and widened == 17 {
+        result = widened + inferred;
+    } else if inferred == 0 {
+        result = 0;
+    } else {
+        result = -1;
+    }
+    let adjustment = result > 0 ? 3 : -3;
+    return result + adjustment + shifted + (power as i32);
+}

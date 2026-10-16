@@ -1,0 +1,8 @@
+fun main() => i32 {
+    let add = fn(left: i32, right: i32) -> i32 {
+        return left + right;
+    };
+    let result = add(40, 2);
+    free add;
+    return result;
+}

@@ -1,0 +1,14 @@
+fun add(left: i32, right: i32) => i32 {
+    return left + right;
+}
+
+fun apply(f: (i32, i32) -> i32, left: i32, right: i32) => i32 {
+    return f(left, right);
+}
+
+fun main() => i32 {
+    let callback = add;
+    let result = apply(callback, 40, 2);
+    free callback;
+    return result;
+}

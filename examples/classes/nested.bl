@@ -1,0 +1,15 @@
+class Inner {
+    let value: i32 = 0;
+}
+
+class Outer {
+    let inside: Inner = new Inner { value = 44 };
+}
+
+fun main() => i32 {
+    let outer = new Outer {};
+    let result = outer.inside.value;
+    free outer.inside;
+    free outer;
+    return result;
+}
