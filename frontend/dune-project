@@ -11,6 +11,7 @@
   (ocaml (>= 4.14.0))
   dune
   menhir
+  menhirLib
   
   ;; useful libs
   core

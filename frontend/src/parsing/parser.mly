@@ -61,8 +61,6 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LTE       /* <= */
 %token GT        /* > */
 %token GTE       /* >= */
-%token LT_TYPE   /* < */
-%token GT_TYPE   /* > */
 // %token OPT_TYPE  /* ? */
 %token NEQ       /* != */
 %token EQEQ      /* == */
@@ -233,8 +231,8 @@ pdecl:
       { bind_proto_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args }) }
 
 cdecl:
-  | annotations=list(annotation) CLASS cname=IDENT impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
-      { (loc $symbolstartpos $endpos { annotations; cname; impls; fields; methods }) }
+  | annotations=list(annotation) CLASS cname=IDENT cparams=type_params impls=impls_spec LBRACE fields=field_list methods=fdecl_list RBRACE
+      { (loc $symbolstartpos $endpos { annotations; cname; cparams; impls; fields; methods } |> map_cdecl_types (bind_type_params cparams)) }
 
 idecl:
   | INTERFACE iname=IDENT LBRACE fields=list(ifield) protos=list(pdecl) RBRACE
@@ -312,9 +310,9 @@ ret_ty_spec:
 
 ref_ty:
   | TSTRING { RString }
-  | cname=qualified_name { RClass cname }
+  | cname=qualified_name %prec QUALIFIED_NAME_END { RClass cname }
   | LBRACKET t=ty SEMI sz=INT RBRACKET { RArray (t, sz) }
-  | gname=IDENT LT_TYPE params=separated_list(COMMA, ty) GT_TYPE
+  | gname=qualified_name LT params=separated_nonempty_list(COMMA, ty) GT
     { RGeneric (gname, params) }
 
 %inline bop:
@@ -329,7 +327,7 @@ ref_ty:
   | LTE   { Lte }
   | LTLT  { Shl }
   | GTGT  { Lshr }
-  | GTGTGT{ Ashr }
+  | GTGTGT { Ashr }
   | GT    { Gt }
   | GTE   { Gte }
   | NEQ   { Neq }
@@ -389,6 +387,11 @@ unary:
       { p }
 
 (* primary forms (literals, ids, arrays, grouped) *)
+class_type:
+  | name=qualified_name { loc $startpos $endpos (RClass name) }
+  | name=qualified_name LT args=separated_nonempty_list(COMMA, ty) GT
+      { loc $startpos $endpos (RGeneric (name, args)) }
+
 primary:
   | TRUE                            { loc $startpos $endpos @@ Bool true }
   | FALSE                           { loc $startpos $endpos @@ Bool false }
@@ -402,7 +405,7 @@ primary:
   | NEW LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array (elems, true) }
   | LPAREN e=exp RPAREN             { e }
-  | NEW cid=qualified_name LBRACE fields=separated_list(COMMA, field_init) RBRACE
+  | NEW cid=class_type LBRACE fields=separated_list(COMMA, field_init) RBRACE
       { 
         loc $startpos $endpos @@ ObjInit (cid, fields)
       }

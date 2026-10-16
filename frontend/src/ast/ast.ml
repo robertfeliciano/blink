@@ -3,6 +3,7 @@ module Range = Util.Range
 type 'a node = { elt : 'a; loc : Range.t }
 
 exception ParserError of Lexing.position * string
+exception InvalidObjectType of Range.t
 
 let show_node show_elt { elt; loc } =
   Printf.sprintf "{ elt = %s; loc = %s }" (show_elt elt)
@@ -40,7 +41,7 @@ and ref_ty =
   | RArray of ty * Z.t
   | RClass of qualified_name node
   | RFun of ty list * ret_ty
-  | RGeneric of string * ty list
+  | RGeneric of qualified_name node * ty list
 
 and ret_ty = RetVoid | RetVal of ty
 
@@ -104,7 +105,7 @@ type exp =
   | Index of exp node * exp node
   | Array of exp node list * bool (* elements, on_heap *)
   | Cast of exp node * ty
-  | ObjInit of qualified_name node * (id node * exp node) list
+  | ObjInit of ref_ty node * (id node * exp node) list
   | Lambda of exp node list * id list * block (* scope, args, body *)
   | TypedLambda of
       exp node list
@@ -161,6 +162,7 @@ type fdecl = {
 type field = { fieldName : id; ftyp : ty; init : exp node option }
 
 type cdecl = {
+  cparams : id node list;
   annotations : annotation list;
   cname : id;
   impls : qualified_name node list;
@@ -207,7 +209,7 @@ let partition_declarations (Prog (_, declarations)) =
 (* Type parameters are bound before module resolution. Share this traversal
    with specialization so annotations inside lambdas and local declarations
    follow the same substitution as the function signature. *)
-let map_fdecl_types ty (fn : fdecl node) =
+let type_mappers ty =
   let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
   let rec exp en =
     let elt =
@@ -220,6 +222,11 @@ let map_fdecl_types ty (fn : fdecl node) =
       | Array (es, on_heap) -> Array (List.map exp es, on_heap)
       | Cast (e, t) -> Cast (exp e, ty t)
       | ObjInit (cn, fields) ->
+          let cn =
+            match ty (TRef cn.elt) with
+            | TRef ref_ty -> { cn with elt = ref_ty }
+            | _ -> raise (InvalidObjectType cn.loc)
+          in
           ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
       | Lambda (scope, args, body) ->
           Lambda (List.map exp scope, args, block body)
@@ -252,6 +259,16 @@ let map_fdecl_types ty (fn : fdecl node) =
     in
     { sn with elt }
   in
+  (exp, block)
+
+let map_exp_types ty = fst (type_mappers ty)
+
+let map_vdecl_types ty (name, annotation, init, const) =
+  (name, Option.map ty annotation, Option.map (map_exp_types ty) init, const)
+
+let map_fdecl_types ty (fn : fdecl node) =
+  let exp, block = type_mappers ty in
+  let ret_ty = function RetVoid -> RetVoid | RetVal t -> RetVal (ty t) in
   {
     fn with
     elt =
@@ -267,12 +284,60 @@ let map_fdecl_types ty (fn : fdecl node) =
       };
   }
 
+let map_cdecl_types ty (cn : cdecl node) =
+  {
+    cn with
+    elt =
+      {
+        cn.elt with
+        fields =
+          List.map
+            (fun field -> { field with elt = map_vdecl_types ty field.elt })
+            cn.elt.fields;
+        methods = List.map (map_fdecl_types ty) cn.elt.methods;
+        annotations =
+          List.map
+            (fun (name, args) ->
+              (name, Option.map (List.map (map_exp_types ty)) args))
+            cn.elt.annotations;
+      };
+  }
+
+let rec exists_type_param predicate = function
+  | TParam p -> predicate p
+  | TRef (RArray (ty, _)) -> exists_type_param predicate ty
+  | TRef (RGeneric (_, args)) -> List.exists (exists_type_param predicate) args
+  | TRef (RFun (args, ret)) -> (
+      List.exists (exists_type_param predicate) args
+      ||
+      match ret with
+      | RetVoid -> false
+      | RetVal ty -> exists_type_param predicate ty)
+  | _ -> false
+
+let rec substitute_type_params lookup = function
+  | TParam p -> lookup p
+  | TRef (RGeneric (name, args)) ->
+      TRef (RGeneric (name, List.map (substitute_type_params lookup) args))
+  | TRef (RArray (ty, size)) ->
+      TRef (RArray (substitute_type_params lookup ty, size))
+  | TRef (RFun (args, ret)) ->
+      let ret =
+        match ret with
+        | RetVoid -> RetVoid
+        | RetVal ty -> RetVal (substitute_type_params lookup ty)
+      in
+      TRef (RFun (List.map (substitute_type_params lookup) args, ret))
+  | ty -> ty
+
 let rec bind_type_params params = function
   | TRef (RClass cn) as t -> (
       match unqualified_id cn with
       | Some i when List.exists (fun p -> p.elt = i) params ->
           TParam cn.elt.name
       | _ -> t)
+  | TRef (RGeneric (name, args)) ->
+      TRef (RGeneric (name, List.map (bind_type_params params) args))
   | TRef (RArray (t, sz)) -> TRef (RArray (bind_type_params params t, sz))
   | TRef (RFun (args, ret)) ->
       let ret =
@@ -286,8 +351,7 @@ let rec bind_type_params params = function
 let bind_fdecl_params (fn : fdecl node) =
   map_fdecl_types (bind_type_params fn.elt.type_params) fn
 
-let bind_proto_params (pn : proto node) =
-  let ty = bind_type_params pn.elt.type_params in
+let map_proto_types ty (pn : proto node) =
   {
     pn with
     elt =
@@ -298,8 +362,16 @@ let bind_proto_params (pn : proto node) =
           (match pn.elt.frtyp with
           | RetVoid -> RetVoid
           | RetVal t -> RetVal (ty t));
+        annotations =
+          List.map
+            (fun (name, args) ->
+              (name, Option.map (List.map (map_exp_types ty)) args))
+            pn.elt.annotations;
       };
   }
+
+let bind_proto_params (pn : proto node) =
+  map_proto_types (bind_type_params pn.elt.type_params) pn
 
 let interface_declarations (Prog (_, declarations)) =
   List.filter_map
@@ -351,7 +423,10 @@ let rec show_ref_ty ?(lvl = 0) = function
         (indent (lvl + 1))
         args_s (indent lvl)
         (show_ret_ty ~lvl:(lvl + 1) ret)
-  | RGeneric _ -> failwith "generics not supported yet"
+  | RGeneric (name, args) ->
+      show_qualified_name name ^ "<"
+      ^ String.concat ", " (List.map (show_ty ~lvl) args)
+      ^ ">"
 
 and show_ret_ty ?(lvl = 0) = function
   | RetVoid -> "RetVoid"
@@ -424,7 +499,7 @@ let rec show_exp ?(lvl = 0) = function
              fields)
       in
       Printf.sprintf "%sObjInit(%s, [\n%s\n%s])" (indent lvl)
-        (show_qualified_name cn) fields_s (indent lvl)
+        (show_ref_ty cn.elt) fields_s (indent lvl)
   | Lambda (scope, params, body) ->
       let scope_s =
         "[" ^ String.concat ", " (List.map (show_node show_exp) scope) ^ "]"
@@ -602,7 +677,7 @@ let show_field ?(lvl = 0) { fieldName; ftyp; init } =
     (match init with Some e -> show_node show_exp e | None -> "None")
 
 let show_cdecl ?(lvl = 0)
-    { elt = { annotations; cname; impls; fields; methods }; loc = _ } =
+    { elt = { annotations; cname; impls; fields; methods; cparams }; loc = _ } =
   let fields_s =
     String.concat ";\n"
       (List.map (show_node (show_vdecl ~lvl:(lvl + 2))) fields)
@@ -620,7 +695,8 @@ let show_cdecl ?(lvl = 0)
      %s\n\
      %s]}"
     (show_annotations annotations)
-    (indent lvl) cname
+    (indent lvl)
+    (cname ^ show_type_params cparams)
     (String.concat ", " (List.map show_qualified_name impls))
     (indent (lvl + 1))
     fields_s

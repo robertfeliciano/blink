@@ -1,0 +1,21 @@
+class Box<T> {
+    let value: T;
+    fun get() => T { return value; }
+}
+
+fun wrap<T>(value: T) => Box<T> {
+    return new Box<T> { value = value };
+}
+
+fun read<T>(box: Box<T>) => T {
+    return box.get();
+}
+
+fun main() => i32 {
+    let first: Box<i32> = wrap(42);
+    let second = new Box<bool> { value = true };
+    let nested = new Box<Box<i32>> { value = first };
+    let result = read(nested).get();
+    free nested, second, first;
+    return result;
+}

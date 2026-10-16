@@ -13,6 +13,34 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "same generic class spelling remains distinct across modules"
+           [
+             ([ "left" ], "export class Box<T> { let item: T; }");
+             ([ "right" ], "export class Box<T> { let item: T; let extra = 1; }");
+             ( [ "main" ],
+               "import left; import right; fun main() => i32 { let x = new \
+                left.Box<i32> { item = 20 }; let y = new right.Box<i32> { item \
+                = 22 }; return x.item + y.item; }" );
+           ];
+         types
+           "generic classes resolve at definition site and preserve parameter \
+            scope"
+           [
+             ( [ "helper" ],
+               "fun secret() => i32 { return 42; } export class Box<Element> { \
+                let item: Element; fun value() => i32 { return secret(); } } \
+                export fun wrap<T>(x: T) => Box<T> { return new Box<T> { item \
+                = x }; }" );
+             ( [ "main" ],
+               "import helper as h; class Element {} fun secret() => i32 { \
+                return 1; } fun main() => i32 { let x: h.Box<i32> = h.wrap(0); \
+                let y = new h.Box<bool> { item = true }; return x.value(); }" );
+           ];
+         rejects "private generic class" "is private"
+           [
+             ([ "helper" ], "class Box<T> { let item: T; }");
+             ([ "main" ], "import helper; fun f(x: helper.Box<i32>) {}");
+           ];
          types "exported interfaces and qualified implementation"
            [
              ( [ "contracts" ],

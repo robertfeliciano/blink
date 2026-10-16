@@ -7,6 +7,7 @@ let suite =
          Test_typing.suite;
          Test_desugaring.suite;
          Test_interfaces.suite;
+         Test_generic_classes.suite;
        ]
 
 let () = run_test_tt_main suite

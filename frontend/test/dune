@@ -33,7 +33,8 @@
   test_typing
   test_parsing
   test_desugaring
-  test_interfaces)
+  test_interfaces
+  test_generic_classes)
  (libraries
   blink.parsing
   blink.desugaring

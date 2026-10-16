@@ -105,7 +105,9 @@ Module interfaces are inferred from `.ml`, without module `.mli` files.
 
 - `frontend/src/parsing/lexer.mll` defines keywords, literals, and tokens.
 - `frontend/src/parsing/parser.mly` defines syntax and precedence.
-- `frontend/src/parsing/parse.ml` wraps lexer and parser error handling.
+- `frontend/src/parsing/parse.ml` drives the incremental Menhir parser, splits
+  closing type angles from compound operators when required by parser state, and
+  wraps lexer and parser error handling. The parser uses the menhirLib runtime.
 - `frontend/src/parsing/dune` configures ocamllex and Menhir.
 
 When adding syntax, update the lexer, parser, AST, and parser tests together.
@@ -120,6 +122,10 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
 - `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
   prototypes, and compilation-local generic state.
+- `frontend/src/typing/class_generics.ml` specializes generic classes before typing
+  concrete declarations; newly discovered classes rebuild compilation contexts.
+- `frontend/src/typing/generic_types.ml` shares specialization identities and
+  parameter/array validation between classes and functions.
 - `frontend/src/typing/generics.ml` owns generic signature matching, substitution,
   specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
@@ -138,8 +144,16 @@ headers before checking queued instance bodies, including recursive instances.
 The final typed program contains only concrete functions; the desugared AST and
 native bridge contract are unchanged. Instances are cached per compilation, with
 limits of 4096 instances and 128 entries in a requesting chain. Generic prototypes
-require matching definitions; generic methods, classes, main and @C declarations
-are unsupported. Dependent bodies are checked only when instantiated.
+require matching definitions; generic methods, interfaces, main and @C declarations
+are unsupported. Dependent bodies are checked only when instantiated. Generic classes use
+`class Box<T>` declarations, `Box<i32>` types, and `new Box<i32> { ... }`.
+Class type arguments are explicit and invariant. Function inference matches
+parameters inside class applications. Class parameters bind before module
+resolution and apply to fields, methods, constructors, and nested annotations.
+Specializations register before recursively expanding their members and reuse
+concrete class layouts; the typed/desugared AST and bridge contract stay concrete.
+Classes may implement ordinary interfaces. Generic classes have compilation-local
+caches and the same specialization limits as generic functions.
 
 Language interfaces declare required fields and method prototypes; classes opt
 in with `impl` and must supply same-name, exactly typed fields and methods with
@@ -447,7 +461,7 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
-Generic classes, generic methods, interface constraints, and several prospective
+Generic interfaces, generic methods, interface constraints, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 

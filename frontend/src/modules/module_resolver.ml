@@ -169,7 +169,9 @@ let resolve graph : (program, diagnostic) result =
         | TRef (RArray (element, size)) -> TRef (RArray (ty element, size))
         | TRef (RFun (args, ret)) -> TRef (RFun (List.map ty args, ret_ty ret))
         | TRef (RGeneric (name, args)) ->
-            TRef (RGeneric (name, List.map ty args))
+            TRef
+              (RGeneric
+                 (nominal_name ~required:Class_kind name, List.map ty args))
         | primitive -> primitive
       and ret_ty = function
         | RetVoid -> RetVoid
@@ -210,7 +212,18 @@ let resolve graph : (program, diagnostic) result =
           | Cast (value, target) -> Cast (recurse value, ty target)
           | ObjInit (name, fields) ->
               ObjInit
-                ( nominal_name ~required:Class_kind name,
+                ( {
+                    name with
+                    elt =
+                      (match name.elt with
+                      | RClass cn ->
+                          RClass (nominal_name ~required:Class_kind cn)
+                      | RGeneric (cn, args) ->
+                          RGeneric
+                            ( nominal_name ~required:Class_kind cn,
+                              List.map ty args )
+                      | _ -> fail name "Expected a class initializer.");
+                  },
                   List.map (fun (field, value) -> (field, recurse value)) fields
                 )
           | Conditional (test, yes, no) ->
@@ -418,6 +431,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         cname = identity;
+                        cparams = value.elt.cparams;
                         impls =
                           List.map
                             (nominal_name ~required:Interface_kind)

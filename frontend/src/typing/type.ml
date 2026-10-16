@@ -71,6 +71,16 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
       type_error stmt_n
         "Lambdas not allowed at class field level - please use function \
          instead."
+  | Some ty, None ->
+      let ftyp = validate_and_convert_ty stmt_n tc ty in
+      (* A field without a source initializer is mandatory at every new-expression.
+         Its stored fallback is unreachable; do not require or invoke a constructor. *)
+      let init =
+        match ftyp with
+        | Typed_ast.TRef ref_ty -> Typed_ast.Null ref_ty
+        | _ -> create_default_init stmt_n tc ftyp
+      in
+      { fieldName; ftyp; init }
   | _ ->
       let init, ftyp =
         type_variable_initializer stmt_n tc fty_opt en_opt (Some cname)
@@ -612,10 +622,13 @@ let type_globals tc declarations =
   let globals = List.map (resolve []) declarations in
   (!context, globals)
 
-let create_generic_ctxt tc fns pns =
+let create_generic_ctxt classes tc fns pns =
   let seen = Hashtbl.create (List.length fns) in
   let rec validate_ty node = function
     | TParam _ -> ()
+    | TRef (RGeneric (name, args)) ->
+        ignore (Class_generics.template classes name args);
+        List.iter (validate_ty node) args
     | TRef (RArray (ty, sz)) ->
         validate_array_length node sz;
         validate_ty node ty
@@ -667,7 +680,7 @@ let create_generic_ctxt tc fns pns =
         if fn.elt.type_params = [] then None else Some (fn.elt.fname, fn))
       fns
   in
-  { tc with generics = Some (Generics.create templates) }
+  { tc with generics = Some (Generics.create classes templates) }
 
 let generic_error_message loc msg =
   try type_error { elt = (); loc } msg with TypeError msg -> msg
@@ -701,8 +714,9 @@ let type_generic_instances tc =
   in
   aux []
 
-let type_program ?(optimization_level = Util.Optimization_level.default)
-    (prog : Ast.program) : Typed_ast.program =
+let type_concrete_program (classes : Class_generics.t)
+    ?(optimization_level = Util.Optimization_level.default) (prog : Ast.program)
+    : Typed_ast.program =
   (* create global var ctxt *)
   let (Prog (imports, _)) = prog in
   (match imports with
@@ -714,7 +728,13 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
   let class_names = create_class_name_ctxt Tctxt.empty cns in
   let interfaces = Ast.interface_declarations prog in
   let interface_ctxt = create_interface_ctxt class_names interfaces in
-  let generic_ctxt = create_generic_ctxt interface_ctxt fns pns in
+  Hashtbl.iter
+    (fun _ (instance : Class_generics.instance) ->
+      List.iter
+        (typecheck_ty { elt = (); loc = instance.origin } interface_ctxt)
+        instance.args)
+    classes.instances;
+  let generic_ctxt = create_generic_ctxt classes interface_ctxt fns pns in
   let fns =
     List.filter (fun (fn : fdecl node) -> fn.elt.type_params = []) fns
   in
@@ -764,10 +784,35 @@ let type_program ?(optimization_level = Util.Optimization_level.default)
             })
         interfaces )
 
+let type_program ?(optimization_level = Util.Optimization_level.default) prog =
+  let _, classes, _, _ = Ast.partition_declarations prog in
+  ignore (create_class_name_ctxt Tctxt.empty classes);
+  List.iter
+    (fun (interface : idecl node) ->
+      if
+        List.exists
+          (fun (cn : cdecl node) -> cn.elt.cname = interface.elt.iname)
+          classes
+      then
+        type_error interface
+          ("Class or interface " ^ interface.elt.iname ^ " already exists."))
+    (Ast.interface_declarations prog);
+  let classes = Class_generics.create classes in
+  let rec specialize () =
+    let concrete = Class_generics.prepare classes prog in
+    try type_concrete_program classes ~optimization_level concrete
+    with Class_generics.New_instances -> specialize ()
+  in
+  try specialize ()
+  with TypeError message ->
+    raise (TypeError (Class_generics.display_names classes message))
+
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
   try Ok (type_program ~optimization_level prog) with
-  | Generics.GenericError (loc, msg) | Generics.CannotInfer (loc, msg) ->
+  | Class_generics.Error (loc, msg)
+  | Generics.GenericError (loc, msg)
+  | Generics.CannotInfer (loc, msg) ->
       let err = Fmt.str "Type Error: %s" (generic_error_message loc msg) in
       Error (Core.Error.of_string err)
   | TypeError msg ->

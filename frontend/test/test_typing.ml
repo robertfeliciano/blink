@@ -700,7 +700,9 @@ let test_array_length_must_fit_target_int _ =
       Tu.validate_and_convert_ty (mk_node ()) Tc.empty array_ty)
 
 let test_unsupported_generic_type_is_type_error _ =
-  let generic_ty = TRef (RGeneric ("Box", [ TInt (TSigned Ti32) ])) in
+  let generic_ty =
+    TRef (RGeneric (unqualified_name (mk_node "Box"), [ TInt (TSigned Ti32) ]))
+  in
   assert_type_error (fun () ->
       Tu.validate_and_convert_ty (mk_node ()) Tc.empty generic_ty)
 

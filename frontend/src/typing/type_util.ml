@@ -105,10 +105,8 @@ let resolved_class_name name =
   | None ->
       type_error name "Qualified class names must be resolved before typing."
 
-let validate_array_length node sz =
-  if Z.lt sz (Z.of_int 0) then type_error node "negative length specified"
-  else if not (Z.fits_int sz) then
-    type_error node "array length is too large for this target"
+let validate_array_length node size =
+  Generic_types.validate_array_length type_error node size
 
 let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
@@ -152,15 +150,29 @@ and resolve_interface_ret_ty tc = function
   | Typed_ast.RetVoid -> Typed_ast.RetVoid
   | RetVal ty -> RetVal (resolve_interface_ty tc ty)
 
+let normalize_class_ty (tc : Tctxt.t) ty =
+  match tc.generics with
+  | None -> ty
+  | Some state ->
+      let classes = state.classes in
+      let count = Hashtbl.length classes.instances in
+      let ty = Class_generics.normalize classes ty in
+      if Hashtbl.length classes.instances <> count then (
+        Class_generics.drain classes;
+        raise Class_generics.New_instances);
+      ty
+
 let validate_and_convert_ty (node : 'a Ast.node) (tc : Tctxt.t) (ty : Ast.ty) :
     Typed_ast.ty =
+  let ty = normalize_class_ty tc ty in
   typecheck_ty node tc ty;
   resolve_interface_ty tc (Conversions.convert_ty ty)
 
 let validate_and_convert_ret_ty (node : 'a Ast.node) (tc : Tctxt.t)
     (ret_ty : Ast.ret_ty) : Typed_ast.ret_ty =
-  typecheck_ret_ty node tc ret_ty;
-  resolve_interface_ret_ty tc (Conversions.convert_ret_ty ret_ty)
+  match ret_ty with
+  | RetVoid -> Typed_ast.RetVoid
+  | RetVal ty -> Typed_ast.RetVal (validate_and_convert_ty node tc ty)
 
 let validate_and_convert_signature (node : 'a Ast.node) (tc : Tctxt.t)
     (args : (Ast.ty * id) list) (ret_ty : Ast.ret_ty) :

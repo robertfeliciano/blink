@@ -15,13 +15,21 @@ type t = {
   instances : (id * instance) list ref;
   pending : instance Queue.t;
   origins : origin list ref;
+  classes : Class_generics.t;
 }
 
-let create templates =
-  { templates; instances = ref []; pending = Queue.create (); origins = ref [] }
+let create classes templates =
+  {
+    classes;
+    templates;
+    instances = ref [];
+    pending = Queue.create ();
+    origins = ref [];
+  }
 
-let rec subst_ty bindings = function
-  | TParam p -> (
+let subst_ty bindings ty =
+  Ast.substitute_type_params
+    (fun p ->
       match List.assoc_opt p.elt bindings with
       | Some ty -> Conversions.convert_source_ty ty
       | None ->
@@ -30,25 +38,10 @@ let rec subst_ty bindings = function
                ( p.loc,
                  "Cannot infer type parameter " ^ p.elt
                  ^ "; provide a type annotation." )))
-  | TRef (RArray (ty, sz)) -> TRef (RArray (subst_ty bindings ty, sz))
-  | TRef (RFun (args, ret)) ->
-      TRef (RFun (List.map (subst_ty bindings) args, subst_ret_ty bindings ret))
-  | ty -> ty
+    ty
 
-and subst_ret_ty bindings = function
-  | RetVoid -> RetVoid
-  | RetVal ty -> RetVal (subst_ty bindings ty)
-
-let rec unresolved bindings = function
-  | TParam p -> not (List.mem_assoc p.elt bindings)
-  | TRef (RArray (ty, _)) -> unresolved bindings ty
-  | TRef (RFun (args, ret)) ->
-      List.exists (unresolved bindings) args || unresolved_ret bindings ret
-  | _ -> false
-
-and unresolved_ret bindings = function
-  | RetVoid -> false
-  | RetVal ty -> unresolved bindings ty
+let unresolved bindings =
+  Ast.exists_type_param (fun p -> not (List.mem_assoc p.elt bindings))
 
 let check_array_length node sz actual =
   if not (Z.equal sz actual) then
@@ -60,7 +53,7 @@ let check_function_arity node args actual =
 
 (* Only generic positions constrain inference. Ordinary positions still use the
    existing argument conversion rules after the signature is concrete. *)
-let rec match_ty ?(fill = false) node bindings ty actual =
+let rec match_ty ~convert_ty ~classes ?(fill = false) node bindings ty actual =
   match (ty, actual) with
   | TParam p, actual -> (
       match List.assoc_opt p.elt !bindings with
@@ -71,35 +64,50 @@ let rec match_ty ?(fill = false) node bindings ty actual =
           generic_error node
             ("Conflicting types for " ^ p.elt ^ ": " ^ Printer.show_ty previous
            ^ " and " ^ Printer.show_ty actual ^ "."))
+  | TRef (RGeneric (name, args)), T.TRef (T.RClass actual) -> (
+      match Class_generics.arguments classes actual with
+      | Some (owner, actual_args) when owner = Ast.show_qualified_name name ->
+          List.iter2
+            (fun ty actual ->
+              match_ty ~convert_ty ~classes ~fill node bindings ty
+                (convert_ty actual))
+            args actual_args
+      | _ -> generic_error node "Generic class specialization mismatch.")
   | TRef (RArray (ty, sz)), T.TRef (T.RArray (actual, len)) ->
       check_array_length node sz (Z.of_int len);
-      match_ty ~fill node bindings ty actual
+      match_ty ~convert_ty ~classes ~fill node bindings ty actual
   | TRef (RFun (args, ret)), T.TRef (T.RFun (actual_args, actual_ret)) ->
       check_function_arity node args actual_args;
-      List.iter2 (match_ty ~fill node bindings) args actual_args;
-      match_ret_ty ~fill node bindings ret actual_ret
+      List.iter2
+        (match_ty ~convert_ty ~classes ~fill node bindings)
+        args actual_args;
+      match_ret_ty ~convert_ty ~classes ~fill node bindings ret actual_ret
   | _ -> ()
 
-and match_ret_ty ?(fill = false) node bindings ret actual =
+and match_ret_ty ~convert_ty ~classes ?(fill = false) node bindings ret actual =
   match (ret, actual) with
-  | RetVal ty, T.RetVal actual -> match_ty ~fill node bindings ty actual
+  | RetVal ty, T.RetVal actual ->
+      match_ty ~convert_ty ~classes ~fill node bindings ty actual
   | RetVoid, T.RetVoid -> ()
   | _ -> generic_error node "Function return mismatch during generic inference."
 
 (* A generic callback can connect still-unbound parameters in its receiver's
    signature. Each side keeps its own bindings, even when parameter names match.
    Only concrete types enter either set of bindings. *)
-let match_patterns ~convert_ty node bindings ty callback_ty =
+let match_patterns ~classes ~convert_ty node bindings ty callback_ty =
   let callback_bindings = ref [] in
   let rec match_pair ty callback_ty =
     if not (unresolved !bindings ty) then
-      match_ty node callback_bindings callback_ty
+      match_ty ~convert_ty ~classes node callback_bindings callback_ty
         (convert_ty (subst_ty !bindings ty))
     else if not (unresolved !callback_bindings callback_ty) then
-      match_ty node bindings ty
+      match_ty ~convert_ty ~classes node bindings ty
         (convert_ty (subst_ty !callback_bindings callback_ty))
     else
       match (ty, callback_ty) with
+      | TRef (RGeneric (name, args)), TRef (RGeneric (other, other_args))
+        when Ast.show_qualified_name name = Ast.show_qualified_name other ->
+          List.iter2 match_pair args other_args
       | TRef (RArray (ty, sz)), TRef (RArray (callback_ty, callback_sz)) ->
           check_array_length node sz callback_sz;
           match_pair ty callback_ty
@@ -123,21 +131,11 @@ let match_patterns ~convert_ty node bindings ty callback_ty =
   aux ()
 
 let validate_params node params args ret annotations =
-  let seen = Hashtbl.create (List.length params) in
-  List.iter
-    (fun p ->
-      if Hashtbl.mem seen p.elt then
-        generic_error p ("Duplicate type parameter " ^ p.elt ^ ".");
-      Hashtbl.add seen p.elt ())
-    params;
+  Generic_types.validate_params generic_error params;
   if params <> [] && has_annotation "C" annotations then
     generic_error node "Generic @C functions are not supported.";
-  let rec uses i = function
-    | TParam p -> p.elt = i
-    | TRef (RArray (ty, _)) -> uses i ty
-    | TRef (RFun (args, ret)) -> List.exists (uses i) args || uses_ret i ret
-    | _ -> false
-  and uses_ret i = function RetVoid -> false | RetVal ty -> uses i ty in
+  let uses i = Ast.exists_type_param (fun p -> p.elt = i) in
+  let uses_ret i = function RetVoid -> false | RetVal ty -> uses i ty in
   List.iter
     (fun p ->
       if
@@ -148,28 +146,8 @@ let validate_params node params args ret annotations =
           ("Type parameter " ^ p.elt ^ " must appear in the function signature."))
     params
 
-let length_and_name name = string_of_int (String.length name) ^ name
-
-let rec encode_ty ty =
-  match ty with
-  | T.TBool -> "b"
-  | T.TInt _ | T.TFloat _ -> Printer.show_ty ty
-  | T.TRef T.RString -> "s"
-  | T.TRef (T.RClass cn) -> "c" ^ length_and_name cn
-  | T.TRef (T.RInterface name) -> "i" ^ length_and_name name
-  | T.TRef (T.RArray (ty, sz)) ->
-      "a" ^ string_of_int sz ^ "_" ^ length_and_name (encode_ty ty)
-  | T.TRef (T.RFun (args, ret)) ->
-      "f"
-      ^ string_of_int (List.length args)
-      ^ "_"
-      ^ String.concat ""
-          (List.map (fun ty -> length_and_name (encode_ty ty)) args)
-      ^ encode_ret ret
-
-and encode_ret = function
-  | T.RetVoid -> "v"
-  | T.RetVal ty -> "r" ^ length_and_name (encode_ty ty)
+let length_and_name = Generic_types.length_and_name
+let encode_ty = Generic_types.encode_ty
 
 let request ~convert_ty ~convert_ret_ty state (node : 'a Ast.node)
     (fn : fdecl node) bindings =
@@ -200,6 +178,7 @@ let request ~convert_ty ~convert_ret_ty state (node : 'a Ast.node)
           ^ String.concat " -> " (List.map (fun origin -> origin.name) origins)
           );
       let fn = map_fdecl_types (subst_ty bindings) fn in
+      let fn = Class_generics.normalize_function state.classes fn in
       let fn = { fn with elt = { fn.elt with fname; type_params = [] } } in
       let args = List.map (fun (ty, _) -> convert_ty ty) fn.elt.args in
       let ty = T.TRef (T.RFun (args, convert_ret_ty fn.elt.frtyp)) in
@@ -217,6 +196,11 @@ let prototype_matches (pn : proto node) (fn : fdecl node) =
             | q :: qs -> if p.elt = q.elt then n else index (n + 1) qs
           in
           TParam (no_loc (string_of_int (index 0 params)))
+      | TRef (RGeneric (name, args)) ->
+          TRef
+            (RGeneric
+               ( unqualified_name (no_loc (show_qualified_name name)),
+                 List.map ty args ))
       | TRef (RClass cn) ->
           TRef (RClass (unqualified_name (no_loc (show_qualified_name cn))))
       | TRef (RArray (t, sz)) -> TRef (RArray (ty t, sz))

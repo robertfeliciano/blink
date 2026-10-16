@@ -248,7 +248,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       let bindings = ref [] in
       (match expected with
       | Some (Typed_ast.TRef (RFun _) as ty) ->
-          Generics.match_ty e bindings
+          Generics.match_ty
+            ~convert_ty:(validate_and_convert_ty e tc)
+            ~classes:(Option.get tc.generics).classes e bindings
             (TRef (RFun (List.map fst fn.elt.args, fn.elt.frtyp)))
             ty
       | _ -> ());
@@ -535,7 +537,11 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
           create_typed_lambda e tc' rhs_args rhs_ret body enclosing_class
             t_scope)
   | ObjInit (class_name, inits) ->
-      let cname = resolved_class_name class_name in
+      let cname =
+        match class_name.elt with
+        | RClass name -> resolved_class_name name
+        | _ -> type_error class_name "Unresolved generic class initializer."
+      in
       if Option.is_some (Tctxt.lookup_interface_option cname tc) then
         type_error class_name ("Cannot construct interface " ^ cname ^ ".");
       let cloc = class_name.loc in
@@ -751,7 +757,7 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
           let callback_ty =
             TRef (RFun (List.map fst callback.elt.args, callback.elt.frtyp))
           in
-          Generics.match_patterns
+          Generics.match_patterns ~classes:(Option.get tc.generics).classes
             ~convert_ty:(validate_and_convert_ty en tc)
             en bindings ty callback_ty
     | _ when (not default) && needs_context en -> ()
@@ -775,13 +781,19 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
               Some actual
             with Generics.CannotInfer _ -> None
           in
-          Option.iter (Generics.match_ty en bindings ty) result
+          Option.iter
+            (Generics.match_ty
+               ~convert_ty:(validate_and_convert_ty en tc)
+               ~classes:(Option.get tc.generics).classes en bindings ty)
+            result
   in
   List.iter2 (fun (ty, _) en -> infer false ty en) fn.elt.args args;
   Option.iter
     (fun ty ->
-      Generics.match_ret_ty ~fill:true node bindings fn.elt.frtyp
-        (Typed_ast.RetVal ty))
+      Generics.match_ret_ty
+        ~convert_ty:(validate_and_convert_ty node tc)
+        ~classes:(Option.get tc.generics).classes ~fill:true node bindings
+        fn.elt.frtyp (Typed_ast.RetVal ty))
     expected;
   let rec infer_pending () =
     let previous = List.length !bindings in

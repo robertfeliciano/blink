@@ -427,6 +427,103 @@ fun main() => i32 {
 let generic_fixtures =
   [
     {
+      name = "generic-class-array-string-and-function-arguments";
+      source =
+        {|class Box<T> { let value: T; }
+class Token<F> { fun apply(f: F) => F { return f; } }
+@C fun strcmp(left: string, right: string) => i32;
+fun main() => i32 {
+  let array = [20, 22];
+  let box = new Box<[i32; 2]> { value = array };
+  let text = new Box<string> { value = "blink" };
+  let token = new Token<(i32) -> i32> {};
+  let callback: (i32) -> i32 = fn[](x) { return x; };
+  if strcmp(text.value, "blink") != 0 { return 1; }
+  let result = token.apply(callback)(box.value[0] + box.value[1]);
+  free callback, token, text, box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-defaults-preserve-side-effects";
+      source =
+        {|let counter: i32 = 0;
+fun next() => i32 { counter += 1; return counter; }
+class Box<T> { let order = next(); let item: T; }
+fun main() => i32 {
+  let first = new Box<i32> { item = 40 };
+  let second = new Box<bool> { item = true, order = 99 };
+  let third = new Box<i32> { item = 0 };
+  if counter != 2 or first.order != 1 or second.order != 99 or third.order != 2 { return 1; }
+  let result = first.item + third.order;
+  free first, second, third;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-functions-methods-and-constructor";
+      source =
+        {|class Box<T> {
+  let value: T;
+  fun get() => T { return value; }
+  fun copy() => Box<T> { return new Box<T> { value = value }; }
+}
+fun wrap<T>(value: T) => Box<T> { return new Box<T> { value = value }; }
+fun read<T>(value: Box<T>) => T { return value.get(); }
+fun main() => i32 {
+  let first = wrap(40); let second = wrap(true); let copy = first.copy();
+  let f: (Box<i32>) -> i32 = read;
+  let result = f(copy) + 2;
+  free f, first, second, copy;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-nested-recursive-interface-and-lambda";
+      source =
+        {|interface Counter { let count: i32; fun value() => i32; }
+class Node<T> {
+  let value: T;
+  let next: Node<T> = null;
+}
+class Counted<T> impl Counter {
+  let count: i32 = 40;
+  let item: T;
+  fun value() => i32 { return count; }
+}
+fun main() => i32 {
+  let node = new Node<i32> { value = 2 };
+  let nested = new Node<Node<i32>> { value = node };
+  let concrete = new Counted<Node<Node<i32>>> { item = nested };
+  let alias: Counter = concrete;
+  let read: () -> i32 = fn[nested]() { return nested.value.value; };
+  alias.count += read();
+  let result = alias.value();
+  free read, concrete, nested, node;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-class-default-constructor-and-shift-precedence";
+      source =
+        {|class Box<T> {
+  let value: T;
+  fun Box() => Box<T> { let initial: T; return new Box<T> { value = initial }; }
+}
+fun main() => i32 {
+  let box: Box<i32>;
+  box.value = 8 >> 1 + 1;
+  if box.value != 5 or (1 + 8 >> 1) != 5 or (16 >>> 1 >> 1) != 4 or not (8 > 4) { return 1; }
+  free box;
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
       name = "generic-functions-and-values";
       source =
         {|fun identity<T>(value: T) => T { return value; }
