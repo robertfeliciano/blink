@@ -142,4 +142,4 @@ let rec create_default_init t =
   | D.TRef (RArray (t, sz)) ->
       let lst = List.init sz (fun _ -> create_default_init t) in
       let t' = D.TRef (RArray (t, sz)) in
-      D.Array (lst, t')
+      D.Array (lst, t', false)

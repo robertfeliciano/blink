@@ -70,7 +70,7 @@ type exp =
   | Uop of unop * exp * ty
   | Index of exp * exp * ty * ty
     (* stores type of element produced by the index and the type of the array *)
-  | Array of exp list * ty (* stores type of array [t x n]*)
+  | Array of exp list * ty * bool (* array type [t x n], on_heap *)
   | Cast of exp * ty
   | Proj of
       exp * id * id * ty (* x.y -> Proj(x, "y", classname of x, type of x.y) *)

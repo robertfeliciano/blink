@@ -357,7 +357,7 @@ Value* ExpToLLVisitor::operator()(const EIndex& e) {
 Value* ExpToLLVisitor::operator()(const EArray& e) {
     llvm::Type* arrTy = gen.codegenType(e.ty);
 
-    Value* arrPtr = gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
+    Value* arrPtr = e.on_heap ? allocateHeap(arrTy) : gen.builder->CreateAlloca(arrTy, nullptr, "array_lit");
     Value* zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*gen.ctxt), 0);
 
     llvm::Type* innerTy = arrTy->getArrayElementType();
@@ -466,17 +466,9 @@ Value* ExpToLLVisitor::operator()(const EProj& e) {
     return gen.builder->CreateLoad(fieldTy, fieldPtr, "fieldVal");
 }
 
-Value* ExpToLLVisitor::operator()(const EObjInit& e) {
-    auto it = gen.structTypes.find(e.id);
-    if (it == gen.structTypes.end()) {
-        throw std::runtime_error("Unknown class: " + e.id);
-    }
-
-    llvm::StructType*  structTy    = it->second;
-    llvm::PointerType* structPtrTy = llvm::PointerType::getUnqual(structTy);
-
+Value* ExpToLLVisitor::allocateHeap(llvm::Type* type) {
     const llvm::DataLayout& dl   = gen.mod->getDataLayout();
-    uint64_t                size = dl.getTypeAllocSize(structTy);
+    uint64_t                size = dl.getTypeAllocSize(type);
 
     llvm::Type* i64Ty   = llvm::Type::getInt64Ty(*gen.ctxt);
     Value*      sizeVal = llvm::ConstantInt::get(i64Ty, size);
@@ -491,7 +483,17 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
 
     Value* rawPtr = gen.builder->CreateCall(mallocFn, {sizeVal}, "rawmem");
 
-    Value* objPtr = gen.builder->CreateBitCast(rawPtr, structPtrTy, "obj");
+    return gen.builder->CreateBitCast(rawPtr, llvm::PointerType::getUnqual(type), "heap_alloc");
+}
+
+Value* ExpToLLVisitor::operator()(const EObjInit& e) {
+    auto it = gen.structTypes.find(e.id);
+    if (it == gen.structTypes.end()) {
+        throw std::runtime_error("Unknown class: " + e.id);
+    }
+
+    llvm::StructType* structTy = it->second;
+    Value*           objPtr   = allocateHeap(structTy);
 
     std::unordered_map<std::string, Value*> userInitMap;
 

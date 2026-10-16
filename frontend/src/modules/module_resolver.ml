@@ -206,7 +206,7 @@ let resolve graph : (program, diagnostic) result =
           | Bop (op, left, right) -> Bop (op, recurse left, recurse right)
           | Uop (op, value) -> Uop (op, recurse value)
           | Index (base, index) -> Index (recurse base, recurse index)
-          | Array values -> Array (List.map recurse values)
+          | Array (values, on_heap) -> Array (List.map recurse values, on_heap)
           | Cast (value, target) -> Cast (recurse value, ty target)
           | ObjInit (name, fields) ->
               ObjInit

@@ -34,7 +34,10 @@ let array_index () =
   let body =
     [
       DA.Decl
-        ("values", array_ty, DA.Array ([ int 4; int 8; int 15 ], array_ty), true);
+        ( "values",
+          array_ty,
+          DA.Array ([ int 4; int 8; int 15 ], array_ty, false),
+          true );
       DA.Ret (Some (DA.Index (DA.Id ("values", array_ty), int 2, i32)));
     ]
   in
@@ -51,7 +54,11 @@ let array_call () =
   let matrix_ty = DA.TRef (DA.RArray (array_ty, 2)) in
   let body =
     [
-      DA.Decl ("values", array_ty, DA.Array ([ int 20; int 22 ], array_ty), true);
+      DA.Decl
+        ( "values",
+          array_ty,
+          DA.Array ([ int 20; int 22 ], array_ty, false),
+          true );
       DA.Decl
         ( "direct",
           array_ty,
@@ -62,7 +69,8 @@ let array_call () =
           matrix_ty,
           DA.Array
             ( [ DA.Id ("direct", array_ty); DA.Id ("values", array_ty) ],
-              matrix_ty ),
+              matrix_ty,
+              false ),
           true );
       DA.Decl
         ( "nested",
@@ -109,7 +117,11 @@ let array_callback () =
   in
   let body =
     [
-      DA.Decl ("values", array_ty, DA.Array ([ int 20; int 22 ], array_ty), true);
+      DA.Decl
+        ( "values",
+          array_ty,
+          DA.Array ([ int 20; int 22 ], array_ty, false),
+          true );
       DA.Decl
         ( "result",
           array_ty,

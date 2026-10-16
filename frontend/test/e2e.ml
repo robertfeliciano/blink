@@ -542,7 +542,8 @@ fun main() => i32 { consume(1); consume("hello"); return identity(40) + count; }
     };
   ]
 
-let test_fixture ?(optimization = "-O0") fixture test_context =
+let test_fixture ?(optimization = "-O0") ?(check_ir = fun _ -> ()) fixture
+    test_context =
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
   Native_test_support.in_temp_dir
     ~prefix:("blink-" ^ fixture.name ^ "-")
@@ -555,7 +556,42 @@ let test_fixture ?(optimization = "-O0") fixture test_context =
       in
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
+      check_ir (Core.In_channel.read_all "new_output.ll");
       Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
+
+let test_heap_array test_context =
+  let fixture =
+    {
+      name = "heap-array-escapes-function";
+      source =
+        {|fun make() => [i32; 3] { return new [20, 21, 0]; }
+fun use_stack() => i32 {
+  let values = [-1, -2, -3];
+  return values[0] + values[1] + values[2];
+}
+fun main() => i32 {
+  let values = make();
+  let alias = values;
+  if use_stack() != -6 { return 1; }
+  alias[2] = 1;
+  let result = values[0] + values[1] + values[2];
+  free values;
+  return result;
+}|};
+      expected_exit = 42;
+    }
+  in
+  List.iter
+    (fun optimization ->
+      let check_ir ir =
+        if optimization = "-O0" then (
+          assert_bool "new array literals must allocate on the heap"
+            (Core.String.is_substring ir ~substring:"call ptr @malloc(");
+          assert_bool "ordinary array literals must still allocate on the stack"
+            (Core.String.is_substring ir ~substring:"alloca [3 x i32]"))
+      in
+      test_fixture ~optimization ~check_ir fixture test_context)
+    [ "-O0"; "-O2" ]
 
 let test_underapplication (name, source) test_context =
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
@@ -1260,6 +1296,7 @@ let suite =
                 >:: test_conflicting_optimization_levels;
               ];
          "inline function" >:: test_inline_function;
+         "heap array escapes function" >:: test_heap_array;
          "calls require all arguments"
          >::: List.map
                 (fun ((name, _) as fixture) ->

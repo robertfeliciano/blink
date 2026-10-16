@@ -302,7 +302,7 @@ let test_cast _ =
 
 let test_array_and_index _ =
   let array =
-    Array [ mk_node (Int (Z.of_int 1)); mk_node (Int (Z.of_int 2)) ]
+    Array ([ mk_node (Int (Z.of_int 1)); mk_node (Int (Z.of_int 2)) ], false)
   in
   let array_node = mk_node array in
   let _, array_ty = type_exp array in
@@ -313,11 +313,13 @@ let test_array_and_index _ =
   assert_ty Typed.(TInt (TSigned Ti32)) element_ty
 
 let test_array_rejects_mixed_elements _ =
-  let array = Array [ mk_node (Int (Z.of_int 1)); mk_node (Bool true) ] in
+  let array =
+    Array ([ mk_node (Int (Z.of_int 1)); mk_node (Bool true) ], false)
+  in
   assert_type_error (fun () -> type_exp array)
 
 let test_index_requires_integer _ =
-  let array = Array [ mk_node (Int (Z.of_int 1)) ] |> mk_node in
+  let array = Array ([ mk_node (Int (Z.of_int 1)) ], false) |> mk_node in
   assert_type_error (fun () -> type_exp (Index (array, mk_node (Bool false))))
 
 let test_function_call _ =

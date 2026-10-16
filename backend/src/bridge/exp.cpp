@@ -227,7 +227,7 @@ Exp convert_exp(value v) {
             result.val = EIndex{std::move(collection), std::move(index), std::move(ty)};
             break;
         }
-        case Constants::EXP_Array: { // Array of exp list * ty
+        case Constants::EXP_Array: { // Array of exp list * ty * bool
             value                             elems_v = Field(v, 0);
             std::vector<std::unique_ptr<Exp>> elements;
             while (elems_v != Val_emptylist) {
@@ -240,6 +240,7 @@ Exp convert_exp(value v) {
             EArray ea;
             ea.elements = std::move(elements);
             ea.ty       = std::move(ty);
+            ea.on_heap  = Bool_val(Field(v, 2));
             result.val  = std::move(ea);
             break;
         }

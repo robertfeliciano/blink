@@ -102,7 +102,7 @@ type exp =
   | Bop of binop * exp node * exp node
   | Uop of unop * exp node
   | Index of exp node * exp node
-  | Array of exp node list
+  | Array of exp node list * bool (* elements, on_heap *)
   | Cast of exp node * ty
   | ObjInit of qualified_name node * (id node * exp node) list
   | Lambda of exp node list * id list * block (* scope, args, body *)
@@ -217,7 +217,7 @@ let map_fdecl_types ty (fn : fdecl node) =
       | Bop (op, e1, e2) -> Bop (op, exp e1, exp e2)
       | Uop (op, e) -> Uop (op, exp e)
       | Index (e1, e2) -> Index (exp e1, exp e2)
-      | Array es -> Array (List.map exp es)
+      | Array (es, on_heap) -> Array (List.map exp es, on_heap)
       | Cast (e, t) -> Cast (exp e, ty t)
       | ObjInit (cn, fields) ->
           ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
@@ -397,7 +397,7 @@ let rec show_exp ?(lvl = 0) = function
   | Index (arr, idx) ->
       Printf.sprintf "%sIndex(%s, %s)" (indent lvl) (show_node show_exp arr)
         (show_node show_exp idx)
-  | Array elems ->
+  | Array (elems, on_heap) ->
       let elems_s =
         String.concat ";\n"
           (List.map
@@ -405,7 +405,8 @@ let rec show_exp ?(lvl = 0) = function
                Printf.sprintf "%s%s" (indent (lvl + 2)) (show_node show_exp e))
              elems)
       in
-      Printf.sprintf "%sArray([\n%s\n%s])" (indent lvl) elems_s (indent lvl)
+      Printf.sprintf "%sArray([\n%s\n%s], on_heap=%b)" (indent lvl) elems_s
+        (indent lvl) on_heap
   | Cast (e, t) ->
       Printf.sprintf "%sCast(%s, %s)" (indent lvl) (show_node show_exp e)
         (show_ty ~lvl:(lvl + 1) t)

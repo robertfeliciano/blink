@@ -473,7 +473,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
         None,
         Index (coll', idx', ty'),
         None )
-  | Array (es, ty) ->
+  | Array (es, ty, on_heap) ->
       let ty', nc_opt = transform_ty ty cs in
       let (ecs, efs, ess), es' =
         List.fold_left_map
@@ -482,7 +482,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
       in
       let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
       let cs' = add_cdecls ecs ncs in
-      (cs', efs, ess, None, None, Array (es', ty'), None)
+      (cs', efs, ess, None, None, Array (es', ty', on_heap), None)
   | Cast _ as ce ->
       (* cannot cast lambdas *)
       (cs, [], [], None, None, ce, None)

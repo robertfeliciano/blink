@@ -95,7 +95,7 @@ let test_for_loop _ =
 
 let test_array_foreach _ =
   let array_ty = TRef (RArray (int_ty, 2)) in
-  let collection = Array ([ int 3; int 5 ], array_ty) in
+  let collection = Array ([ int 3; int 5 ], array_ty, false) in
   let loop = ForEach ("item", collection, array_ty, []) in
   match desugar_exn (function_program [ loop ]) |> only_function_body with
   | [ DA.Decl _; DA.Decl _; DA.While (_, [ DA.Decl _; DA.Assn _ ]) ] -> ()
@@ -310,7 +310,7 @@ let test_lambda_lifting _ =
 let rec exp_contains_lambda (exp : DA.exp) =
   match exp with
   | DA.Lambda _ -> true
-  | DA.Call (_, args, _) | DA.Array (args, _) ->
+  | DA.Call (_, args, _) | DA.Array (args, _, _) ->
       List.exists exp_contains_lambda args
   | DA.ObjInit (_, fields) ->
       List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
