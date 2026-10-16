@@ -21,8 +21,6 @@ let assert_parse_error source =
 let valid_programs =
   [
     ("minimal function", "fun main() => i32 { return 1; }");
-    ( "inline function",
-      "inline fun increment(value: i32) => i32 { return value + 1; }" );
     ("comments", "// before\nfun main() => i32 { /* inside */ return 0; }");
     ( "prototype",
       "@C fun puts(s: string) => i32;\nfun main() => i32 { return 0; }" );

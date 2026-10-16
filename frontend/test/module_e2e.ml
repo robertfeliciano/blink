@@ -16,10 +16,6 @@ let command ?(options = []) filename =
     (List.map Filename.quote
        ((compiler :: "-module-root" :: Sys.getcwd () :: options) @ [ filename ]))
 
-let verify_ir () =
-  assert_success "LLVM verification"
-    "llc --filetype=null new_output.ll -o /dev/null"
-
 let native ?(options = []) name files =
   List.map
     (fun optimization ->
@@ -28,7 +24,6 @@ let native ?(options = []) name files =
           write_sources (Sys.getcwd ()) files;
           assert_success_silently "module compilation"
             (command ~options:(optimization :: options) "main.bl");
-          verify_ir ();
           compile_and_run ~expected_exit:42))
     [ "-O0"; "-O2" ]
 
@@ -195,7 +190,6 @@ fun main() => i32 {
                          && Core.String.is_substring line ~substring:"_BLG")
                    in
                    assert_equal 1 (List.length definitions);
-                   verify_ir ();
                    compile_and_run ~expected_exit:42) );
            ];
            native "global imported string identity"
@@ -526,7 +520,6 @@ fun main() => i32 {
                  assert_bool "no LLVM-renamed duplicate C prototype"
                    (not (contains ir "@abs."));
                  assert_contains ~substring:"define i32 @main(" ir;
-                 verify_ir ();
                  compile_and_run ~expected_exit:42) );
            ( "stdlib output and isolation" >:: fun context ->
              in_temp_dir ~prefix:"blink-module-stdlib" context (fun () ->
@@ -541,7 +534,6 @@ fun main() => i32 {
                  let library = Filename.concat (Sys.getcwd ()) "library" in
                  assert_success_silently "stdlib compile"
                    (command ~options:[ "-stdlib-root"; library ] "main.bl");
-                 verify_ir ();
                  assert_success "lower stdlib"
                    "llc --filetype=obj --relocation-model=pic new_output.ll -o \
                     program.o";

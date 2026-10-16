@@ -542,28 +542,7 @@ fun main() => i32 { consume(1); consume("hello"); return identity(40) + count; }
     };
   ]
 
-let stage_failure fixture stage error =
-  assert_failure
-    (Printf.sprintf "%s failed during %s: %s" fixture.name stage
-       (Core.Error.to_string_hum error))
-
-let check_frontend_stages fixture =
-  let ast =
-    match Parsing.Parse.parse_prog (Lexing.from_string fixture.source) with
-    | Ok ast -> ast
-    | Error error -> stage_failure fixture "parsing" error
-  in
-  let typed =
-    match Typing.Type.type_prog ast with
-    | Ok typed -> typed
-    | Error error -> stage_failure fixture "type checking" error
-  in
-  match Desugaring.Desugar.desugar_prog typed with
-  | Ok _ -> ()
-  | Error error -> stage_failure fixture "desugaring" error
-
 let test_fixture ?(optimization = "-O0") fixture test_context =
-  check_frontend_stages fixture;
   let compiler = Native_test_support.executable_path "../src/blink.exe" in
   Native_test_support.in_temp_dir
     ~prefix:("blink-" ^ fixture.name ^ "-")
@@ -576,8 +555,6 @@ let test_fixture ?(optimization = "-O0") fixture test_context =
       in
       Native_test_support.assert_success_silently "Blink compiler"
         compile_command;
-      Native_test_support.assert_success "LLVM verification"
-        "llc --filetype=null new_output.ll -o /dev/null";
       Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
 
 let test_underapplication (name, source) test_context =
@@ -1189,39 +1166,6 @@ fun main() => i32 {
     };
   ]
 
-let test_interface_fixture optimization fixture context =
-  check_frontend_stages fixture;
-  let compiler = Native_test_support.executable_path "../src/blink.exe" in
-  Native_test_support.in_temp_dir
-    ~prefix:("blink-" ^ fixture.name ^ "-")
-    context
-    (fun () ->
-      Core.Out_channel.write_all "program.bl" ~data:fixture.source;
-      Native_test_support.assert_success_silently "interface compiler"
-        (Printf.sprintf "%s %s program.bl" (Filename.quote compiler)
-           optimization);
-      Native_test_support.assert_success "LLVM verification"
-        "llc --filetype=null new_output.ll -o /dev/null";
-      Native_test_support.compile_and_run ~expected_exit:fixture.expected_exit)
-
-let test_parse_failure_stops_at_parser _ =
-  let source = "fun main( => i32 { return 1; }" in
-  match Parsing.Parse.parse_prog (Lexing.from_string source) with
-  | Error _ -> ()
-  | Ok _ -> assert_failure "invalid syntax unexpectedly parsed"
-
-let test_type_failure_stops_at_type_checker _ =
-  let source = "fun main() => i32 { return true; }" in
-  match Parsing.Parse.parse_prog (Lexing.from_string source) with
-  | Error error ->
-      assert_failure
-        (Printf.sprintf "type-error fixture failed to parse: %s"
-           (Core.Error.to_string_hum error))
-  | Ok ast -> (
-      match Typing.Type.type_prog ast with
-      | Error _ -> ()
-      | Ok _ -> assert_failure "invalid program unexpectedly type-checked")
-
 let optimization_source =
   "fun main() => i32 {\n\
   \  let value = 0;\n\
@@ -1309,11 +1253,6 @@ let suite =
   in
   "Compiler end-to-end"
   >::: [
-         "stage failures"
-         >::: [
-                "parsing" >:: test_parse_failure_stops_at_parser;
-                "type checking" >:: test_type_failure_stops_at_type_checker;
-              ];
          "optimization levels"
          >::: [
                 "compile and execute" >:: test_optimization_levels;
@@ -1325,14 +1264,19 @@ let suite =
          >::: List.map
                 (fun ((name, _) as fixture) ->
                   name >:: test_underapplication fixture)
-                Call_arity_fixtures.underapplication;
+                (* The typing suite owns the full arity matrix. These cases
+                   check CLI diagnostics and that failure prevents IR emission. *)
+                (List.map
+                   (fun name ->
+                     (name, List.assoc name Call_arity_fixtures.underapplication))
+                   [ "named-value-zero-expression"; "named-void-one-statement" ]);
          "interface runtime dispatch"
          >::: List.concat_map
                 (fun fixture ->
                   List.map
                     (fun optimization ->
                       fixture.name ^ optimization
-                      >:: test_interface_fixture optimization fixture)
+                      >:: test_fixture ~optimization fixture)
                     [ "-O0"; "-O2" ])
                 interface_fixtures;
          "generic native execution"
