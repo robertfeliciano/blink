@@ -1,0 +1,4 @@
+// Add four doubles on a CUDA device. Inputs and output are host arrays.
+// Returns 0 on success, otherwise a CUDA runtime error code.
+// Link vector_add.cu and the CUDA runtime (see examples/cu/README.md).
+export @C fun blink_cu_add_f64_4(left: [f64; 4], right: [f64; 4], result: [f64; 4]) => i32;
