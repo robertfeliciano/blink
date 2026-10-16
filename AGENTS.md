@@ -149,7 +149,7 @@ read-only requirements can match mutable or constant fields. Validate field
 requirements after class field types are inferred. Interfaces support `export`
 and qualified imported names. Typing inserts class-to-interface conversions,
 and lowering supplies ordered method tables and
-interface calls. See `docs/interfaces.md` and `examples/interfaces/`.
+interface calls. See `examples/interfaces/`.
 Runtime interface values contain an object pointer and a shared method-table
 pointer, passed as an LLVM aggregate. Shared tables contain ordered method
 pointers and field byte offsets for each concrete class/interface pair.

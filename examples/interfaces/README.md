@@ -38,6 +38,3 @@ Required fields and method signatures must match exactly. Classes can add other
 members and arrange fields differently. Converting to an interface keeps a
 reference to the original object; free that object once after all aliases are
 finished using it.
-
-See the [interface reference](../../docs/interfaces.md) for the complete rules
-and runtime representation.
