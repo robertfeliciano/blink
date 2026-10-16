@@ -398,7 +398,9 @@ primary:
   | s=STRING                        { loc $startpos $endpos @@ Str s }
   | id=IDENT                        { loc $startpos $endpos @@ Id id }
   | LBRACKET elems=separated_list(COMMA, exp) RBRACKET
-      { loc $startpos $endpos @@ Array elems }
+      { loc $startpos $endpos @@ Array (elems, false) }
+  | NEW LBRACKET elems=separated_list(COMMA, exp) RBRACKET
+      { loc $startpos $endpos @@ Array (elems, true) }
   | LPAREN e=exp RPAREN             { e }
   | NEW cid=qualified_name LBRACE fields=separated_list(COMMA, field_init) RBRACE
       { 

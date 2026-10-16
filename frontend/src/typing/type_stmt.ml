@@ -719,7 +719,7 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
     | Int _ | Float _ | Null | Lambda _ -> true
     | (Bop _ | Uop _) when Option.is_some (eval_const_exp en) -> true
     | Id i -> Option.is_some (Tctxt.lookup_generic_option i tc)
-    | Array es -> List.for_all needs_context es
+    | Array (es, _) -> List.for_all needs_context es
     | Conditional (_, yes, no) -> needs_context yes && needs_context no
     | Call ({ elt = Id i; _ }, es)
       when Option.is_some (Tctxt.lookup_generic_option i tc) ->
@@ -728,7 +728,7 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
   in
   let rec infer_actual en =
     match en.elt with
-    | Array es -> (
+    | Array (es, _) -> (
         match List.find_opt (fun e -> not (needs_context e)) es with
         | Some e ->
             let elt_ty = infer_actual e in
@@ -739,7 +739,8 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
   in
   let rec infer default ty en =
     match (ty, en.elt) with
-    | TRef (RArray (elt_ty, _)), Array es -> List.iter (infer default elt_ty) es
+    | TRef (RArray (elt_ty, _)), Array (es, _) ->
+        List.iter (infer default elt_ty) es
     | _, Conditional (_, yes, no) ->
         infer default ty yes;
         infer default ty no
@@ -869,16 +870,16 @@ and type_method_app (proj : exp) (args : exp node list) (from_exp : bool)
 and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
     (tc : Tctxt.t) (en : exp node) : Typed_ast.exp * Typed_ast.ty =
   match (en.elt, expected) with
-  | Array [], None ->
+  | Array ([], _), None ->
       type_error en
         "Could not infer type of empty array. Please provide type annotation."
-  | Array [], Some (TRef (RArray (elt_ty, len))) ->
+  | Array ([], on_heap), Some (TRef (RArray (elt_ty, len))) ->
       let ty_of_array = Typed_ast.TRef (RArray (elt_ty, len)) in
-      (Typed_ast.Array ([], ty_of_array), ty_of_array)
-  | Array [], Some other ->
+      (Typed_ast.Array ([], ty_of_array, on_heap), ty_of_array)
+  | Array ([], _), Some other ->
       type_error en
         ("Expected " ^ Printer.show_ty other ^ " but got empty array.")
-  | Array (h :: t), exp_opt ->
+  | Array (h :: t, on_heap), exp_opt ->
       let exp_ty, exp_len =
         match exp_opt with
         | Some (TRef (RArray (ety, elen))) -> (Some ety, Some elen)
@@ -910,7 +911,7 @@ and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
            ^ " but got " ^ Int.to_string len)
       | _ -> ());
       let arr_ty = Typed_ast.(TRef (RArray (h_ty, len))) in
-      (Typed_ast.Array (all_elems, arr_ty), arr_ty)
+      (Typed_ast.Array (all_elems, arr_ty, on_heap), arr_ty)
   | _ -> type_error en "Somehow reached unreachable state."
 
 and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
@@ -941,7 +942,7 @@ and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
       type_error stmt_n "Default functions not allowed."
   | Typed_ast.TRef (RArray (t, sz)) as array_ty ->
       let elems = List.init sz (fun _ -> create_default_init stmt_n tc t) in
-      Typed_ast.Array (elems, array_ty)
+      Typed_ast.Array (elems, array_ty, false)
 
 and type_block (tc : Tctxt.t) (frtyp : Typed_ast.ret_ty)
     (stmts : stmt node list) (in_loop : bool) (enclosing_class : id option) :

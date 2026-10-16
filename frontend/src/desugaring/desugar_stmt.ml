@@ -33,7 +33,7 @@ let expression_ty = function
   | Call (_, _, ty)
   | Bop (_, _, _, ty)
   | Uop (_, _, ty)
-  | Array (_, ty)
+  | Array (_, ty, _)
   | Cast (_, ty)
   | Proj (_, _, ty)
   | Index (_, _, ty)
@@ -251,9 +251,9 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
         ( sa @ si @ [ D.Decl (name, idx_ty, idx', true) ],
           D.Index (arr', D.Id (name, idx_ty), convert_ty ty) )
       else (sa @ si, D.Index (arr', idx', convert_ty ty))
-  | Array (elems, ty) ->
+  | Array (elems, ty, on_heap) ->
       let ss, elems' = List.map desugar_exp elems |> flatten in
-      (ss, D.Array (elems', convert_ty ty))
+      (ss, D.Array (elems', convert_ty ty, on_heap))
   | InterfaceCast (receiver, cname, iname) ->
       let ss, receiver = desugar_exp receiver in
       (ss, D.InterfaceCast (receiver, cname, iname))

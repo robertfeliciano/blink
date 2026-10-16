@@ -11,6 +11,8 @@ struct Generator;
 class ExpToLLVisitor {
     Generator& gen;
 
+    Value* allocateHeap(llvm::Type* type);
+
   public:
     explicit ExpToLLVisitor(Generator& g) : gen(g) {}
 

@@ -129,11 +129,11 @@ let rec show_exp ?(lvl = 0) = function
         (show_exp ~lvl:(lvl + 1) arr)
         (show_exp ~lvl:(lvl + 1) idx)
         (show_ty ty) (show_ty ity)
-  | Array (elems, ty) ->
+  | Array (elems, ty, on_heap) ->
       let elems_s =
         String.concat ", " (List.map (fun e -> show_exp ~lvl:(lvl + 1) e) elems)
       in
-      Printf.sprintf "Array([%s], %s)" elems_s (show_ty ty)
+      Printf.sprintf "Array([%s], %s, on_heap=%b)" elems_s (show_ty ty) on_heap
   | Cast (e, t) ->
       Printf.sprintf "Cast(%s, %s)" (show_exp ~lvl:(lvl + 1) e) (show_ty t)
   | Proj (e, i, cname, t) ->

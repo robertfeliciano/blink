@@ -184,6 +184,10 @@ method prototypes. Field slots and method slots are independent. Interface
 projections lower to a receiver, field slot, and value type, with receiver
 evaluation preserved through assignments and lambda lifting.
 The external `convert_caml_ast` declaration is the OCaml side of the FFI.
+Array expressions carry an `on_heap` boolean: `new [...]` sets it, while ordinary
+literals and default initializers clear it. The desugared `Array` fields are
+elements, array type, and `on_heap`, in that order; the bridge preserves the flag
+and codegen selects heap allocation or stack storage without changing array types.
 
 ### Utilities
 

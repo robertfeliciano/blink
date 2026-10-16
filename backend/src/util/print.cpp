@@ -226,7 +226,7 @@ struct ExpToStringVisitor {
         return expToString(*e.collection) + "[" + expToString(*e.index) + "]";
     }
     std::string operator()(const EArray& e) const {
-        std::string res = "[";
+        std::string res = e.on_heap ? "new [" : "[";
         for (size_t i = 0; i < e.elements.size(); ++i) {
             res += expToString(*e.elements[i]);
             if (i + 1 < e.elements.size())

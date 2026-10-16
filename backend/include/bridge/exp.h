@@ -95,6 +95,7 @@ struct EIndex {
 struct EArray {
     std::vector<std::unique_ptr<Exp>> elements;
     Ty                                ty; // array type: [t x n], e.g. [i32 x 5]
+    bool                              on_heap = false;
 };
 
 struct ECast {
