@@ -126,7 +126,7 @@ let type_class (tc : Tctxt.t) (tfields : Typed_ast.field list) (cn : cdecl node)
   {
     annotations = annotations';
     cname;
-    impls = List.map resolved_class_name impls;
+    impls = List.map resolved_interface_name impls;
     fields = tfields;
     methods = tmethods;
   }
@@ -308,14 +308,9 @@ let create_interface_ctxt tc declarations =
   in
   List.fold_left
     (fun tc (i : idecl node) ->
-      let seen = Hashtbl.create 8 in
       let fields =
         List.map
           (fun (f : ifield node) ->
-            if Hashtbl.mem seen f.elt.fieldName then
-              type_error f
-                ("Duplicate interface member " ^ f.elt.fieldName ^ ".");
-            Hashtbl.add seen f.elt.fieldName ();
             let ftyp = validate_and_convert_ty f tc f.elt.ftyp in
             (match ftyp with
             | Typed_ast.TRef (RFun _) ->
@@ -329,13 +324,6 @@ let create_interface_ctxt tc declarations =
       let methods =
         List.map
           (fun (p : proto node) ->
-            if p.elt.type_params <> [] then
-              type_error p "Generic interface methods are not supported.";
-            if Hashtbl.mem seen p.elt.fname then
-              type_error p ("Duplicate interface member " ^ p.elt.fname ^ ".");
-            Hashtbl.add seen p.elt.fname ();
-            if p.elt.annotations <> [] then
-              type_error p "Interface prototypes cannot have annotations.";
             let args, ret =
               validate_and_convert_signature p tc p.elt.args p.elt.frtyp
             in
@@ -372,10 +360,24 @@ let validate_implementations tc classes =
       let names =
         List.map
           (fun name ->
-            let iname = resolved_class_name name in
-            if Hashtbl.mem seen iname then
-              type_error name ("Duplicate implemented interface " ^ iname ^ ".");
-            Hashtbl.add seen iname ();
+            let iname = resolved_interface_name name in
+            let owner =
+              match
+                Option.bind tc.generics (fun state ->
+                    Nominal_generics.arguments state.nominals iname)
+              with
+              | Some (owner, _) -> owner
+              | None -> iname
+            in
+            (match Hashtbl.find_opt seen owner with
+            | Some previous when previous = iname ->
+                type_error name
+                  ("Duplicate implemented interface " ^ iname ^ ".")
+            | Some _ ->
+                type_error name
+                  ("Conflicting specializations of implemented interface "
+                 ^ owner ^ ".")
+            | None -> Hashtbl.add seen owner iname);
             let required =
               match lookup_interface_option iname tc with
               | Some info -> info.methods
@@ -419,7 +421,7 @@ let validate_impl_fields tc classes =
     (fun (c : cdecl node) ->
       List.iter
         (fun name ->
-          let iname = resolved_class_name name in
+          let iname = resolved_interface_name name in
           let info = Option.get (lookup_interface_option iname tc) in
           List.iter
             (fun (required : Typed_ast.ifield) ->
@@ -622,12 +624,12 @@ let type_globals tc declarations =
   let globals = List.map (resolve []) declarations in
   (!context, globals)
 
-let create_generic_ctxt classes tc fns pns =
+let create_generic_ctxt nominals tc fns pns =
   let seen = Hashtbl.create (List.length fns) in
   let rec validate_ty node = function
     | TParam _ -> ()
     | TRef (RGeneric (name, args)) ->
-        ignore (Class_generics.template classes name args);
+        ignore (Nominal_generics.template nominals name args);
         List.iter (validate_ty node) args
     | TRef (RArray (ty, sz)) ->
         validate_array_length node sz;
@@ -680,7 +682,7 @@ let create_generic_ctxt classes tc fns pns =
         if fn.elt.type_params = [] then None else Some (fn.elt.fname, fn))
       fns
   in
-  { tc with generics = Some (Generics.create classes templates) }
+  { tc with generics = Some (Generics.create nominals templates) }
 
 let generic_error_message loc msg =
   try type_error { elt = (); loc } msg with TypeError msg -> msg
@@ -714,7 +716,7 @@ let type_generic_instances tc =
   in
   aux []
 
-let type_concrete_program (classes : Class_generics.t)
+let type_concrete_program (nominals : Nominal_generics.t)
     ?(optimization_level = Util.Optimization_level.default) (prog : Ast.program)
     : Typed_ast.program =
   (* create global var ctxt *)
@@ -729,12 +731,12 @@ let type_concrete_program (classes : Class_generics.t)
   let interfaces = Ast.interface_declarations prog in
   let interface_ctxt = create_interface_ctxt class_names interfaces in
   Hashtbl.iter
-    (fun _ (instance : Class_generics.instance) ->
+    (fun _ (instance : Nominal_generics.instance) ->
       List.iter
         (typecheck_ty { elt = (); loc = instance.origin } interface_ctxt)
         instance.args)
-    classes.instances;
-  let generic_ctxt = create_generic_ctxt classes interface_ctxt fns pns in
+    nominals.instances;
+  let generic_ctxt = create_generic_ctxt nominals interface_ctxt fns pns in
   let fns =
     List.filter (fun (fn : fdecl node) -> fn.elt.type_params = []) fns
   in
@@ -786,31 +788,29 @@ let type_concrete_program (classes : Class_generics.t)
 
 let type_program ?(optimization_level = Util.Optimization_level.default) prog =
   let _, classes, _, _ = Ast.partition_declarations prog in
-  ignore (create_class_name_ctxt Tctxt.empty classes);
-  List.iter
-    (fun (interface : idecl node) ->
-      if
-        List.exists
-          (fun (cn : cdecl node) -> cn.elt.cname = interface.elt.iname)
-          classes
-      then
-        type_error interface
-          ("Class or interface " ^ interface.elt.iname ^ " already exists."))
-    (Ast.interface_declarations prog);
-  let classes = Class_generics.create classes in
-  let rec specialize () =
-    let concrete = Class_generics.prepare classes prog in
-    try type_concrete_program classes ~optimization_level concrete
-    with Class_generics.New_instances -> specialize ()
+  let nominals =
+    Nominal_generics.create classes (Ast.interface_declarations prog)
   in
-  try specialize ()
-  with TypeError message ->
-    raise (TypeError (Class_generics.display_names classes message))
+  let rec specialize () =
+    let concrete = Nominal_generics.prepare nominals prog in
+    try type_concrete_program nominals ~optimization_level concrete
+    with Nominal_generics.New_instances -> specialize ()
+  in
+  try specialize () with
+  | TypeError message ->
+      raise (TypeError (Nominal_generics.display_names nominals message))
+  | Nominal_generics.Error (loc, message)
+  | Generics.GenericError (loc, message)
+  | Generics.CannotInfer (loc, message) ->
+      raise
+        (TypeError
+           (Nominal_generics.display_names nominals
+              (generic_error_message loc message)))
 
 let type_prog ?(optimization_level = Util.Optimization_level.default)
     (prog : Ast.program) : (Typed_ast.program, Core.Error.t) result =
   try Ok (type_program ~optimization_level prog) with
-  | Class_generics.Error (loc, msg)
+  | Nominal_generics.Error (loc, msg)
   | Generics.GenericError (loc, msg)
   | Generics.CannotInfer (loc, msg) ->
       let err = Fmt.str "Type Error: %s" (generic_error_message loc msg) in

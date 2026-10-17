@@ -1,0 +1,132 @@
+import std.collections.list as lists;
+
+@C fun exit(status: i32) => void;
+
+// Class references are pointers. Nodes are private to this module.
+class Node<T> {
+    let value: T;
+    let next: Node<T> = null;
+    let prev: Node<T> = null;
+}
+
+// Empty: head == null and count == 0. Otherwise head.prev is the tail,
+// tail.next is head, and every next/prev pair points back to its node.
+export class LinkedList<T> impl lists.List<T> {
+    let head: Node<T> = null;
+    let count: i64 = 0;
+
+    fun size() => i64 { return count; }
+    fun isEmpty() => bool { return count == 0; }
+
+    // Negative indices select an element relative to the end. Add count rather
+    // than negating the index so even the minimum i64 fails without overflow.
+    // Insertion alone accepts the position just after the final element.
+    fun normalizeIndex(index: i64, allowEnd: bool) => i64 {
+        let position = index;
+        if position < 0 { position += count; }
+        if position < 0 or position > count or (position == count and not allowEnd) {
+            exit(1);
+        }
+        return position;
+    }
+
+    // Walk from whichever end is nearer. Helpers and storage are implementation
+    // details; Blink currently has no private class members.
+    fun nodeAt(index: i64) => Node<T> {
+        let position = this.normalizeIndex(index, false);
+        let node = head;
+        let remaining = position;
+        if position < count / 2 {
+            while remaining > 0 {
+                node = node.next;
+                remaining -= 1;
+            }
+        } else {
+            node = head.prev;
+            remaining = count - position - 1;
+            while remaining > 0 {
+                node = node.prev;
+                remaining -= 1;
+            }
+        }
+        return node;
+    }
+
+    // Splice before successor. For an empty list successor may be null.
+    fun linkBefore(successor: Node<T>, value: T) {
+        let node = new Node<T> { value = value };
+        if head == null {
+            node.next = node;
+            node.prev = node;
+            head = node;
+        } else {
+            let predecessor = successor.prev;
+            node.next = successor;
+            node.prev = predecessor;
+            predecessor.next = node;
+            successor.prev = node;
+        }
+        count += 1;
+    }
+
+    // Save the value and repair the ring before releasing the node.
+    fun unlink(node: Node<T>) => T {
+        let value = node.value;
+        if count == 1 {
+            head = null;
+        } else {
+            node.prev.next = node.next;
+            node.next.prev = node.prev;
+            if node == head { head = node.next; }
+        }
+        count -= 1;
+        free node;
+        return value;
+    }
+
+    fun get(index: i64) => T { return this.nodeAt(index).value; }
+
+    // Return the replaced value without freeing it.
+    fun set(index: i64, value: T) => T {
+        let node = this.nodeAt(index);
+        let previous = node.value;
+        node.value = value;
+        return previous;
+    }
+
+    fun add(value: T) { this.addLast(value); }
+
+    fun addFirst(value: T) {
+        this.linkBefore(head, value);
+        head = head.prev;
+    }
+
+    fun addLast(value: T) { this.linkBefore(head, value); }
+
+    // Insert before the selected element; index == size() appends.
+    fun insert(index: i64, value: T) {
+        let position = this.normalizeIndex(index, true);
+        if position == 0 {
+            this.addFirst(value);
+        } else {
+            if position == count {
+                this.addLast(value);
+            } else {
+                this.linkBefore(this.nodeAt(position), value);
+            }
+        }
+    }
+
+    fun getFirst() => T { return this.get(0); }
+    fun getLast() => T { return this.get(-1); }
+    fun removeAt(index: i64) => T { return this.unlink(this.nodeAt(index)); }
+    fun removeFirst() => T { return this.removeAt(0); }
+    fun removeLast() => T { return this.removeAt(-1); }
+
+    // Free every node, keep stored references alive, and leave a reusable list.
+    fun clear() {
+        while count > 0 {
+            let discarded = this.unlink(head);
+        }
+    }
+}

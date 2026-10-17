@@ -3,8 +3,8 @@
 #### ...and you'll miss it
 
 Blink is a small, statically typed language that compiles to native code through
-LLVM. It combines type inference, generic functions, explicit lambda captures,
-and classes with interfaces. Each source file is a module, and `@C` declarations
+LLVM. It combines type inference, generic functions, classes and interfaces,
+and explicit lambda captures. Each source file is a module, and `@C` declarations
 let you call C functions directly. Memory management is explicit with `free`.
 
 ```blink
@@ -52,8 +52,11 @@ an executable named `new_output.o` in the current directory.
 
 Browse the [examples](examples/README.md) for more:
 [modules](examples/modules/README.md), [lambdas](examples/lambdas/README.md),
-[interfaces](examples/interfaces/README.md), and
-[generic functions](examples/generic_functions.bl).
+[interfaces](examples/interfaces/README.md),
+[generic functions](examples/generic_functions.bl),
+[generic classes](examples/generic_classes.bl),
+[generic interfaces](examples/interfaces/generic.bl), and
+[standard-library lists](runtime/stdlib/collections/README.md).
 
 For a container-based toolchain, run `docker compose build` followed by
 `docker compose run --rm dev`. Run `make` and `make test` inside the container.

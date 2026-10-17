@@ -8,6 +8,7 @@ let suite =
          Test_desugaring.suite;
          Test_interfaces.suite;
          Test_generic_classes.suite;
+         Test_generic_interfaces.suite;
        ]
 
 let () = run_test_tt_main suite

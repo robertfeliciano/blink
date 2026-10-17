@@ -66,6 +66,9 @@ AST debugging flags are `-print-ast`, `-print-typed-ast`, and
   `classes/`, `lambdas/`, `modules/`, and `interfaces/` topic folders.
   `examples/README.md` indexes the runnable programs and expected results.
 - `tests/` contains additional `.bl` fixtures not wired into Dune directly.
+- `runtime/stdlib/` contains importable standard modules.
+  `collections/list.bl` defines `List<T>` and `collections/linked_list.bl`
+  implements a circular doubly linked `LinkedList<T>` with caller-owned payloads.
 - `LICENSE` contains the project license.
 
 Generated root artifacts include `blink`, `new_output.ll`, `new_output.s`,
@@ -122,18 +125,18 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
 - `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
   prototypes, and compilation-local generic state.
-- `frontend/src/typing/generics/class_generics.ml` specializes generic classes
-  before typing concrete declarations; newly discovered classes rebuild compilation
+- `frontend/src/typing/generics/nominal_generics.ml` specializes generic classes
+  and interfaces before typing concrete declarations; newly discovered instances rebuild compilation
   contexts.
 - `frontend/src/typing/generics/generic_types.ml` shares specialization identities
-  and parameter/array validation between classes and functions.
+  and parameter/array validation between nominal types and functions.
 - `frontend/src/typing/generics/generics.ml` owns generic signature matching,
   substitution, specialization identities, and pending instances.
 - `frontend/src/typing/conversions.ml` converts source AST types.
 - `frontend/src/typing/pprint_typed_ast.ml` prints typed trees for diagnostics.
 - `frontend/src/typing/dune` exposes the typing library and includes the
   `generics/` subdirectory without adding another module namespace, so base typing
-  files can use `Generics`, `Class_generics`, and `Generic_types` directly.
+  files can use `Generics`, `Nominal_generics`, and `Generic_types` directly.
 
 Type failures are reported with source locations through `type_error` helpers.
 Keep constness and class context intact when extending context operations.
@@ -147,7 +150,7 @@ headers before checking queued instance bodies, including recursive instances.
 The final typed program contains only concrete functions; the desugared AST and
 native bridge contract are unchanged. Instances are cached per compilation, with
 limits of 4096 instances and 128 entries in a requesting chain. Generic prototypes
-require matching definitions; generic methods, interfaces, main and @C declarations
+require matching definitions; generic methods, main and @C declarations
 are unsupported. Dependent bodies are checked only when instantiated. Generic classes use
 `class Box<T>` declarations, `Box<i32>` types, and `new Box<i32> { ... }`.
 Class type arguments are explicit and invariant. Function inference matches
@@ -155,8 +158,16 @@ parameters inside class applications. Class parameters bind before module
 resolution and apply to fields, methods, constructors, and nested annotations.
 Specializations register before recursively expanding their members and reuse
 concrete class layouts; the typed/desugared AST and bridge contract stay concrete.
-Classes may implement ordinary interfaces. Generic classes have compilation-local
-caches and the same specialization limits as generic functions.
+Classes may implement ordinary or generic interfaces. Generic classes and
+interfaces share a compilation-local specialization coordinator and the same
+specialization limits as generic functions. Generic interfaces use
+`interface Value<T>` and `class Box<T> impl Value<T>`. Interface type arguments
+are explicit and invariant; generic function inference follows both interface
+values and concrete classes' validated implementation arguments. Each class
+can implement at most one specialization of an interface template. Source
+interface declarations carry `iparams`, and source class `impls` are located
+types traversed by binding, resolution, and substitution. Only concrete
+interfaces and implementation names reach the typed AST and backend.
 
 Language interfaces declare required fields and method prototypes; classes opt
 in with `impl` and must supply same-name, exactly typed fields and methods with
@@ -251,12 +262,17 @@ The generated module targets the build host and uses position-independent code.
 
 - `frontend/test/frontend_tests.ml` gathers parser, typer, and desugar suites.
 - `frontend/test/module_{ast,loader,resolver}_tests.ml` test module phases.
+- `frontend/test/stdlib_collections_tests.ml` runs the actual collections modules
+  at O0/O2, checking circular links, indexed mutations against a model, payload
+  ownership, interface inference, and exit(1) on invalid operations.
 - `frontend/test/module_e2e.ml` tests multi-file native programs and CLI/wrapper
   behavior; `module_test_support.ml` provides reusable source fixtures.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
 - `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
+- `frontend/test/test_generic_interfaces.ml` tests generic interface specialization,
+  implementation inference, conformance, diagnostics, and concrete lowering.
 - `frontend/test/e2e.ml` compiles source text through the complete pipeline.
 - `frontend/test/backend_tests.ml` tests bridge/codegen with constructed ASTs.
 - `frontend/test/backend_fixture_compiler.ml` builds those backend fixtures.
@@ -464,7 +480,13 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
-Generic interfaces, generic methods, interface constraints, and several prospective
+Class references are already pointers; collections use those references for
+node links. Freeing is shallow: clear a linked list before freeing its object,
+and free caller-owned stored objects separately. Invalid collection indices
+and empty-end access terminate with exit(1). Negative list indices count from
+the tail (-1 is last); insertion is before the selected element, with size()
+reserved for appending.
+Generic methods, interface inheritance, interface constraints, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 

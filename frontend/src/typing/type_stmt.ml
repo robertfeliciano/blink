@@ -250,7 +250,8 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       | Some (Typed_ast.TRef (RFun _) as ty) ->
           Generics.match_ty
             ~convert_ty:(validate_and_convert_ty e tc)
-            ~classes:(Option.get tc.generics).classes e bindings
+            ~implementations:(Tctxt.implemented_interfaces tc)
+            ~nominals:(Option.get tc.generics).nominals e bindings
             (TRef (RFun (List.map fst fn.elt.args, fn.elt.frtyp)))
             ty
       | _ -> ());
@@ -757,7 +758,9 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
           let callback_ty =
             TRef (RFun (List.map fst callback.elt.args, callback.elt.frtyp))
           in
-          Generics.match_patterns ~classes:(Option.get tc.generics).classes
+          Generics.match_patterns
+            ~implementations:(Tctxt.implemented_interfaces tc)
+            ~nominals:(Option.get tc.generics).nominals
             ~convert_ty:(validate_and_convert_ty en tc)
             en bindings ty callback_ty
     | _ when (not default) && needs_context en -> ()
@@ -784,7 +787,8 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
           Option.iter
             (Generics.match_ty
                ~convert_ty:(validate_and_convert_ty en tc)
-               ~classes:(Option.get tc.generics).classes en bindings ty)
+               ~implementations:(Tctxt.implemented_interfaces tc)
+               ~nominals:(Option.get tc.generics).nominals en bindings ty)
             result
   in
   List.iter2 (fun (ty, _) en -> infer false ty en) fn.elt.args args;
@@ -792,7 +796,8 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
     (fun ty ->
       Generics.match_ret_ty
         ~convert_ty:(validate_and_convert_ty node tc)
-        ~classes:(Option.get tc.generics).classes ~fill:true node bindings
+        ~implementations:(Tctxt.implemented_interfaces tc)
+        ~nominals:(Option.get tc.generics).nominals ~fill:true node bindings
         fn.elt.frtyp (Typed_ast.RetVal ty))
     expected;
   let rec infer_pending () =

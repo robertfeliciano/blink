@@ -43,6 +43,46 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "generic interfaces share specializations across importers"
+             [
+               ( "contracts.bl",
+                 {|export interface Value<T> { let item: T; fun get() => T; }
+export fun read<T>(x: Value<T>) => T { return x.get(); }|}
+               );
+               ( "boxes.bl",
+                 {|import contracts as c;
+export class Box<T> impl c.Value<T> {
+  let padding: bool = false; let item: T;
+  fun get() => T { return item; }
+}
+export fun wrap<T>(x: T) => c.Value<T> { return new Box<T> { item = x }; }|}
+               );
+               ( "other.bl",
+                 {|import contracts;
+export fun add(x: contracts.Value<i32>) { x.item += 2; }|}
+               );
+               ( "main.bl",
+                 {|import contracts as c; import boxes as b; import other;
+fun main() => i32 {
+  let concrete = new b.Box<i32> { item = 20 };
+  let view = b.wrap(20);
+  other.add(view);
+  let result = c.read(concrete) + c.read(view);
+  free concrete, view;
+  return result;
+}|}
+               );
+             ];
+           [
+             negative "conflicting imported interface specializations"
+               [
+                 ("contracts.bl", "export interface I<T> {}");
+                 ( "main.bl",
+                   "import contracts as c; class C impl c.I<i32>, c.I<bool> {} \
+                    fun main() => i32 { return 0; }" );
+               ]
+               "Conflicting specializations";
+           ];
            native "imported generic classes share specialization identities"
              [
                ( "boxes.bl",

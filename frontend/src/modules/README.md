@@ -51,3 +51,9 @@ defining module, including private helper references. Exported generic functions
 use the same module identities and visibility rules as ordinary functions.
 Typing later specializes the resolved templates and shares each instance across
 all importers in the combined program; generic metadata stays in the frontend.
+
+Generic class and interface parameters bind before module resolution as well.
+Type applications may name either kind; object construction requires a class,
+and `impl` applications require an interface. Template signatures and implementation
+arguments resolve in their defining module. The shared nominal specialization
+coordinator gives each concrete class or interface one identity across importers.
