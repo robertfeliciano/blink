@@ -18,20 +18,32 @@ export class LinkedList<T> impl lists.List<T> {
     fun size() => i64 { return count; }
     fun isEmpty() => bool { return count == 0; }
 
+    // Negative indices select an element relative to the end. Add count rather
+    // than negating the index so even the minimum i64 fails without overflow.
+    // Insertion alone accepts the position just after the final element.
+    fun normalizeIndex(index: i64, allowEnd: bool) => i64 {
+        let position = index;
+        if position < 0 { position += count; }
+        if position < 0 or position > count or (position == count and not allowEnd) {
+            exit(1);
+        }
+        return position;
+    }
+
     // Walk from whichever end is nearer. Helpers and storage are implementation
     // details; Blink currently has no private class members.
     fun nodeAt(index: i64) => Node<T> {
-        if index < 0 or index >= count { exit(1); }
+        let position = this.normalizeIndex(index, false);
         let node = head;
-        let remaining = index;
-        if index < count / 2 {
+        let remaining = position;
+        if position < count / 2 {
             while remaining > 0 {
                 node = node.next;
                 remaining -= 1;
             }
         } else {
             node = head.prev;
-            remaining = count - index - 1;
+            remaining = count - position - 1;
             while remaining > 0 {
                 node = node.prev;
                 remaining -= 1;
@@ -91,25 +103,25 @@ export class LinkedList<T> impl lists.List<T> {
 
     fun addLast(value: T) { this.linkBefore(head, value); }
 
-    // Insertion also permits index == size(), which appends.
+    // Insert before the selected element; index == size() appends.
     fun insert(index: i64, value: T) {
-        if index < 0 or index > count { exit(1); }
-        if index == 0 {
+        let position = this.normalizeIndex(index, true);
+        if position == 0 {
             this.addFirst(value);
         } else {
-            if index == count {
+            if position == count {
                 this.addLast(value);
             } else {
-                this.linkBefore(this.nodeAt(index), value);
+                this.linkBefore(this.nodeAt(position), value);
             }
         }
     }
 
     fun getFirst() => T { return this.get(0); }
-    fun getLast() => T { return this.get(count - 1); }
+    fun getLast() => T { return this.get(-1); }
     fun removeAt(index: i64) => T { return this.unlink(this.nodeAt(index)); }
     fun removeFirst() => T { return this.removeAt(0); }
-    fun removeLast() => T { return this.removeAt(count - 1); }
+    fun removeLast() => T { return this.removeAt(-1); }
 
     // Free every node, keep stored references alive, and leave a reusable list.
     fun clear() {

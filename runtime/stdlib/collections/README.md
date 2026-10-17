@@ -16,7 +16,7 @@ fun main() => i32 {
     items.add(20);
     items.addLast(22);
     let view: lists.List<i32> = items;
-    let result = first(items) + view.get(1);
+    let result = first(items) + view.get(-1);
     view.clear();
     free items;
     return result;
@@ -30,21 +30,31 @@ implemented interface, as in `first(items)`.
 
 ## List operations
 
-Indices are signed `i64` values and start at zero. For `get`, `set`, and
-`removeAt`, valid indices satisfy `0 <= index < size()`. Insertion also permits
-`index == size()` to append. Invalid indices and reading or removing an end of
-an empty list call `exit(1)`.
+Indices are signed `i64` values. Nonnegative indices start at zero; negative
+indices count from the end: `-1` selects the last element, `-2` the
+second-to-last, and `-size()` the first. For `get`, `set`, and `removeAt`, valid
+indices satisfy `-size() <= index < size()` on a nonempty list. Negative
+indices normalize to `size() + index` before the existing walk from the nearer
+end. They do not wrap around the circular list repeatedly.
+
+Insertion uses the same positions and inserts before the selected element:
+`insert(-1, value)` inserts before the current last element, and
+`insert(-size(), value)` prepends. The additional position `index == size()`
+appends. On an empty list, only `insert(0, value)` is valid. Indices outside
+these bounds and reading or removing an end of an empty list call `exit(1)`.
 
 | Method | Behavior | LinkedList cost |
 | --- | --- | --- |
 | `size() => i64` | Number of elements | O(1) |
 | `isEmpty() => bool` | Whether the list has no elements | O(1) |
-| `get(index) => T` | Read an element | O(1 + min(index, size - 1 - index)) |
+| `get(index) => T` | Read an element | O(1 + min(position, size - 1 - position)) |
 | `set(index, value) => T` | Replace an element and return the old value | Same as `get` |
 | `add(value)` | Append an element | O(1) |
 | `insert(index, value)` | Insert before an index, shifting later indices | O(1) at either end; O(n) otherwise |
 | `removeAt(index) => T` | Unlink an element and return its value | Same as `get` |
 | `clear()` | Free all nodes and leave the list empty and reusable | O(n) |
+
+Here `position` is the normalized nonnegative index.
 
 `LinkedList<T>` additionally provides `addFirst`, `addLast`, `getFirst`,
 `getLast`, `removeFirst`, and `removeLast`, all O(1). The getters and removers

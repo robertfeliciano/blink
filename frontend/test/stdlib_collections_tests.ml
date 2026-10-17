@@ -104,6 +104,55 @@ fun main() => i32 {
   return result;
 }|}
     );
+    ( "negative indices read backward replace and remove through List views",
+      {|fun main() => i32 {
+  let concrete = new linked.LinkedList<i32> {};
+  let items: lists.List<i32> = concrete;
+  let value = 10;
+  while value <= 50 { items.add(value); value += 10; }
+  let index: i64 = -1;
+  let expected = 50;
+  while index >= -items.size() {
+    if items.get(index) != expected { return 1; }
+    index -= 1; expected -= 10;
+  }
+  if items.set(-5, 11) != 10 or items.set(-1, 51) != 50 { return 2; }
+  if items.removeAt(-3) != 30 or not valid(concrete) { return 3; }
+  if items.removeAt(-4) != 11 or not valid(concrete) { return 4; }
+  if items.removeAt(-1) != 51 or not valid(concrete) { return 5; }
+  if items.removeAt(-2) != 20 or not valid(concrete) { return 6; }
+  if items.get(-1) != 40 or items.get(-items.size()) != 40 { return 7; }
+  if items.set(-1, 42) != 40 { return 8; }
+  let result = items.removeAt(-1);
+  if not items.isEmpty() or not valid(concrete) { return 9; }
+  items.clear(); free concrete;
+  return result;
+}|}
+    );
+    ( "negative insertion selects the element to insert before",
+      {|fun main() => i32 {
+  let concrete = new linked.LinkedList<i32> {};
+  let items: lists.List<i32> = concrete;
+  items.insert(0, 20);
+  items.insert(-1, 10);
+  if not valid(concrete) { return 1; }
+  items.insert(-1, 15);
+  items.insert(-items.size(), 5);
+  items.insert(items.size(), 25);
+  if items.size() != 5 or not valid(concrete) { return 2; }
+  let index = 0;
+  while index < 5 {
+    if items.get(index) != (index + 1) * 5 { return 3; }
+    if items.get(index - 5) != items.get(index) { return 4; }
+    index += 1;
+  }
+  items.clear();
+  items.add(42);
+  if items.get(-1) != 42 or not valid(concrete) { return 5; }
+  items.clear(); free concrete;
+  return 42;
+}|}
+    );
     ( "model sequence preserves both links after every mutation",
       {|fun main() => i32 {
   let items = new linked.LinkedList<i32> {};
@@ -117,15 +166,19 @@ fun main() => i32 {
       let cursor = count;
       while cursor > index { expected[cursor] = expected[cursor - 1]; cursor -= 1; }
       expected[index] = step;
-      items.insert(index, step);
+      let actualIndex = index;
+      if seed % 2 == 0 and index < count { actualIndex = index - count; }
+      items.insert(actualIndex, step);
       count += 1;
     } else {
       let index = seed % count;
+      let actualIndex = index;
+      if seed % 2 == 0 { actualIndex = index - count; }
       if operation == 3 {
-        if items.set(index, step) != expected[index] { return 1; }
+        if items.set(actualIndex, step) != expected[index] { return 1; }
         expected[index] = step;
       } else {
-        if items.removeAt(index) != expected[index] { return 2; }
+        if items.removeAt(actualIndex) != expected[index] { return 2; }
         let cursor = index;
         while cursor + 1 < count { expected[cursor] = expected[cursor + 1]; cursor += 1; }
         count -= 1;
@@ -135,6 +188,7 @@ fun main() => i32 {
     let index = 0;
     while index < count {
       if items.get(index) != expected[index] { return 4; }
+      if items.get(index - count) != expected[index] { return 6; }
       index += 1;
     }
     step += 1;
@@ -198,12 +252,15 @@ fun main() => i32 {
   while index < 1024 { items.addLast(index); index += 1; }
   if not valid(items) or items.get(0) != 0 or items.get(1023) != 1023 { return 1; }
   if items.get(511) != 511 or items.get(512) != 512 { return 2; }
+  if items.get(-1) != 1023 or items.get(-1024) != 0 { return 7; }
+  if items.get(-513) != 511 or items.get(-512) != 512 { return 8; }
   index = 0;
   while index < 512 {
     if items.removeFirst() != index { return 3; }
     index += 1;
   }
   if not valid(items) { return 4; }
+  if items.get(-512) != 512 or items.get(-1) != 1023 { return 9; }
   items.clear(); items.clear();
   if not valid(items) { return 5; }
   items.insert(0, 42);
@@ -217,15 +274,28 @@ fun main() => i32 {
 
 let invalid_operations =
   [
-    ("get negative", "items.add(42); let ignored = items.get(-1);");
+    ("get before beginning", "items.add(42); let ignored = items.get(-2);");
     ("get upper bound", "items.add(42); let ignored = items.get(1);");
     ( "get huge index",
       "items.add(42); let ignored = items.get(9223372036854775807);" );
-    ("set negative", "items.add(42); let ignored = items.set(-1, 0);");
+    ("set before beginning", "items.add(42); let ignored = items.set(-2, 0);");
     ("set upper bound", "items.add(42); let ignored = items.set(1, 0);");
-    ("remove negative", "items.add(42); let ignored = items.removeAt(-1);");
+    ( "remove before beginning",
+      "items.add(42); let ignored = items.removeAt(-2);" );
     ("remove upper bound", "items.add(42); let ignored = items.removeAt(1);");
-    ("insert negative", "items.insert(-1, 42);");
+    ("insert negative into empty list", "items.insert(-1, 42);");
+    ("insert before beginning", "items.add(42); items.insert(-2, 0);");
+    ("get negative from empty list", "let ignored = items.get(-1);");
+    ("set negative in empty list", "let ignored = items.set(-1, 0);");
+    ("remove negative from empty list", "let ignored = items.removeAt(-1);");
+    ( "get minimum i64",
+      "items.add(42); let ignored = items.get(-9223372036854775808);" );
+    ( "set minimum i64",
+      "items.add(42); let ignored = items.set(-9223372036854775808, 0);" );
+    ( "remove minimum i64",
+      "items.add(42); let ignored = items.removeAt(-9223372036854775808);" );
+    ( "insert minimum i64",
+      "items.add(42); items.insert(-9223372036854775808, 0);" );
     ("insert past end", "items.add(42); items.insert(2, 42);");
     ("get first empty", "let ignored = items.getFirst();");
     ("get last empty", "let ignored = items.getLast();");

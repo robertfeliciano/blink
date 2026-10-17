@@ -1,4 +1,6 @@
-// Mutable, zero-indexed sequence. Invalid indices terminate with exit(1).
+// Mutable, zero-indexed sequence. Negative indices count from the end:
+// -1 selects the last element, -size() the first. Insertion is before the
+// selected element; index == size() appends. Invalid indices call exit(1).
 // The list owns its storage; stored reference values remain caller-owned.
 export interface List<T> {
     fun size() => i64;

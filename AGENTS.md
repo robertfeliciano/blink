@@ -483,7 +483,9 @@ The project currently targets the native host rather than cross-compiling.
 Class references are already pointers; collections use those references for
 node links. Freeing is shallow: clear a linked list before freeing its object,
 and free caller-owned stored objects separately. Invalid collection indices
-and empty-end access terminate with exit(1).
+and empty-end access terminate with exit(1). Negative list indices count from
+the tail (-1 is last); insertion is before the selected element, with size()
+reserved for appending.
 Generic methods, interface inheritance, interface constraints, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
