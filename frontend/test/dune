@@ -106,3 +106,12 @@
   ../../examples/modules/geometry.bl
   ../../examples/modules/state.bl)
  (libraries module_test_support test_support ounit2 core core_unix))
+
+(test
+ (name stdlib_collections_tests)
+ (modules stdlib_collections_tests)
+ (deps
+  ../src/blink.exe
+  ../../runtime/stdlib/collections/list.bl
+  ../../runtime/stdlib/collections/linked_list.bl)
+ (libraries test_support ounit2 core core_unix))

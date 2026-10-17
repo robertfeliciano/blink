@@ -66,6 +66,9 @@ AST debugging flags are `-print-ast`, `-print-typed-ast`, and
   `classes/`, `lambdas/`, `modules/`, and `interfaces/` topic folders.
   `examples/README.md` indexes the runnable programs and expected results.
 - `tests/` contains additional `.bl` fixtures not wired into Dune directly.
+- `runtime/stdlib/` contains importable standard modules.
+  `collections/list.bl` defines `List<T>` and `collections/linked_list.bl`
+  implements a circular doubly linked `LinkedList<T>` with caller-owned payloads.
 - `LICENSE` contains the project license.
 
 Generated root artifacts include `blink`, `new_output.ll`, `new_output.s`,
@@ -259,6 +262,9 @@ The generated module targets the build host and uses position-independent code.
 
 - `frontend/test/frontend_tests.ml` gathers parser, typer, and desugar suites.
 - `frontend/test/module_{ast,loader,resolver}_tests.ml` test module phases.
+- `frontend/test/stdlib_collections_tests.ml` runs the actual collections modules
+  at O0/O2, checking circular links, indexed mutations against a model, payload
+  ownership, interface inference, and exit(1) on invalid operations.
 - `frontend/test/module_e2e.ml` tests multi-file native programs and CLI/wrapper
   behavior; `module_test_support.ml` provides reusable source fixtures.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
@@ -474,6 +480,10 @@ The `compile` script also uses fixed assembly and executable filenames.
 Run concurrent compilations in separate working directories.
 Native tests depend on host execution and expected process exit codes.
 The project currently targets the native host rather than cross-compiling.
+Class references are already pointers; collections use those references for
+node links. Freeing is shallow: clear a linked list before freeing its object,
+and free caller-owned stored objects separately. Invalid collection indices
+and empty-end access terminate with exit(1).
 Generic methods, interface inheritance, interface constraints, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.

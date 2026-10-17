@@ -1,0 +1,22 @@
+import std.collections.list as lists;
+import std.collections.linked_list as linked;
+
+fun first<T>(items: lists.List<T>) => T {
+    return items.get(0);
+}
+
+fun main() => i32 {
+    let items = new linked.LinkedList<i32> {};
+    items.add(20);
+    items.addFirst(1);
+    items.addLast(22);
+    let view: lists.List<i32> = items;
+    view.insert(2, 21);
+    let removed = items.removeFirst();
+    let replaced = view.set(1, 22);
+    let result = first(items) + view.get(1);
+    if removed != 1 or replaced != 21 or view.size() != 3 { return 1; }
+    view.clear();
+    free items;
+    return result;
+}

@@ -1,0 +1,12 @@
+// Mutable, zero-indexed sequence. Invalid indices terminate with exit(1).
+// The list owns its storage; stored reference values remain caller-owned.
+export interface List<T> {
+    fun size() => i64;
+    fun isEmpty() => bool;
+    fun get(index: i64) => T;
+    fun set(index: i64, value: T) => T;
+    fun add(value: T);
+    fun insert(index: i64, value: T);
+    fun removeAt(index: i64) => T;
+    fun clear();
+}
