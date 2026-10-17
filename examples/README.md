@@ -8,6 +8,7 @@
 | [arrays.bl](arrays.bl) | Empty arrays, indexing, mutation, matrices, and nested arrays | 19 |
 | [annotations.bl](annotations.bl) | C interop and inline functions and methods | 20 |
 | [generic_functions.bl](generic_functions.bl) | Generic functions, arrays, and callbacks | 42 |
+| [generic_classes.bl](generic_classes.bl) | Generic classes, explicit type arguments, nesting, and function inference | 42 |
 | [classes/main.bl](classes/main.bl) | Fields, defaults, mutation, and method calls | 52 |
 | [classes/arrays.bl](classes/arrays.bl) | Array fields and arrays of objects | 7 |
 | [classes/nested.bl](classes/nested.bl) | Nested objects and default field initializers | 44 |

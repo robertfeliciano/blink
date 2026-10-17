@@ -137,8 +137,6 @@ rule read = parse
   (* | "lambda" { LAMBDA } *)
   | "//" { read_single_line_comment lexbuf }
   | "/*" { read_multi_line_comment lexbuf } 
-  | "<" { LT_TYPE }
-  | ">" { GT_TYPE }
   (* | "?" { OPT_TYPE } *)
   | id { IDENT (Lexing.lexeme lexbuf) }
   | int { INT (Z.of_string (normalize_number (Lexing.lexeme lexbuf))) }

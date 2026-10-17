@@ -43,6 +43,28 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "imported generic classes share specialization identities"
+             [
+               ( "boxes.bl",
+                 {|fun secret() => i32 { return 40; }
+export class Box<Element> { let item: Element; fun base() => i32 { return secret(); } }
+export fun wrap<T>(x: T) => Box<T> { return new Box<T> { item = x }; }
+export fun read<T>(box: Box<T>) => T { return box.item; }
+|}
+               );
+               ( "main.bl",
+                 {|import boxes as b;
+class Element {}
+fun secret() => i32 { return 1; }
+fun main() => i32 {
+  let first: b.Box<i32> = b.wrap(2);
+  let nested = new b.Box<b.Box<i32>> { item = first };
+  let result = b.read(nested).base() + b.read(first);
+  free nested, first;
+  return result;
+}|}
+               );
+             ];
            native "imported interface fields, globals, and generic values"
              [
                ( "contracts.bl",

@@ -1,9 +1,10 @@
 (library
  (name parsing)
  (public_name blink.parsing)
- (libraries core ast fmt zarith))
+ (libraries core ast fmt zarith menhirLib))
 
 (ocamllex lexer)
 
 (menhir
- (modules parser))
+ (modules parser)
+ (flags --table))

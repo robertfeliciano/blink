@@ -270,7 +270,11 @@ let test_generic_parser_boundaries _ =
     [
       "fun f<>(value: i32) {}";
       "fun f<T,>(value: T) {}";
-      "class Box<T> {}";
+      "class Box<> {}";
+      "fun make<T>(value: T) => T { return new T {}; }";
+      "class Box<T,> {}";
+      "fun main() => i32 { return 8 > > 1; }";
+      "fun main() => i32 { return 8 > /* gap */ > 1; }";
       "fun main() { identity<i32>(42); }";
     ];
   ignore
