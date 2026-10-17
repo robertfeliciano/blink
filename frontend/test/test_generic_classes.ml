@@ -160,9 +160,9 @@ let suite =
            (box ^ "fun f(x: Box) {}");
          negative "arity" "expects 1 type arguments, got 2"
            (box ^ "fun f(x: Box<i32, bool>) {}");
-         negative "ordinary class application" "Not a generic class"
-           "class C {} fun f(x: C<i32>) {}";
-         negative "interface application" "Not a generic class"
+         negative "ordinary class application"
+           "Not a generic class or interface" "class C {} fun f(x: C<i32>) {}";
+         negative "interface application" "Not a generic class or interface"
            "interface I {} fun f(x: I<i32>) {}";
          negative "duplicate parameters" "Duplicate type parameter"
            "class C<T, T> {}";

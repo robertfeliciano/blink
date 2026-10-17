@@ -1,0 +1,24 @@
+interface Value<T> {
+    let item: T;
+    fun get() => T;
+}
+
+class Box<T> impl Value<T> {
+    let item: T;
+    fun get() => T { return item; }
+}
+
+fun read<T>(value: Value<T>) => T {
+    return value.get();
+}
+
+fun main() => i32 {
+    let box = new Box<i32> { item = 40 };
+    let view: Value<i32> = box;
+    view.item += 2;
+    let flag = new Box<bool> { item = true };
+    if not read(flag) { return 1; }
+    let result = read(box);
+    free flag, box;
+    return result;
+}

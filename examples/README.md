@@ -19,7 +19,8 @@
   returned closures, function values, and left folds.
 - [modules/](modules/README.md): imports, exports, shared globals, and `std.io`.
 - [interfaces/](interfaces/README.md): interface contracts and dynamic dispatch;
-  [fields.bl](interfaces/fields.bl) demonstrates interface field access.
+  [fields.bl](interfaces/fields.bl) demonstrates interface field access and
+  [generic.bl](interfaces/generic.bl) demonstrates generic contracts and inference (exit `42`).
 
 Run from the repository root. Programs return their result as the process exit code:
 

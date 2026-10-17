@@ -105,6 +105,11 @@ let resolved_class_name name =
   | None ->
       type_error name "Qualified class names must be resolved before typing."
 
+let resolved_interface_name node =
+  match node.elt with
+  | TRef (RClass name) -> resolved_class_name name
+  | _ -> type_error node "Expected a concrete interface implementation type."
+
 let validate_array_length node size =
   Generic_types.validate_array_length type_error node size
 
@@ -150,21 +155,21 @@ and resolve_interface_ret_ty tc = function
   | Typed_ast.RetVoid -> Typed_ast.RetVoid
   | RetVal ty -> RetVal (resolve_interface_ty tc ty)
 
-let normalize_class_ty (tc : Tctxt.t) ty =
+let normalize_nominal_ty (tc : Tctxt.t) ty =
   match tc.generics with
   | None -> ty
   | Some state ->
-      let classes = state.classes in
-      let count = Hashtbl.length classes.instances in
-      let ty = Class_generics.normalize classes ty in
-      if Hashtbl.length classes.instances <> count then (
-        Class_generics.drain classes;
-        raise Class_generics.New_instances);
+      let nominals = state.nominals in
+      let count = Hashtbl.length nominals.instances in
+      let ty = Nominal_generics.normalize nominals ty in
+      if Hashtbl.length nominals.instances <> count then (
+        Nominal_generics.drain nominals;
+        raise Nominal_generics.New_instances);
       ty
 
 let validate_and_convert_ty (node : 'a Ast.node) (tc : Tctxt.t) (ty : Ast.ty) :
     Typed_ast.ty =
-  let ty = normalize_class_ty tc ty in
+  let ty = normalize_nominal_ty tc ty in
   typecheck_ty node tc ty;
   resolve_interface_ty tc (Conversions.convert_ty ty)
 
@@ -437,7 +442,7 @@ and eval_const_binop e1 e2 operator =
 let unexpected_ty expected e =
  fun received ->
   type_error e
-    ("Expteced type " ^ Printer.show_ty expected ^ ", received type " ^ received)
+    ("Expected type " ^ Printer.show_ty expected ^ ", received type " ^ received)
 
 let check_expected_ty (expected : Typed_ast.ty option) (actual : Typed_ast.ty)
     (e : Ast.exp node) : unit =

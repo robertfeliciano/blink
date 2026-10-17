@@ -169,9 +169,7 @@ let resolve graph : (program, diagnostic) result =
         | TRef (RArray (element, size)) -> TRef (RArray (ty element, size))
         | TRef (RFun (args, ret)) -> TRef (RFun (List.map ty args, ret_ty ret))
         | TRef (RGeneric (name, args)) ->
-            TRef
-              (RGeneric
-                 (nominal_name ~required:Class_kind name, List.map ty args))
+            TRef (RGeneric (nominal_name name, List.map ty args))
         | primitive -> primitive
       and ret_ty = function
         | RetVoid -> RetVoid
@@ -380,6 +378,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         iname = identity;
+                        iparams = value.elt.iparams;
                         fields =
                           List.map
                             (fun (field : ifield node) ->
@@ -434,7 +433,27 @@ let resolve graph : (program, diagnostic) result =
                         cparams = value.elt.cparams;
                         impls =
                           List.map
-                            (nominal_name ~required:Interface_kind)
+                            (fun n ->
+                              {
+                                n with
+                                elt =
+                                  (match n.elt with
+                                  | TRef (RClass name) ->
+                                      TRef
+                                        (RClass
+                                           (nominal_name
+                                              ~required:Interface_kind name))
+                                  | TRef (RGeneric (name, args)) ->
+                                      TRef
+                                        (RGeneric
+                                           ( nominal_name
+                                               ~required:Interface_kind name,
+                                             List.map ty args ))
+                                  | _ ->
+                                      fail n
+                                        "Expected an interface implementation \
+                                         type.");
+                              })
                             value.elt.impls;
                         annotations = annotations value.elt.annotations;
                         fields =
