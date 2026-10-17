@@ -1,0 +1,59 @@
+import std.cu.blas;
+import std.io;
+
+// Check the f64 declaration through Blink's native bridge as well.
+fun check_double(a: [f32; 6], b: [f32; 12], expected: [f32; 8]) => i32 {
+    let da: [f64; 6] = new [0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let db: [f64; 12] = new [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let dc: [f64; 8] = new [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    for i in 0..6 { da[i] = a[i]; }
+    for i in 0..12 { db[i] = b[i]; }
+    let status = blas.blink_cu_dgemm_2x3_3x4(da, db, dc, 1.0, 0.0);
+    if status == 0 {
+        for i in 0..8 {
+            if dc[i] != expected[i] {
+                free da, db, dc;
+                return 5;
+            }
+        }
+    }
+    free da, db, dc;
+    return status;
+}
+
+fun main() => i32 {
+    // Row-major A = [[1,2,3],[4,5,6]], B = [[1,2,3,4],[5,6,7,8],[9,10,11,12]].
+    let a: [f32; 6] = new [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+    let b: [f32; 12] = new [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
+    let c: [f32; 8] = new [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let status = blas.blink_cu_sgemm_2x3_3x4(a, b, c, 1.0, 0.0);
+    if status != 0 {
+        free a, b, c;
+        let ignored = io.println("cuBLAS GEMM failed");
+        return 1;
+    }
+    let expected: [f32; 8] = [38.0, 44.0, 50.0, 56.0, 83.0, 98.0, 113.0, 128.0];
+    for i in 0..8 {
+        if c[i] != expected[i] {
+            free a, b, c;
+            return 2;
+        }
+    }
+    // Exercise alpha/beta accumulation on the same heap output: C = 2*A*B + C.
+    let accumulated = blas.blink_cu_sgemm_2x3_3x4(a, b, c, 2.0, 1.0);
+    if accumulated != 0 {
+        free a, b, c;
+        return 3;
+    }
+    for i in 0..8 {
+        if c[i] != 3.0 * expected[i] {
+            free a, b, c;
+            return 4;
+        }
+    }
+    let double_status = check_double(a, b, expected);
+    free a, b, c;
+    if double_status != 0 { return 5; }
+    let ignored = io.println("cuBLAS heap-array GEMM passed");
+    return 0;
+}

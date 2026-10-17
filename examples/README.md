@@ -12,6 +12,8 @@
 | [classes/arrays.bl](classes/arrays.bl) | Array fields and arrays of objects | 7 |
 | [classes/nested.bl](classes/nested.bl) | Nested objects and default field initializers | 44 |
 
+- [cu/](cu/README.md): CUDA array addition and cuBLAS GEMM with heap arrays;
+  requires the CUDA toolkit, cuBLAS, and an NVIDIA GPU.
 - [lambdas/](lambdas/README.md): basic calls, unnamed arguments, captures,
   returned closures, function values, and left folds.
 - [modules/](modules/README.md): imports, exports, shared globals, and `std.io`.

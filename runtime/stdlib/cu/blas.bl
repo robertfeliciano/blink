@@ -1,0 +1,7 @@
+// Row-major GEMM: C = alpha*A*B + beta*C.
+// A is 2x3, B is 3x4, C is 2x4; each is one contiguous flat array.
+// Heap arrays (new [...]) are supported; the caller owns and frees them.
+// Returns 0 on success, positive CUDA status, or negative cuBLAS status.
+// Link gemm.cu and -lcublas. Calls finish before returning to Blink.
+export @C fun blink_cu_sgemm_2x3_3x4(a: [f32; 6], b: [f32; 12], c: [f32; 8], alpha: f32, beta: f32) => i32;
+export @C fun blink_cu_dgemm_2x3_3x4(a: [f64; 6], b: [f64; 12], c: [f64; 8], alpha: f64, beta: f64) => i32;
