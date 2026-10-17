@@ -29,7 +29,7 @@ namespace {
                 }
             }
         }
-        // All input uploads precede writing host output, so C may alias B.
+        
         T aliased[12];
         for (int i = 0; i < 12; ++i)
             aliased[i] = b[i];

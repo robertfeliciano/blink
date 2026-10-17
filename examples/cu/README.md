@@ -1,5 +1,10 @@
 # CUDA examples
 
+The CUDA work in this repo is a proof-of-concept.
+Not that we need much of a proof-of-concept for this method since we are simply exposing some CUDA entry-point with `extern "C"` and wrapping it in a Blink function, just like we do with standard C code. 
+
+But the end goal of GPU functionality will take much longer to achieve. So I'm leaving this here for the sweet 0.0001% CUDA code on the language breakdown.
+
 The vector example adds two four-element `f64` arrays on an NVIDIA GPU and checks
 that the result is `[11, 22, 33, 44]`. It requires the CUDA toolkit (`nvcc`), a
 CUDA-capable NVIDIA GPU with a working driver, and Blink's usual LLVM toolchain.
