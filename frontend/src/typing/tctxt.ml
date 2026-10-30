@@ -113,10 +113,10 @@ let lookup_method_option c_name m_name c =
 
 let lookup_interface_option id c = List.assoc_opt id c.interfaces
 
-let implements cname iname c =
-  match List.assoc_opt cname c.implementations with
-  | Some names -> List.mem iname names
-  | None -> false
+let implemented_interfaces c name =
+  Option.value (List.assoc_opt name c.implementations) ~default:[]
+
+let implements cname iname c = List.mem iname (implemented_interfaces c cname)
 
 let lookup_interface_method_option iname mname c =
   match lookup_interface_option iname c with

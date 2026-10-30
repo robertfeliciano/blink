@@ -15,12 +15,12 @@ type t = {
   instances : (id * instance) list ref;
   pending : instance Queue.t;
   origins : origin list ref;
-  classes : Class_generics.t;
+  nominals : Nominal_generics.t;
 }
 
-let create classes templates =
+let create nominals templates =
   {
-    classes;
+    nominals;
     templates;
     instances = ref [];
     pending = Queue.create ();
@@ -53,7 +53,8 @@ let check_function_arity node args actual =
 
 (* Only generic positions constrain inference. Ordinary positions still use the
    existing argument conversion rules after the signature is concrete. *)
-let rec match_ty ~convert_ty ~classes ?(fill = false) node bindings ty actual =
+let rec match_ty ~convert_ty ~nominals ~implementations ?(fill = false) node
+    bindings ty actual =
   match (ty, actual) with
   | TParam p, actual -> (
       match List.assoc_opt p.elt !bindings with
@@ -64,44 +65,67 @@ let rec match_ty ~convert_ty ~classes ?(fill = false) node bindings ty actual =
           generic_error node
             ("Conflicting types for " ^ p.elt ^ ": " ^ Printer.show_ty previous
            ^ " and " ^ Printer.show_ty actual ^ "."))
-  | TRef (RGeneric (name, args)), T.TRef (T.RClass actual) -> (
-      match Class_generics.arguments classes actual with
-      | Some (owner, actual_args) when owner = Ast.show_qualified_name name ->
+  | TRef (RGeneric (name, args)), T.TRef (T.RClass actual | T.RInterface actual)
+    -> (
+      let owner = Ast.show_qualified_name name in
+      let candidates = actual :: implementations actual in
+      let matches =
+        List.filter_map
+          (fun candidate ->
+            match Nominal_generics.arguments nominals candidate with
+            | Some (template, actual_args) when template = owner ->
+                Some actual_args
+            | _ -> None)
+          candidates
+      in
+      match matches with
+      | [ actual_args ] ->
+          if List.length args <> List.length actual_args then
+            generic_error node "Generic type arity mismatch during inference.";
           List.iter2
             (fun ty actual ->
-              match_ty ~convert_ty ~classes ~fill node bindings ty
-                (convert_ty actual))
+              match_ty ~convert_ty ~nominals ~implementations ~fill node
+                bindings ty (convert_ty actual))
             args actual_args
-      | _ -> generic_error node "Generic class specialization mismatch.")
+      | [] ->
+          generic_error node
+            "Generic class or interface specialization mismatch."
+      | _ -> generic_error node "Ambiguous generic interface implementation.")
   | TRef (RArray (ty, sz)), T.TRef (T.RArray (actual, len)) ->
       check_array_length node sz (Z.of_int len);
-      match_ty ~convert_ty ~classes ~fill node bindings ty actual
+      match_ty ~convert_ty ~nominals ~implementations ~fill node bindings ty
+        actual
   | TRef (RFun (args, ret)), T.TRef (T.RFun (actual_args, actual_ret)) ->
       check_function_arity node args actual_args;
       List.iter2
-        (match_ty ~convert_ty ~classes ~fill node bindings)
+        (match_ty ~convert_ty ~nominals ~implementations ~fill node bindings)
         args actual_args;
-      match_ret_ty ~convert_ty ~classes ~fill node bindings ret actual_ret
+      match_ret_ty ~convert_ty ~nominals ~implementations ~fill node bindings
+        ret actual_ret
   | _ -> ()
 
-and match_ret_ty ~convert_ty ~classes ?(fill = false) node bindings ret actual =
+and match_ret_ty ~convert_ty ~nominals ~implementations ?(fill = false) node
+    bindings ret actual =
   match (ret, actual) with
   | RetVal ty, T.RetVal actual ->
-      match_ty ~convert_ty ~classes ~fill node bindings ty actual
+      match_ty ~convert_ty ~nominals ~implementations ~fill node bindings ty
+        actual
   | RetVoid, T.RetVoid -> ()
   | _ -> generic_error node "Function return mismatch during generic inference."
 
 (* A generic callback can connect still-unbound parameters in its receiver's
    signature. Each side keeps its own bindings, even when parameter names match.
    Only concrete types enter either set of bindings. *)
-let match_patterns ~classes ~convert_ty node bindings ty callback_ty =
+let match_patterns ~nominals ~implementations ~convert_ty node bindings ty
+    callback_ty =
   let callback_bindings = ref [] in
   let rec match_pair ty callback_ty =
     if not (unresolved !bindings ty) then
-      match_ty ~convert_ty ~classes node callback_bindings callback_ty
+      match_ty ~convert_ty ~nominals ~implementations node callback_bindings
+        callback_ty
         (convert_ty (subst_ty !bindings ty))
     else if not (unresolved !callback_bindings callback_ty) then
-      match_ty ~convert_ty ~classes node bindings ty
+      match_ty ~convert_ty ~nominals ~implementations node bindings ty
         (convert_ty (subst_ty !callback_bindings callback_ty))
     else
       match (ty, callback_ty) with
@@ -178,7 +202,7 @@ let request ~convert_ty ~convert_ret_ty state (node : 'a Ast.node)
           ^ String.concat " -> " (List.map (fun origin -> origin.name) origins)
           );
       let fn = map_fdecl_types (subst_ty bindings) fn in
-      let fn = Class_generics.normalize_function state.classes fn in
+      let fn = Nominal_generics.normalize_function state.nominals fn in
       let fn = { fn with elt = { fn.elt with fname; type_params = [] } } in
       let args = List.map (fun (ty, _) -> convert_ty ty) fn.elt.args in
       let ty = T.TRef (T.RFun (args, convert_ret_ty fn.elt.frtyp)) in

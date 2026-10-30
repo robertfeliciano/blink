@@ -165,7 +165,7 @@ type cdecl = {
   cparams : id node list;
   annotations : annotation list;
   cname : id;
-  impls : qualified_name node list;
+  impls : ty node list;
   fields : vdecl node list;
   methods : fdecl node list;
 }
@@ -179,7 +179,14 @@ type proto = {
 }
 
 type ifield = { fieldName : id; ftyp : ty; fconst : bool }
-type idecl = { iname : id; protos : proto node list; fields : ifield node list }
+
+type idecl = {
+  iname : id;
+  iparams : id node list;
+  protos : proto node list;
+  fields : ifield node list;
+}
+
 type import = { path : qualified_name node; alias : id node option }
 
 type top_level_decl =
@@ -290,6 +297,7 @@ let map_cdecl_types ty (cn : cdecl node) =
     elt =
       {
         cn.elt with
+        impls = List.map (fun n -> { n with elt = ty n.elt }) cn.elt.impls;
         fields =
           List.map
             (fun field -> { field with elt = map_vdecl_types ty field.elt })
@@ -367,6 +375,21 @@ let map_proto_types ty (pn : proto node) =
             (fun (name, args) ->
               (name, Option.map (List.map (map_exp_types ty)) args))
             pn.elt.annotations;
+      };
+  }
+
+let map_idecl_types ty (interface : idecl node) =
+  {
+    interface with
+    elt =
+      {
+        interface.elt with
+        fields =
+          List.map
+            (fun (field : ifield node) ->
+              { field with elt = { field.elt with ftyp = ty field.elt.ftyp } })
+            interface.elt.fields;
+        protos = List.map (map_proto_types ty) interface.elt.protos;
       };
   }
 
@@ -697,7 +720,7 @@ let show_cdecl ?(lvl = 0)
     (show_annotations annotations)
     (indent lvl)
     (cname ^ show_type_params cparams)
-    (String.concat ", " (List.map show_qualified_name impls))
+    (String.concat ", " (List.map (fun n -> show_ty n.elt) impls))
     (indent (lvl + 1))
     fields_s
     (indent (lvl + 1))
@@ -719,7 +742,9 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Class cn -> show_cdecl ~lvl:1 cn
     | Prototype pn -> show_proto ~lvl:1 pn
     | Interface value ->
-        "interface " ^ value.elt.iname ^ " { "
+        "interface " ^ value.elt.iname
+        ^ show_type_params value.elt.iparams
+        ^ " { "
         ^ String.concat "; "
             (List.map
                (fun (f : ifield node) ->

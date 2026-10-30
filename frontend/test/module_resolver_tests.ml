@@ -13,6 +13,60 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types
+           "generic interfaces preserve definition-site and parameter bindings"
+           [
+             ( [ "contracts" ],
+               "class Hidden {} export interface Value<Element> { const item: \
+                Element; fun get() => Element; fun hidden() => Hidden; }" );
+             ( [ "main" ],
+               "import contracts as c; class Element {} fun read<T>(x: \
+                c.Value<T>) => T { return x.get(); }" );
+           ];
+         types "qualified generic implementation supports inference"
+           [
+             ( [ "contracts" ],
+               "export interface Value<T> { fun get() => T; } export fun \
+                read<T>(x: Value<T>) => T { return x.get(); }" );
+             ( [ "main" ],
+               "import contracts as c; class Box<T> impl c.Value<T> { let \
+                item: T; fun get() => T { return item; } } fun main() => i32 { \
+                return c.read(new Box<i32> { item = 42 }); }" );
+           ];
+         types
+           "same generic interface spelling in different modules stays distinct"
+           [
+             ([ "left" ], "export interface I<T> { fun get() => T; }");
+             ([ "right" ], "export interface I<T> { fun get() => T; }");
+             ( [ "main" ],
+               "import left; import right; class C impl left.I<i32>, \
+                right.I<i32> { fun get() => i32 { return 42; } } fun main() => \
+                i32 { let x: left.I<i32> = new C {}; let y: right.I<i32> = new \
+                C {}; return x.get(); }" );
+           ];
+         rejects "private generic interface in annotation" "is private"
+           [
+             ([ "contracts" ], "interface I<T> {}");
+             ([ "main" ], "import contracts; fun f(x: contracts.I<i32>) {}");
+           ];
+         rejects "private generic interface in impl" "is private"
+           [
+             ([ "contracts" ], "interface I<T> {}");
+             ([ "main" ], "import contracts; class C impl contracts.I<i32> {}");
+           ];
+         rejects "generic interface cannot be constructed"
+           "not the required class"
+           [
+             ([ "contracts" ], "export interface I<T> {}");
+             ( [ "main" ],
+               "import contracts; fun f() { let x = new contracts.I<i32> {}; }"
+             );
+           ];
+         rejects "generic class cannot be implemented" "not the required class"
+           [
+             ([ "contracts" ], "export class C<T> {}");
+             ([ "main" ], "import contracts; class D impl contracts.C<i32> {}");
+           ];
          types "same generic class spelling remains distinct across modules"
            [
              ([ "left" ], "export class Box<T> { let item: T; }");

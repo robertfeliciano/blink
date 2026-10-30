@@ -235,8 +235,9 @@ cdecl:
       { (loc $symbolstartpos $endpos { annotations; cname; cparams; impls; fields; methods } |> map_cdecl_types (bind_type_params cparams)) }
 
 idecl:
-  | INTERFACE iname=IDENT LBRACE fields=list(ifield) protos=list(pdecl) RBRACE
-      { loc $startpos $endpos { iname; protos; fields } }
+  | INTERFACE iname=IDENT iparams=type_params LBRACE fields=list(ifield) protos=list(pdecl) RBRACE
+      { loc $startpos $endpos { iname; iparams; protos; fields }
+        |> map_idecl_types (bind_type_params iparams) }
 
 ifield:
   | LET fieldName=IDENT ftyp=ty_spec SEMI
@@ -245,7 +246,8 @@ ifield:
       { loc $startpos $endpos { fieldName; ftyp; fconst = true } }
 
 impls_spec:
-  | IMPLS ids=separated_nonempty_list(COMMA, qualified_name) { ids }
+  | IMPLS ids=separated_nonempty_list(COMMA, class_type)
+      { List.map (fun n -> { n with elt = TRef n.elt }) ids }
   | { [] }
 
 field_list:

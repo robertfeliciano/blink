@@ -1,0 +1,14 @@
+// Mutable, zero-indexed sequence. Negative indices count from the end:
+// -1 selects the last element, -size() the first. Insertion is before the
+// selected element; index == size() appends. Invalid indices call exit(1).
+// The list owns its storage; stored reference values remain caller-owned.
+export interface List<T> {
+    fun size() => i64;
+    fun isEmpty() => bool;
+    fun get(index: i64) => T;
+    fun set(index: i64, value: T) => T;
+    fun add(value: T);
+    fun insert(index: i64, value: T);
+    fun removeAt(index: i64) => T;
+    fun clear();
+}

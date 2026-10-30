@@ -712,6 +712,123 @@ let test_underapplication (name, source) test_context =
       assert_bool "type errors must stop before LLVM emission"
         (not (Sys.file_exists "new_output.ll")))
 
+let generic_interface_fixtures =
+  [
+    {
+      name = "generic-interface-concrete-inference-fields-and-distinct-layouts";
+      source =
+        {|interface State<T> { let item: T; fun get() => T; fun set(x: T); }
+class First<T> impl State<T> {
+  let padding: bool = false; let item: T;
+  fun get() => T { return item; }
+  fun set(x: T) { item = x; }
+}
+class Second impl State<i32> {
+  let item = 20; let padding: i64 = 0;
+  fun get() => i32 { return item; }
+  fun set(x: i32) { item = x; }
+}
+fun read<T>(x: State<T>) => T { return x.get(); }
+fun write<T>(x: State<T>, value: T) { x.set(value); }
+fun main() => i32 {
+  let first = new First<i32> { item = 19 };
+  let second = new Second {};
+  let view: State<i32> = first;
+  view.item += 1;
+  write(second, 22);
+  let flag = new First<bool> { item = true };
+  if not read(flag) { return 1; }
+  let result = read(first) + read(second);
+  let alias: State<i32> = first;
+  if view != alias { return 2; }
+  free first, second, flag;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-interface-nested-aggregate-arguments-returns-and-closures";
+      source =
+        {|interface Value<T> { const item: T; fun get() => T; }
+class Box<T> impl Value<T> { let item: T; fun get() => T { return item; } }
+interface Echo<T> { fun echo(x: Value<T>) => Value<T>; }
+class Echoer<T> impl Echo<T> { fun echo(x: Value<T>) => Value<T> { return x; } }
+fun read<T>(x: Value<T>) => T { return x.get(); }
+fun echo<T>(e: Echo<T>, x: Value<T>) => Value<T> { return e.echo(x); }
+fun main() => i32 {
+  let inner: Value<i32> = new Box<i32> { item = 42 };
+  let outer = new Box<Value<i32>> { item = inner };
+  let e = new Echoer<i32> {};
+  let callback: (Value<i32>) -> i32 = read;
+  let captured: () -> i32 = fn[inner]() { return inner.item; };
+  let result = callback(echo(e, read(outer)));
+  if captured() != result { return 1; }
+  free callback, captured, inner, outer, e;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-interface-array-mapping-and-signature-reordering";
+      source =
+        {|interface Value<T> { fun get() => T; }
+class Pair<T> impl Value<[T; 2]> { let items: [T; 2]; fun get() => [T; 2] { return items; } }
+interface Mapping<A, B> { fun apply(x: A) => B; }
+class Mapper<X, Y> impl Mapping<Y, X> { let result: X; fun apply(x: Y) => X { return result; } }
+fun read<T>(x: Value<T>) => T { return x.get(); }
+fun apply<A, B>(m: Mapping<A, B>, x: A) => B { return m.apply(x); }
+fun main() => i32 {
+  let pair = new Pair<i32> { items = [40, 2] };
+  let mapper = new Mapper<i32, bool> { result = 2 };
+  let result = read(pair)[0] + apply(mapper, true);
+  free pair, mapper;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name =
+        "generic-interface-discovery-null-defaults-and-recursive-signatures";
+      source =
+        {|interface Link<T> { let next: Link<T>; fun get() => T; }
+class Node<T> impl Link<T> { let next: Link<T> = null; let item: T; fun get() => T { return item; } }
+fun make<T>(item: T) => Node<T> {
+  let x: Link<T> = new Node<T> { item = item };
+  return new Node<T> { item = x.get(), next = x };
+}
+fun main() => i32 {
+  let node = make(42);
+  let view: Link<i32> = node;
+  if view.next.next != null { return 1; }
+  let empty: Link<bool>;
+  if empty != null { return 2; }
+  let result = view.next.get();
+  free view.next, node;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "generic-interface-function-type-specialization-and-receiver-order";
+      source =
+        {|class Counter { let count = 0; }
+interface Mapping<A, B> { fun apply(x: A) => B; }
+class Mapper impl Mapping<(i32) -> i32, i32> {
+  fun apply(f: (i32) -> i32) => i32 { return f(40); }
+}
+fun pick(counter: Counter, mapper: Mapper) => Mapper { counter.count += 1; return mapper; }
+fun run<A, B>(mapper: Mapping<A, B>, x: A) => B { return mapper.apply(x); }
+fun main() => i32 {
+  let counter = new Counter {}; let mapper = new Mapper {};
+  let result = run(pick(counter, mapper), fn[counter](x: i32) -> i32 { return x + counter.count + 1; });
+  if counter.count != 1 { return 1; }
+  free counter, mapper;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+  ]
+
 let interface_fixtures =
   [
     {
@@ -1412,7 +1529,7 @@ let suite =
                       fixture.name ^ optimization
                       >:: test_fixture ~optimization fixture)
                     [ "-O0"; "-O2" ])
-                interface_fixtures;
+                (interface_fixtures @ generic_interface_fixtures);
          "generic native execution"
          >::: List.concat_map
                 (fun fixture ->
