@@ -110,6 +110,7 @@ rule read = parse
   | "null" { NULL }
   | "inline" { INLINE }
   | "import" { IMPORT }
+  | "from" { FROM }
   | "export" { EXPORT }
   | "fun" { FUN }
   | "if" { IF }

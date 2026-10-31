@@ -2,7 +2,7 @@
 
 | Entry point | Demonstrates | Exit code |
 | --- | --- | --- |
-| [main.bl](main.bl) | Imported contracts, class-to-interface conversions, and dynamic dispatch | 0 |
+| [main.bl](main.bl) | Named contract imports, class-to-interface conversions, and dynamic dispatch | 0 |
 | [fields.bl](fields.bl) | Mutable and read-only field requirements, different class layouts, and shared mutations | 0 |
 | [generic.bl](generic.bl) | Generic contracts, class implementation inference, and shared field mutations | 42 |
 | [temp.bl](temp.bl) | A minimal interface method call and freeing an object through its interface reference | 42 |
@@ -25,8 +25,9 @@ echo $?
 Both programs exit with `0` when their checks pass and `1` when they fail.
 Neither needs the standard library root.
 
-In `main.bl`, `First` and `Second` explicitly implement `contracts.Value` with
-`impl`. `choose` returns either object as that interface, and `contracts.read`
+In `main.bl`, `import Value, read from contracts;` selects the exported interface
+and function. `First` and `Second` explicitly implement `Value` with
+`impl`. `choose` returns either object as that interface, and `read`
 calls the selected object's implementation. The two calls produce `10` and `20`.
 
 In `fields.bl`, `Counter` requires a mutable `count`, a read-only `label`, and a

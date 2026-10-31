@@ -8,7 +8,7 @@ and explicit lambda captures. Each source file is a module, and `@C` declaration
 let you call C functions directly. Memory management is explicit with `free`.
 
 ```blink
-import std.io;
+import println from std.io;
 
 @C fun abs(value: i32) => i32;
 
@@ -33,7 +33,7 @@ fun main() => i32 {
     };
     let sensor = new Sensor { value = -4 };
     let result = measure(sensor, transform);
-    io.println("Blink!");
+    println("Blink!");
     free sensor, transform;
     return result;
 }

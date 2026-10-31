@@ -1,16 +1,16 @@
-import std.collections.list as lists;
-import std.collections.linked_list as linked;
+import List from std.collections.list;
+import LinkedList from std.collections.linked_list;
 
-fun first<T>(items: lists.List<T>) => T {
+fun first<T>(items: List<T>) => T {
     return items.get(0);
 }
 
 fun main() => i32 {
-    let items = new linked.LinkedList<i32> {};
+    let items = new LinkedList<i32> {};
     items.add(20);
     items.addFirst(1);
     items.addLast(22);
-    let view: lists.List<i32> = items;
+    let view: List<i32> = items;
     view.insert(-1, 21);
     let removed = items.removeFirst();
     let replaced = view.set(-2, 22);

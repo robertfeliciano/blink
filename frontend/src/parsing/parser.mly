@@ -102,7 +102,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token TRUE      /* true */
 %token FALSE     /* false */
 // %token WHERE     /* where */
-%token IMPORT EXPORT
+%token IMPORT EXPORT FROM
 // %token ENABLE    /* enable */
 %token INTERFACE
 %token CLASS     /* class */
@@ -182,10 +182,20 @@ qualified_name:
 
 import_decl:
   | IMPORT path=qualified_name SEMI
-      { loc $startpos $endpos { path; alias = None } }
+      { loc $startpos $endpos { path; selection = Module_import None } }
   | IMPORT path=qualified_name AS alias=IDENT SEMI
       { loc $startpos $endpos
-          { path; alias = Some (loc $startpos(alias) $endpos(alias) alias) } }
+          { path; selection = Module_import (Some (loc $startpos(alias) $endpos(alias) alias)) } }
+  | IMPORT names=import_names FROM path=qualified_name SEMI
+      { loc $startpos $endpos { path; selection = Named_import names } }
+
+import_names:
+  | name=IDENT
+      { [loc $startpos(name) $endpos(name) name] }
+  | name=IDENT COMMA
+      { [loc $startpos(name) $endpos(name) name] }
+  | name=IDENT COMMA rest=import_names
+      { (loc $startpos(name) $endpos(name) name) :: rest }
 
 program:
   | imports=list(import_decl) decls=list(tdecl) EOF

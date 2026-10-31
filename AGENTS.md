@@ -102,6 +102,11 @@ declarations for typing. Module-owned symbols, classes, interfaces, and globals
 have stable internal identities; entry `main` and `@C` symbols retain exact names.
 Shared C signatures are reconciled by typing. Import/export metadata stays in the
 frontend; globals cross the native FFI as ordinary resolved declarations.
+Imports support module namespaces (`import helper as h;`) and selected exports
+(`import answer, Box, from helper;`), with an optional trailing comma in named
+lists. Named imports are validated eagerly and reuse defining-module identities;
+locals may shadow them. Import names cannot collide with top-level declarations
+or module aliases. Imported names are not re-exported. `from` is reserved.
 See `frontend/src/modules/README.md` for implementation notes, `examples/modules/`
 for a runnable example, and `runtime/stdlib/io.bl` for bootstrap `std.io` using libc.
 Module interfaces are inferred from `.ml`, without module `.mli` files.

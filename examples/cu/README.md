@@ -22,9 +22,10 @@ Override `NVCC` or `LLC` if those tools are not on PATH.
 Generated files stay in `examples/cu/build/`.
 
 `runtime/stdlib/cu/vector_add.cu` exports `blink_cu_add_f64_4` with C linkage.
-`runtime/stdlib/cu/vector.bl` exports the matching `@C` declaration, imported as
-`std.cu.vector`. Blink's fixed-size arrays pass pointers to contiguous elements;
-this API accepts exactly four doubles per array. The CUDA wrapper copies host
+`runtime/stdlib/cu/vector.bl` exports the matching `@C` declaration, selected with
+`import blink_cu_add_f64_4 from std.cu.vector;`. Blink's fixed-size arrays pass
+pointers to contiguous elements; this API accepts exactly four doubles per
+array. The CUDA wrapper copies host
 inputs to device memory, launches the addition kernel, copies the result back,
 and releases device memory. It returns zero on success or a CUDA error code.
 The example reports errors and exits nonzero if CUDA fails or any sum is wrong.
@@ -35,9 +36,9 @@ CUDA example. This is an optional module; ordinary Blink builds do not need CUDA
 
 ## cuBLAS GEMM with heap arrays
 
-`gemm.bl` passes two flat heap arrays and a heap output array to cuBLAS. Import
-`std.cu.blas` for `blink_cu_sgemm_2x3_3x4` (`f32`) or
-`blink_cu_dgemm_2x3_3x4` (`f64`). Both compute `C = alpha*A*B + beta*C`:
+`gemm.bl` passes two flat heap arrays and a heap output array to cuBLAS. It uses
+`import blink_cu_sgemm_2x3_3x4, blink_cu_dgemm_2x3_3x4, from std.cu.blas;`
+to select the `f32` and `f64` entry points. Both compute `C = alpha*A*B + beta*C`:
 
 - A: row-major 2-by-3 matrix, `[f32; 6]` or `[f64; 6]`.
 - B: row-major 3-by-4 matrix, 12 elements.
