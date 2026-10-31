@@ -75,7 +75,7 @@ Program convert_program(value prog) {
         for (value fs = Field(decl, 2); fs != Val_emptylist; fs = Field(fs, 1)) {
             value field = Field(fs, 0); // record ifield = { fieldName; ftyp; fconst }
             interface.fields.push_back(
-                InterfaceField{String_val(Field(field, 0)), convert_ty(Field(field, 1)), Bool_val(Field(field, 2))});
+                InterfaceField{String_val(Field(field, 0)), convert_ty(Field(field, 1)), Bool_val(Field(field, 2)) != 0});
         }
         program.interfaces.push_back(std::move(interface));
     }
