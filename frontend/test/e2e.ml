@@ -431,7 +431,7 @@ let generic_fixtures =
       source =
         Core.In_channel.read_all
           (Native_test_support.executable_path
-             "../../../../examples/generics/constraints.bl");
+             "../../../test/fixtures/generic_constraints.bl");
       expected_exit = 42;
     };
     {

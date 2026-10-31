@@ -1,0 +1,50 @@
+interface Value<T> {
+    const item: T;
+    fun get() => T;
+}
+
+class Box<T> impl Value<T> {
+    let item: T;
+    fun get() => T { return item; }
+}
+
+interface HolderView<T impl Value<i32>> {
+    const value: T;
+}
+
+class Holder<T impl Value<i32>> impl HolderView<T> {
+    let value: T;
+}
+
+// Prototypes may rename parameters, but must declare the same bounds.
+fun identity<T impl Value<i32>>(value: T) => T;
+fun identity<U impl Value<i32>>(value: U) => U {
+    return value;
+}
+
+// U is inferred from the signature, then checked against T's bound.
+fun read<T impl Value<U>, U>(value: T, fallback: U) => U {
+    return value.get();
+}
+
+fun repeat<T impl Value<i32>>(value: T, count: i32) => T {
+    if count == 0 { return identity(value); }
+    return repeat(value, count - 1);
+}
+
+fun apply<A, B>(callback: (A) -> B, value: A) => B {
+    return callback(value);
+}
+
+fun main() => i32 {
+    let box = new Box<i32> { item = 21 };
+    let view: Value<i32> = box;
+    let callback: (Box<i32>) -> Box<i32> = identity;
+    let holder = new Holder<Box<i32>> {
+        value = apply(identity, repeat(callback(box), 2))
+    };
+    let holder_view: HolderView<Box<i32>> = holder;
+    let result = read(holder_view.value, 0) + read(identity(view), 0);
+    free callback, holder, box;
+    return result;
+}

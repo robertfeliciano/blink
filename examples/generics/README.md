@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | [generic_functions.bl](generic_functions.bl) | Inferred function arguments, arrays, and callbacks | 42 |
 | [generic_classes.bl](generic_classes.bl) | Explicit class arguments, nesting, and function inference | 42 |
-| [constraints.bl](constraints.bl) | Interface bounds on functions, classes, and interfaces | 42 |
+| [constraints.bl](constraints.bl) | A generic function that requires a `Readable` implementation | 42 |
 | [../interfaces/generic.bl](../interfaces/generic.bl) | Generic interface contracts, conversions, and shared field mutations | 42 |
 
 Run from the repository root:
@@ -58,6 +58,10 @@ function signatures. See [interface examples](../interfaces/README.md) for the
 field, method, mutation, and ownership rules.
 
 ## Interface constraints
+
+Start with [constraints.bl](constraints.bl): `Number` implements `Readable`,
+so it can be passed to `readValue<T impl Readable>`. Passing an `i32` instead
+would fail the constraint check. The program reads `42` and returns it.
 
 Add one optional interface bound to each type parameter:
 

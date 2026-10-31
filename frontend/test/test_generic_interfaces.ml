@@ -42,18 +42,18 @@ let box =
 
 let read = "fun read<T>(x: Value<T>) => T { return x.get(); }\n"
 
-let constraints_example () =
+let constraints_fixture () =
   Core.In_channel.read_all
     (Filename.concat
        (Filename.dirname Sys.executable_name)
-       "../../../../examples/generics/constraints.bl")
+       "../../../test/fixtures/generic_constraints.bl")
 
 let suite =
   "generic interfaces"
   >::: [
          ( "bounded specializations preserve types and reuse instances"
          >:: fun _ ->
-           let program = typed (constraints_example ()) in
+           let program = typed (constraints_fixture ()) in
            let (T.Prog (_, functions, _, _, _, _)) = program in
            let identities =
              List.filter
