@@ -5,7 +5,13 @@ open Ast
 open Module_model
 module Names = Set.Make (String)
 
-type kind = Function_kind | Class_kind | Interface_kind | Global_kind
+type kind =
+  | Function_kind
+  | Class_kind
+  | Interface_kind
+  | Global_kind
+  | Alias_kind
+
 type symbol = { identity : string; kind : kind; public : bool }
 type import_binding = Module_alias of module_id | Imported_symbol of symbol
 
@@ -26,6 +32,7 @@ let declaration_info = function
   | Class cn -> (cn.elt.cname, Class_kind, cn.elt.annotations)
   | Interface value -> (value.elt.iname, Interface_kind, [])
   | Global gn -> (gn.elt.gname, Global_kind, [])
+  | TypeAlias alias -> (alias.elt.aname.elt, Alias_kind, [])
 
 let make_scope entry source =
   let declarations = Hashtbl.create 16 in
@@ -182,15 +189,17 @@ let resolve graph : (program, diagnostic) result =
                 "Class types must use a direct import alias (alias.Class)."
         in
         if
-          (symbol.kind <> Class_kind && symbol.kind <> Interface_kind)
+          symbol.kind <> Class_kind
+          && symbol.kind <> Interface_kind
+          && symbol.kind <> Alias_kind
           ||
           match required with
-          | Some kind -> symbol.kind <> kind
+          | Some kind -> symbol.kind <> kind && symbol.kind <> Alias_kind
           | None -> false
         then
           fail name
             (show_qualified_name name
-           ^ " is not the required class or interface type.");
+           ^ " is not the required class or interface type (or a type alias).");
         {
           name with
           elt =
@@ -225,7 +234,7 @@ let resolve graph : (program, diagnostic) result =
               if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (name
-                 ^ " is a class, not a function or value; use new or a typed \
+                 ^ " is a type, not a function or value; use new or a typed \
                     default initializer.");
               Id symbol.identity
           | Proj ({ elt = Id alias; _ }, member)
@@ -234,7 +243,7 @@ let resolve graph : (program, diagnostic) result =
               if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node
                   (alias ^ "." ^ member
-                 ^ " is a class, not a function or value; use new or a typed \
+                 ^ " is a type, not a function or value; use new or a typed \
                     default initializer.");
               Id symbol.identity
           | Proj (base, member) -> Proj (recurse base, member)
@@ -375,6 +384,20 @@ let resolve graph : (program, diagnostic) result =
           let identity = (local_symbol node name).identity in
           let declaration =
             match node.elt.declaration with
+            | TypeAlias value ->
+                TypeAlias
+                  {
+                    value with
+                    elt =
+                      {
+                        aname = { value.elt.aname with elt = identity };
+                        target =
+                          {
+                            value.elt.target with
+                            elt = ty value.elt.target.elt;
+                          };
+                      };
+                  }
             | Global value ->
                 Global
                   {

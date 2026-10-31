@@ -313,6 +313,21 @@ let prepare state (Prog (imports, declarations)) =
       (fun (item : top_level node) ->
         let declaration =
           match item.elt.declaration with
+          | TypeAlias alias ->
+              Some
+                (TypeAlias
+                   {
+                     alias with
+                     elt =
+                       {
+                         alias.elt with
+                         target =
+                           {
+                             alias.elt.target with
+                             elt = normalize state alias.elt.target.elt;
+                           };
+                       };
+                   })
           | Class cn when cn.elt.cparams <> [] -> None
           | Class cn -> Some (Class (map_cdecl_types (normalize state) cn))
           | Function fn ->

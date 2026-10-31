@@ -1,0 +1,22 @@
+type Number = i32;
+type Callback = (Number) -> Number;
+type Numbers = [Number; 2];
+type IntBox = Box<Number>;
+
+class Box<T> {
+    let value: T;
+}
+
+fun apply(transform: Callback, value: Number) => Number {
+    return transform(value);
+}
+
+fun main() => i32 {
+    let box: IntBox = new IntBox { value = 40 };
+    let values: Numbers = [box.value, 2];
+    let offset = values[1];
+    let transform: Callback = fn[offset](value) { return value + offset; };
+    let result = apply(transform, values[0]);
+    free transform, box;
+    return result;
+}

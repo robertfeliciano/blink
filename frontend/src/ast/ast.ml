@@ -200,6 +200,7 @@ type import_selection =
   | Named_import of id node list
 
 type import = { path : qualified_name node; selection : import_selection }
+type alias_decl = { aname : id node; target : ty node }
 
 type top_level_decl =
   | Function of fdecl node
@@ -207,6 +208,7 @@ type top_level_decl =
   | Prototype of proto node
   | Interface of idecl node
   | Global of gdecl node
+  | TypeAlias of alias_decl node
 
 type top_level = { declaration : top_level_decl; export_loc : Range.t option }
 type program = Prog of import node list * top_level node list
@@ -221,7 +223,7 @@ let partition_declarations (Prog (_, declarations)) =
       | Function fn -> (fn :: functions, classes, prototypes, globals)
       | Class cn -> (functions, cn :: classes, prototypes, globals)
       | Prototype pn -> (functions, classes, pn :: prototypes, globals)
-      | Interface _ -> (functions, classes, prototypes, globals)
+      | Interface _ | TypeAlias _ -> (functions, classes, prototypes, globals)
       | Global gn -> (functions, classes, prototypes, gn :: globals))
     declarations ([], [], [], [])
 
@@ -243,7 +245,8 @@ let type_mappers ty =
       | ObjInit (cn, fields) ->
           let cn =
             match ty (TRef cn.elt) with
-            | TRef ref_ty -> { cn with elt = ref_ty }
+            | TRef ((RClass _ | RGeneric _) as ref_ty) ->
+                { cn with elt = ref_ty }
             | _ -> raise (InvalidObjectType cn.loc)
           in
           ObjInit (cn, List.map (fun (i, e) -> (i, exp e)) fields)
@@ -778,6 +781,10 @@ let show_top_level { elt = { declaration; export_loc }; _ } =
     | Function fn -> show_decl ~lvl:1 fn
     | Class cn -> show_cdecl ~lvl:1 cn
     | Prototype pn -> show_proto ~lvl:1 pn
+    | TypeAlias alias ->
+        "type " ^ alias.elt.aname.elt ^ " = "
+        ^ show_ty alias.elt.target.elt
+        ^ ";"
     | Interface value ->
         "interface " ^ value.elt.iname
         ^ show_type_params value.elt.iparams

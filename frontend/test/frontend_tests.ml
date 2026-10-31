@@ -4,6 +4,7 @@ let suite =
   "Frontend tests"
   >::: [
          Test_parsing.suite;
+         Test_type_aliases.suite;
          Test_typing.suite;
          Test_desugaring.suite;
          Test_interfaces.suite;

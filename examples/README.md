@@ -4,6 +4,7 @@
 | --- | --- | --- |
 | [basics.bl](basics.bl) | Types, inference, casts, operators, conditionals, and ternaries | 42 |
 | [functions.bl](functions.bl) | Parameters, nested calls, and recursion | 42 |
+| [type_aliases.bl](type_aliases.bl) | Transparent aliases for scalars, callbacks, arrays, and generic classes | 42 |
 | [loops.bl](loops.bl) | While, ranges, steps, foreach, nesting, break, and continue | 42 |
 | [arrays.bl](arrays.bl) | Empty arrays, indexing, mutation, matrices, and nested arrays | 19 |
 | [annotations.bl](annotations.bl) | C interop and inline functions and methods | 20 |

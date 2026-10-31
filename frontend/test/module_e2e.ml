@@ -43,6 +43,97 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native
+             "scalar and callable aliases preserve defaults and heap arrays"
+             [
+               ( "main.bl",
+                 {|type Number = i32;
+type Byte = u8;
+type Real = f32;
+type Text = string;
+type Flag = bool;
+type Numbers = [Byte; 2];
+type Callback = (Number) -> Number;
+type Factory = () -> Callback;
+type Notify = () -> void;
+@C fun strlen(value: Text) => u64;
+const base: Byte = 40;
+const fraction: Real = 0.5;
+const text: Text = "aliases";
+let total: Number;
+let enabled: Flag = true;
+fun add(value: Number) => Number { return value + 2; }
+fun factory() => Callback { return add; }
+fun values() => Numbers { return new [base, 2]; }
+fun main() => i32 {
+  let defaults: Numbers;
+  let zero: Real;
+  let empty: Text;
+  let flag: Flag;
+  if defaults[0] != 0 or zero != 0.0 or strlen(empty) != 0 or flag { return 1; }
+  if fraction != 0.5 or strlen(text) != 7 or not enabled { return 2; }
+  let maker: Factory = factory;
+  let callback: Callback = maker();
+  let numbers: Numbers = values();
+  let notify: Notify = fn[]() { total += 1; };
+  notify();
+  if total != 1 { return 3; }
+  let result = callback(numbers[0]);
+  free numbers, notify, callback, maker;
+  return result;
+}|}
+               );
+             ];
+           native
+             "aliases share representations and specializations across modules"
+             [
+               ( "types.bl",
+                 {|type Number = i32;
+export type Callback = (Number) -> Number;
+export type IntBox = Box<Number>;
+export type View = Value<Number>;
+export type Pair = [Number; 2];
+export type CInt = Number;
+@C fun abs(value: CInt) => CInt;
+export interface Value<T> { let value: T; }
+class Box<T> impl Value<T> { let value: T; }
+export fun make(value: Number) => IntBox { return new IntBox { value = abs(value) }; }
+export fun identity<T>(value: T) => T { return value; }|}
+               );
+               ( "other.bl",
+                 {|import IntBox from types;
+import types as t;
+@C fun abs(value: i32) => i32;
+export fun apply(box: IntBox, f: t.Callback) => i32 { return f(abs(box.value)); }
+export fun read<T impl t.View>(value: T) => i32 { return value.value; }|}
+               );
+               ( "main.bl",
+                 {|import Callback, IntBox, Pair, CInt, make, identity from types;
+import types as t;
+import apply, read from other;
+const base: CInt = 40;
+fun main() => i32 {
+  let box: IntBox = identity(make(-base));
+  let same: t.IntBox = box;
+  let view: t.View = same;
+  let pair: Pair = [read(view), 2];
+  let f: Callback = fn[pair](x: CInt) -> CInt { return x + pair[1]; };
+  let result = apply(box, f);
+  free f, box;
+  return result;
+}|}
+               );
+             ];
+           [
+             negative "alias cycles carry declaration locations"
+               [
+                 ( "helper.bl",
+                   "export type First = Second; type Second = First;" );
+                 ("main.bl", "import helper; fun main() => i32 { return 0; }");
+               ]
+               ~also:[ "Cyclic type alias"; "First"; "Second" ]
+               "helper.bl:1:";
+           ];
            native "named imports share global storage and function identities"
              [
                ( "state.bl",

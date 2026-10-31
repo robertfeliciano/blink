@@ -70,6 +70,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
 %token LET       /* let */
 %token NEW       /* new */
 %token CONST     /* const */
+%token TYPE      /* type */
 %token TVOID     /* void */
 /* integer tokens */
 %token Ti8
@@ -160,6 +161,7 @@ let loc (startpos:Lexing.position) (endpos:Lexing.position) (elt:'a) : 'a node =
    ----------------------- *)
 
 tdecl_body:
+  | a=alias_decl { { elt = { declaration = TypeAlias a; export_loc = None }; loc = a.loc } }
   | g=gdecl { { elt = { declaration = Global g; export_loc = None }; loc = g.loc } }
   | f=fdecl { { elt = { declaration = Function f; export_loc = None }; loc = f.loc } }
   | c=cdecl { { elt = { declaration = Class c; export_loc = None }; loc = c.loc } }
@@ -171,6 +173,12 @@ tdecl:
   | EXPORT d=tdecl_body
       { loc $startpos $endpos
           { d.elt with export_loc = Some (Range.mk_lex_range $startpos $endpos($1)) } }
+
+alias_decl:
+  | TYPE name=IDENT EQUAL target=ty SEMI
+      { loc $startpos $endpos
+          { aname = loc $startpos(name) $endpos(name) name;
+            target = loc $startpos(target) $endpos(target) target } }
 
 qualified_name:
   | name=IDENT %prec QUALIFIED_NAME_END

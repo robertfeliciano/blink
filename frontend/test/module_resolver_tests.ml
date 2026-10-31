@@ -16,6 +16,66 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "named and qualified aliases preserve defining module scope"
+           [
+             ( [ "helper" ],
+               {|class Hidden { let value: i32; }
+export type Number = i32;
+export type Callback = (Number) -> Number;
+export type PublicBox = Hidden;
+export interface Value<T> { let value: T; }
+export type IntValue = Value<Number>;|}
+             );
+             ( [ "main" ],
+               {|import Number, Callback, PublicBox, IntValue from helper;
+import helper as h;
+class Hidden { let other: bool; }
+class Local impl IntValue { let value: Number; }
+fun read<T impl h.IntValue>(value: T) => Number { return value.value; }
+fun main() => i32 {
+  let box: h.PublicBox = new PublicBox { value = 40 };
+  let f: Callback = fn[box](x: h.Number) -> Number { return box.value + x; };
+  let local = new Local { value = 2 };
+  let result = f(read(local));
+  free f, box, local;
+  return result;
+}|}
+             );
+           ];
+         rejects "private alias" "is private"
+           [
+             ([ "helper" ], "type Number = i32;");
+             ([ "main" ], "import helper; fun f(value: helper.Number) {}");
+           ];
+         rejects "unused private named alias" "is private"
+           [
+             ([ "helper" ], "type Number = i32;");
+             ([ "main" ], "import Number from helper;");
+           ];
+         rejects "alias import collision" "conflicts with a declaration"
+           [
+             helper;
+             ([ "main" ], "import answer from helper; type answer = i32;");
+           ];
+         rejects "alias declaration collision" "Duplicate declaration"
+           [ ([ "main" ], "type Box = i32; class Box {}") ];
+         rejects "alias is not a value" "not a function or value"
+           [
+             ( [ "main" ],
+               "type Number = i32; fun main() => i32 { return Number; }" );
+           ];
+         rejects "qualified alias is not a value" "not a function or value"
+           [
+             ([ "helper" ], "export type Number = i32;");
+             ( [ "main" ],
+               "import helper; fun main() => i32 { return helper.Number; }" );
+           ];
+         rejects "aliases do not reexport named imports" "has no member Number"
+           [
+             ([ "helper" ], "export type Number = i32;");
+             ([ "middle" ], "import Number from helper;");
+             ([ "main" ], "import middle; fun f(value: middle.Number) {}");
+           ];
          types "named imports coexist with qualified imports"
            [
              helper;

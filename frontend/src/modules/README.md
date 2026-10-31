@@ -26,6 +26,13 @@ exact names. Error display
 decodes internal identities without global state. Compatible shared C prototypes
 are deduplicated by the existing type checker, after nominal names resolve.
 
+Type aliases have module-owned identities and the same export/import checks.
+The resolver rewrites alias targets in their defining module, including private
+nominal types. Alias names are permitted in type, constructor, and `impl`
+positions; typing expands them before generic specialization and validates the
+resulting kind. Named imports retain the defining alias identity. Explicit
+`export type Public = Imported;` declarations can expose imported types.
+
 Imports select either a module namespace (`import helper as h;`) or a nonempty
 list of exported declarations (`import answer, Box, from helper;`). Named lists
 allow a trailing comma. The source AST keeps the located names and module path;

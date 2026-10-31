@@ -7,6 +7,15 @@ LLVM. It combines type inference, generic functions, classes and interfaces,
 and explicit lambda captures. Each source file is a module, and `@C` declarations
 let you call C functions directly. Memory management is explicit with `free`.
 
+Top-level type aliases give existing types readable names:
+`type Callback = (i32) -> i32;`, `type Counts = [i32; 4];`, and
+`type IntList = LinkedList<i32>;` (after importing `LinkedList`). Aliases are
+interchangeable with their underlying types and add no runtime representation.
+They support forward references, `export type`, and named or qualified imports.
+Alias cycles are rejected, including unused declarations. Aliases do not have
+their own type parameters; they can name concrete generic applications.
+`type` is a reserved keyword. See [the runnable example](examples/type_aliases.bl).
+
 ```blink
 import println from std.io;
 

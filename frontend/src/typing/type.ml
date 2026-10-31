@@ -730,6 +730,16 @@ let type_concrete_program (nominals : Nominal_generics.t)
   let class_names = create_class_name_ctxt Tctxt.empty cns in
   let interfaces = Ast.interface_declarations prog in
   let interface_ctxt = create_interface_ctxt class_names interfaces in
+  (* Validate alias targets even when unused, using the same rules as every
+     source annotation. Generic targets have already been specialized. *)
+  let (Prog (_, declarations)) = prog in
+  List.iter
+    (fun item ->
+      match item.elt.declaration with
+      | TypeAlias alias ->
+          typecheck_ty alias.elt.target interface_ctxt alias.elt.target.elt
+      | _ -> ())
+    declarations;
   Hashtbl.iter
     (fun _ (instance : Nominal_generics.instance) ->
       List.iter
@@ -791,6 +801,7 @@ let type_concrete_program (nominals : Nominal_generics.t)
         interfaces )
 
 let type_program ?(optimization_level = Util.Optimization_level.default) prog =
+  let prog = Type_aliases.expand prog in
   let functions, classes, prototypes, _ = Ast.partition_declarations prog in
   let nominals =
     Nominal_generics.create classes (Ast.interface_declarations prog)

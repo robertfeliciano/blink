@@ -128,6 +128,9 @@ Check operator precedence explicitly for new unary or binary operators.
 - `frontend/src/typing/type.ml` builds contexts and types declarations.
 - `frontend/src/typing/type_stmt.ml` types statements and expressions.
 - `frontend/src/typing/type_util.ml` provides type rules and helpers.
+- `frontend/src/typing/type_aliases.ml` expands transparent top-level aliases
+  after module resolution and before generic specialization. Alias declarations
+  retain located names and targets in the source AST; none reach the typed AST.
 - `frontend/src/typing/tctxt.ml` stores locals, globals, classes, interfaces,
   prototypes, and compilation-local generic state.
 - `frontend/src/typing/generics/nominal_generics.ml` specializes generic classes
@@ -144,6 +147,10 @@ Check operator precedence explicitly for new unary or binary operators.
   files can use `Generics`, `Nominal_generics`, and `Generic_types` directly.
 
 Type failures are reported with source locations through `type_error` helpers.
+Type aliases use `type Callback = (i32) -> i32;` and support exports, imports,
+forward references, and concrete generic targets, without alias type parameters.
+Typing validates unused declarations and expansion rejects cycles. Nominal targets
+keep their defining-module identities and share ordinary generic instances.
 Keep constness and class context intact when extending context operations.
 Function prototypes and definitions are collected before bodies are checked.
 Classes track fields and method headers in a separate class context.
@@ -283,6 +290,8 @@ The generated module targets the build host and uses position-independent code.
   behavior; `module_test_support.ml` provides reusable source fixtures.
 - `frontend/test/test_parsing.ml` contains parser unit tests.
 - `frontend/test/test_typing.ml` contains typing unit tests.
+- `frontend/test/test_type_aliases.ml` covers alias syntax, source ranges,
+  expansion, generic interactions, diagnostics, and transparent lowering.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
 - `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
 - `frontend/test/test_generic_interfaces.ml` tests generic interface specialization,

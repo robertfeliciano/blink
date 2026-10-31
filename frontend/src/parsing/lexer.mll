@@ -92,6 +92,7 @@ rule read = parse
   | "let" { LET }
   | "new" { NEW }
   | "const" { CONST }
+  | "type" { TYPE }
   | "void" { TVOID }
   | "i8"   { Ti8 }
   | "i16"  { Ti16 }
