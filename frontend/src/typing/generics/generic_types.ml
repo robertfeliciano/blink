@@ -27,7 +27,8 @@ and encode_ret = function
 let validate_params fail params =
   let seen = Hashtbl.create (List.length params) in
   List.iter
-    (fun (p : Ast.id Ast.node) ->
+    (fun (param : Ast.type_param) ->
+      let p = param.pname in
       if Hashtbl.mem seen p.elt then
         fail p ("Duplicate type parameter " ^ p.elt ^ ".");
       Hashtbl.add seen p.elt ())
@@ -50,3 +51,32 @@ let rec validate_array_lengths fail node = function
       | RetVoid -> ()
       | RetVal ty -> validate_array_lengths fail node ty)
   | _ -> ()
+
+(* Functions and nominal types enforce the same explicit interface relation.
+   Keep inferred/explicit arguments concrete; a bound never changes inference. *)
+let check_constraints ~fail ~convert_ty ~implements node params args =
+  let bindings = List.map2 (fun p ty -> (p.Ast.pname.elt, ty)) params args in
+  let substitute =
+    Ast.substitute_type_params (fun p -> List.assoc p.Ast.elt bindings)
+  in
+  List.iter2
+    (fun p actual ->
+      match p.Ast.bound with
+      | None -> ()
+      | Some bound ->
+          let required = convert_ty (substitute bound.elt) in
+          let actual = convert_ty actual in
+          let satisfies =
+            match (actual, required) with
+            | T.TRef (T.RInterface a), T.TRef (T.RInterface b) -> a = b
+            | T.TRef (T.RClass c), T.TRef (T.RInterface i) -> implements c i
+            | _ -> false
+          in
+          if not satisfies then
+            fail node
+              ("Type argument " ^ Printer.show_ty actual ^ " for " ^ p.pname.elt
+             ^ " does not satisfy interface constraint "
+             ^ Printer.show_ty required ^ " (declared at "
+              ^ Util.Range.string_of_range bound.loc
+              ^ ")."))
+    params args

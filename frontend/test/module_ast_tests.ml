@@ -132,7 +132,7 @@ let test_exported_generic _ =
   in
   let functions, _, _, _ = partition_declarations source in
   assert_equal [ "T" ]
-    (List.map (fun p -> p.elt) (List.hd functions).elt.type_params);
+    (List.map (fun p -> p.pname.elt) (List.hd functions).elt.type_params);
   assert_bool "generic AST printer succeeds"
     (Core.String.is_substring (show_prog source) ~substring:"identity<T>")
 

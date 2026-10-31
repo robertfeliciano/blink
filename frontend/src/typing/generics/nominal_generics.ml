@@ -30,12 +30,56 @@ type instance = {
 
 type t = {
   templates : (id * template) list;
+  nominal_types : (id * (bool * int)) list;
   instances : (id, instance) Hashtbl.t;
   pending : instance Queue.t;
   mutable ordered : instance list;
 }
 
 let fail node message = raise (Error (node.loc, message))
+
+(* Validate bounds even on templates that are never instantiated. This uses
+   source declarations, before concrete specialization names replace them. *)
+let validate_param_bounds state params =
+  let nominal name args =
+    let id = show_qualified_name name in
+    match List.assoc_opt id state.nominal_types with
+    | None -> fail name ("Unknown constraint type " ^ id ^ ".")
+    | Some (is_interface, arity) ->
+        if List.length args <> arity then
+          fail name
+            (Printf.sprintf "Type %s expects %d type arguments, got %d." id
+               arity (List.length args));
+        is_interface
+  in
+  let rec validate node = function
+    | TRef (RClass name) -> ignore (nominal name [])
+    | TRef (RGeneric (name, args)) ->
+        ignore (nominal name args);
+        List.iter (validate node) args
+    | TRef (RArray (ty, size)) ->
+        Generic_types.validate_array_length fail node size;
+        validate node ty
+    | TRef (RFun (args, ret)) -> (
+        List.iter (validate node) args;
+        match ret with RetVoid -> () | RetVal ty -> validate node ty)
+    | _ -> ()
+  in
+  List.iter
+    (fun p ->
+      Option.iter
+        (fun bound ->
+          let interface =
+            match bound.elt with
+            | TRef (RClass name) -> nominal name []
+            | TRef (RGeneric (name, args)) -> nominal name args
+            | _ -> false
+          in
+          if not interface then
+            fail bound "A type parameter constraint must be an interface.";
+          validate bound bound.elt)
+        p.bound)
+    params
 
 let create classes interfaces =
   let seen = Hashtbl.create 16 in
@@ -77,22 +121,40 @@ let create classes interfaces =
             fail p "Interface prototypes cannot have annotations.")
         i.elt.protos)
     interfaces;
-  {
-    templates =
-      List.filter_map
-        (fun (cn : cdecl node) ->
-          if cn.elt.cparams = [] then None
-          else Some (cn.elt.cname, Class_template cn))
-        classes
-      @ List.filter_map
-          (fun (i : idecl node) ->
-            if i.elt.iparams = [] then None
-            else Some (i.elt.iname, Interface_template i))
-          interfaces;
-    instances = Hashtbl.create 16;
-    pending = Queue.create ();
-    ordered = [];
-  }
+  let state =
+    {
+      nominal_types =
+        List.map
+          (fun (cn : cdecl node) ->
+            (cn.elt.cname, (false, List.length cn.elt.cparams)))
+          classes
+        @ List.map
+            (fun (i : idecl node) ->
+              (i.elt.iname, (true, List.length i.elt.iparams)))
+            interfaces;
+      templates =
+        List.filter_map
+          (fun (cn : cdecl node) ->
+            if cn.elt.cparams = [] then None
+            else Some (cn.elt.cname, Class_template cn))
+          classes
+        @ List.filter_map
+            (fun (i : idecl node) ->
+              if i.elt.iparams = [] then None
+              else Some (i.elt.iname, Interface_template i))
+            interfaces;
+      instances = Hashtbl.create 16;
+      pending = Queue.create ();
+      ordered = [];
+    }
+  in
+  List.iter
+    (fun (cn : cdecl node) -> validate_param_bounds state cn.elt.cparams)
+    classes;
+  List.iter
+    (fun (i : idecl node) -> validate_param_bounds state i.elt.iparams)
+    interfaces;
+  state
 
 let arguments state name =
   Option.map
@@ -188,7 +250,7 @@ let drain state =
     let instance = Queue.take state.pending in
     let owner = List.assoc instance.template state.templates in
     let bindings =
-      List.map2 (fun p ty -> (p.elt, ty)) (parameters owner) instance.args
+      List.map2 (fun p ty -> (p.pname.elt, ty)) (parameters owner) instance.args
     in
     let substitute =
       substitute_type_params (fun p -> List.assoc p.elt bindings)
@@ -240,6 +302,11 @@ let normalize_function state fn =
   fn
 
 let prepare state (Prog (imports, declarations)) =
+  (* Concrete applications inside unused nominal bounds still have obligations. *)
+  List.iter
+    (fun (_, owner) ->
+      ignore (map_type_params (normalize state) (parameters owner)))
+    state.templates;
   drain state;
   let declarations =
     List.filter_map
@@ -299,6 +366,15 @@ let prepare state (Prog (imports, declarations)) =
       state.ordered
   in
   Prog (imports, declarations @ instances)
+
+let check_constraints ~convert_ty ~implements state =
+  List.iter
+    (fun instance ->
+      let owner = List.assoc instance.template state.templates in
+      let node = { elt = (); loc = instance.origin } in
+      Generic_types.check_constraints ~fail ~convert_ty:(convert_ty node)
+        ~implements node (parameters owner) instance.args)
+    (List.rev state.ordered)
 
 let display_names state message =
   List.fold_left

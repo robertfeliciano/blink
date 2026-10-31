@@ -14,6 +14,26 @@ let suite =
   "module resolver"
   >::: [
          types
+           "constraints resolve at the definition site with dependent arguments"
+           [
+             ( [ "contracts" ],
+               "export interface Value<T> {} export class Holder<T impl \
+                Value<U>, U> { let item: T; } export fun keep<T impl Value<U>, \
+                U>(x: T, y: U) => T { return x; }" );
+             ( [ "main" ],
+               "import contracts as c; interface Value<T> {} class Box impl \
+                c.Value<i32> {} fun main() => i32 { let box = new Box {}; let \
+                holder = new c.Holder<Box, i32> { item = c.keep(box, 0) }; \
+                free holder, box; return 42; }" );
+           ];
+         rejects "private interface in a constraint" "is private"
+           [
+             ([ "contracts" ], "interface Hidden {} ");
+             ( [ "main" ],
+               "import contracts; fun f<T impl contracts.Hidden>(x: T) => T { \
+                return x; }" );
+           ];
+         types
            "generic interfaces preserve definition-site and parameter bindings"
            [
              ( [ "contracts" ],

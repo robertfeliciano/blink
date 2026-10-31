@@ -220,7 +220,10 @@ fdecl:
       { bind_fdecl_params (loc $symbolstartpos $endpos { type_params; annotations; frtyp; fname; args; body; inline = true }) }
 
 type_param:
-  | i=IDENT { loc $startpos $endpos i }
+  | i=IDENT bound=option(type_param_bound) { { pname = loc $startpos(i) $endpos(i) i; bound } }
+
+type_param_bound:
+  | IMPLS t=class_type { loc $startpos(t) $endpos(t) (TRef t.elt) }
 
 type_params:
   | { [] }
