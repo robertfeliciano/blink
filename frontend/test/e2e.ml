@@ -427,6 +427,14 @@ fun main() => i32 {
 let generic_fixtures =
   [
     {
+      name = "bounded-generics-preserve-concrete-and-interface-dispatch";
+      source =
+        Core.In_channel.read_all
+          (Native_test_support.executable_path
+             "../../../test/fixtures/generic_constraints.bl");
+      expected_exit = 42;
+    };
+    {
       name = "generic-class-array-string-and-function-arguments";
       source =
         {|class Box<T> { let value: T; }
@@ -451,13 +459,18 @@ fun main() => i32 {
         {|let counter: i32 = 0;
 fun next() => i32 { counter += 1; return counter; }
 class Box<T> { let order = next(); let item: T; }
+class Pair { let first: i32; let second: i32; }
 fun main() => i32 {
   let first = new Box<i32> { item = 40 };
   let second = new Box<bool> { item = true, order = 99 };
   let third = new Box<i32> { item = 0 };
   if counter != 2 or first.order != 1 or second.order != 99 or third.order != 2 { return 1; }
   let result = first.item + third.order;
-  free first, second, third;
+  counter = 0;
+  let callback: () -> i32 = next;
+  let ordered = new Pair { first = callback(), second = next() };
+  if ordered.first != 1 or ordered.second != 2 or counter != 2 { return 2; }
+  free callback, ordered, first, second, third;
   return result;
 }|};
       expected_exit = 42;

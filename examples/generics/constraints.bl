@@ -1,0 +1,25 @@
+interface Readable {
+    fun read() => i32;
+}
+
+class Number impl Readable {
+    let value: i32;
+
+    fun read() => i32 { return value; }
+}
+
+// T can be any type that implements Readable.
+fun readValue<T impl Readable>(item: T) => i32 {
+    return item.read();
+}
+
+fun main() => i32 {
+    let number = new Number { value = 42 };
+
+    // T is inferred as Number, which implements Readable.
+    let result = readValue(number);
+    // readValue(42) would be rejected: i32 does not implement Readable.
+
+    free number;
+    return result;
+}

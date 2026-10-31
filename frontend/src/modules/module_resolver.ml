@@ -323,6 +323,7 @@ let resolve graph : (program, diagnostic) result =
           elt =
             {
               value with
+              type_params = map_type_params ty value.type_params;
               fname = identity;
               annotations = annotations value.annotations;
               args = args value.args;
@@ -365,7 +366,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         fname = identity;
-                        type_params = value.elt.type_params;
+                        type_params = map_type_params ty value.elt.type_params;
                         annotations = annotations value.elt.annotations;
                         args = args value.elt.args;
                         frtyp = ret_ty value.elt.frtyp;
@@ -378,7 +379,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         iname = identity;
-                        iparams = value.elt.iparams;
+                        iparams = map_type_params ty value.elt.iparams;
                         fields =
                           List.map
                             (fun (field : ifield node) ->
@@ -430,7 +431,7 @@ let resolve graph : (program, diagnostic) result =
                     elt =
                       {
                         cname = identity;
-                        cparams = value.elt.cparams;
+                        cparams = map_type_params ty value.elt.cparams;
                         impls =
                           List.map
                             (fun n ->

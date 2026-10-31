@@ -284,14 +284,21 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       in
       (s, D.Proj (inst', field, convert_ty t))
   | ObjInit (cn, fields) ->
-      let stmts, fields' =
-        List.fold_left
-          (fun (stmts, pairs) (fid, e) ->
-            let sn, e' = desugar_exp e in
-            (sn :: stmts, (fid, e') :: pairs))
-          ([], []) fields
+      (* Closure conversion processes declarations, but not object fields.
+         Freeze every initializer in source order so nested callbacks are
+         converted and later setup cannot run before an earlier field value. *)
+      let setups, fields =
+        List.split
+          (List.map
+             (fun (field, value) ->
+               let setup, value = desugar_exp value in
+               let ty = expression_ty value in
+               let name = gensym "field_init" in
+               ( setup @ [ D.Decl (name, ty, value, true) ],
+                 (field, D.Id (name, ty)) ))
+             fields)
       in
-      (List.flatten stmts, D.ObjInit (cn, fields'))
+      (List.concat setups, D.ObjInit (cn, fields))
   | Call (Proj (inst, pname, cname, _t), args, tys, ty) ->
       (* desugar instance method call: inst.method(a,b) → method(inst,a,b) *)
       let setup, name, args =

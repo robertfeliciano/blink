@@ -692,6 +692,7 @@ and request_generic tc node fn bindings : Generics.instance =
   let state = Option.get tc.Tctxt.generics in
   try
     Generics.request
+      ~implements:(fun c i -> Tctxt.implements c i tc)
       ~convert_ty:(validate_and_convert_ty node tc)
       ~convert_ret_ty:(validate_and_convert_ret_ty node tc)
       state node fn bindings

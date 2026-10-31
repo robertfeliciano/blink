@@ -47,9 +47,11 @@ let suite =
            with
            | Ast.Prog (_, [ { elt = { declaration = Ast.Class cn; _ }; _ } ]) ->
                assert_equal [ "Element" ]
-                 (List.map (fun (p : Ast.id Ast.node) -> p.elt) cn.elt.cparams);
+                 (List.map
+                    (fun (p : Ast.type_param) -> p.pname.elt)
+                    cn.elt.cparams);
                assert_bool "parameter location"
-                 ((List.hd cn.elt.cparams).loc <> Util.Range.norange);
+                 ((List.hd cn.elt.cparams).pname.loc <> Util.Range.norange);
                (match (List.hd cn.elt.fields).elt with
                | _, Some (Ast.TParam p), _, _ -> assert_equal "Element" p.elt
                | _ -> assert_failure "field parameter not bound");

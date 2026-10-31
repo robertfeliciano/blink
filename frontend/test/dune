@@ -28,6 +28,7 @@
 
 (test
  (name frontend_tests)
+ (deps fixtures/generic_constraints.bl)
  (modules
   frontend_tests
   test_typing
@@ -52,7 +53,7 @@
 (test
  (name e2e)
  (modules e2e)
- (deps ../src/blink.exe)
+ (deps ../src/blink.exe fixtures/generic_constraints.bl)
  (libraries test_support call_arity_fixtures ounit2 core core_unix))
 
 (executable

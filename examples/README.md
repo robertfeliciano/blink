@@ -7,15 +7,15 @@
 | [loops.bl](loops.bl) | While, ranges, steps, foreach, nesting, break, and continue | 42 |
 | [arrays.bl](arrays.bl) | Empty arrays, indexing, mutation, matrices, and nested arrays | 19 |
 | [annotations.bl](annotations.bl) | C interop and inline functions and methods | 20 |
-| [generic_functions.bl](generic_functions.bl) | Generic functions, arrays, and callbacks | 42 |
 | [collections.bl](collections.bl) | Standard-library generic lists, circular linked storage, and interface inference | 42 |
-| [generic_classes.bl](generic_classes.bl) | Generic classes, explicit type arguments, nesting, and function inference | 42 |
 | [classes/main.bl](classes/main.bl) | Fields, defaults, mutation, and method calls | 52 |
 | [classes/arrays.bl](classes/arrays.bl) | Array fields and arrays of objects | 7 |
 | [classes/nested.bl](classes/nested.bl) | Nested objects and default field initializers | 44 |
 
 - [cu/](cu/README.md): CUDA array addition and cuBLAS GEMM with heap arrays;
   requires the CUDA toolkit, cuBLAS, and an NVIDIA GPU.
+- [generics/](generics/README.md): generic functions, classes, interfaces, and
+  interface constraints.
 - [lambdas/](lambdas/README.md): basic calls, unnamed arguments, captures,
   returned closures, function values, and left folds.
 - [modules/](modules/README.md): imports, exports, shared globals, and `std.io`.

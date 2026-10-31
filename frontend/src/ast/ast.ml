@@ -149,8 +149,16 @@ type annotation = id node * exp node list option
 let has_annotation name annotations =
   List.exists (fun (id, _) -> id.elt = name) annotations
 
+type type_param = { pname : id node; bound : ty node option }
+
+let map_type_params ty params =
+  List.map
+    (fun p ->
+      { p with bound = Option.map (fun n -> { n with elt = ty n.elt }) p.bound })
+    params
+
 type fdecl = {
-  type_params : id node list;
+  type_params : type_param list;
   annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
@@ -162,7 +170,7 @@ type fdecl = {
 type field = { fieldName : id; ftyp : ty; init : exp node option }
 
 type cdecl = {
-  cparams : id node list;
+  cparams : type_param list;
   annotations : annotation list;
   cname : id;
   impls : ty node list;
@@ -171,7 +179,7 @@ type cdecl = {
 }
 
 type proto = {
-  type_params : id node list;
+  type_params : type_param list;
   annotations : annotation list;
   frtyp : ret_ty;
   fname : id;
@@ -182,7 +190,7 @@ type ifield = { fieldName : id; ftyp : ty; fconst : bool }
 
 type idecl = {
   iname : id;
-  iparams : id node list;
+  iparams : type_param list;
   protos : proto node list;
   fields : ifield node list;
 }
@@ -281,6 +289,7 @@ let map_fdecl_types ty (fn : fdecl node) =
     elt =
       {
         fn.elt with
+        type_params = map_type_params ty fn.elt.type_params;
         args = List.map (fun (t, i) -> (ty t, i)) fn.elt.args;
         frtyp = ret_ty fn.elt.frtyp;
         annotations =
@@ -297,6 +306,7 @@ let map_cdecl_types ty (cn : cdecl node) =
     elt =
       {
         cn.elt with
+        cparams = map_type_params ty cn.elt.cparams;
         impls = List.map (fun n -> { n with elt = ty n.elt }) cn.elt.impls;
         fields =
           List.map
@@ -341,7 +351,7 @@ let rec substitute_type_params lookup = function
 let rec bind_type_params params = function
   | TRef (RClass cn) as t -> (
       match unqualified_id cn with
-      | Some i when List.exists (fun p -> p.elt = i) params ->
+      | Some i when List.exists (fun p -> p.pname.elt = i) params ->
           TParam cn.elt.name
       | _ -> t)
   | TRef (RGeneric (name, args)) ->
@@ -365,6 +375,7 @@ let map_proto_types ty (pn : proto node) =
     elt =
       {
         pn.elt with
+        type_params = map_type_params ty pn.elt.type_params;
         args = List.map (fun (t, i) -> (ty t, i)) pn.elt.args;
         frtyp =
           (match pn.elt.frtyp with
@@ -384,6 +395,7 @@ let map_idecl_types ty (interface : idecl node) =
     elt =
       {
         interface.elt with
+        iparams = map_type_params ty interface.elt.iparams;
         fields =
           List.map
             (fun (field : ifield node) ->
@@ -657,7 +669,18 @@ let show_annotations annos =
 let show_type_params params =
   match params with
   | [] -> ""
-  | _ -> "<" ^ String.concat ", " (List.map (fun p -> p.elt) params) ^ ">"
+  | _ ->
+      "<"
+      ^ String.concat ", "
+          (List.map
+             (fun p ->
+               p.pname.elt
+               ^
+               match p.bound with
+               | None -> ""
+               | Some b -> " impl " ^ show_ty b.elt)
+             params)
+      ^ ">"
 
 let show_proto ?(lvl = 0)
     { elt = { annotations; frtyp; fname; args; type_params }; loc = _ } =

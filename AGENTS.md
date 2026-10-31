@@ -63,7 +63,7 @@ AST debugging flags are `-print-ast`, `-print-typed-ast`, and
 - `Dockerfile` defines the Debian, OCaml, Clang, and LLVM 16 toolchain.
 - `compose.yaml` mounts the checkout at `/workspace` in the dev container.
 - `examples/` contains consolidated standalone feature demonstrations and
-  `classes/`, `lambdas/`, `modules/`, and `interfaces/` topic folders.
+  `classes/`, `generics/`, `lambdas/`, `modules/`, and `interfaces/` topic folders.
   `examples/README.md` indexes the runnable programs and expected results.
 - `tests/` contains additional `.bl` fixtures not wired into Dune directly.
 - `runtime/stdlib/` contains importable standard modules.
@@ -168,6 +168,15 @@ can implement at most one specialization of an interface template. Source
 interface declarations carry `iparams`, and source class `impls` are located
 types traversed by binding, resolution, and substitution. Only concrete
 interfaces and implementation names reach the typed AST and backend.
+Generic parameters on functions, prototypes, classes, and interfaces may carry
+one interface bound, such as `<T impl Value<U>, U>`. Source parameters store a
+located `pname` and optional located `bound`. AST traversal and module resolution
+preserve these bounds. `Generic_types.check_constraints` is shared by function
+requests and nominal specialization validation; actual class types must explicitly
+implement the exact required interface, while interface types match exactly.
+Bounds validate arguments without contributing to inference. Typed/desugared
+representations and the backend remain concrete. See `examples/generics/README.md`
+for user-facing generics documentation.
 
 Language interfaces declare required fields and method prototypes; classes opt
 in with `impl` and must supply same-name, exactly typed fields and methods with
@@ -486,7 +495,7 @@ and free caller-owned stored objects separately. Invalid collection indices
 and empty-end access terminate with exit(1). Negative list indices count from
 the tail (-1 is last); insertion is before the selected element, with size()
 reserved for appending.
-Generic methods, interface inheritance, interface constraints, and several prospective
+Generic methods, interface inheritance, and several prospective
 language features remain unsupported.
 Use implemented examples and tests as the source of truth for syntax.
 

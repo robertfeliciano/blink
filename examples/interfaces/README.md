@@ -42,23 +42,9 @@ finished using it.
 
 ## Generic interfaces
 
-Declare type parameters with `interface Value<T>` and use explicit arguments in
-interface types and implementations: `Value<i32>` and
-`class Box<T> impl Value<T>`. Fields and method signatures substitute the
-interface arguments before checking conformance. Type arguments are invariant.
-Generic methods and interface inheritance are not supported.
-
-[generic.bl](generic.bl) demonstrates these rules. `let box = new Box<i32> { ... }`
-infers `Box<i32>`. Calling `read(box)` infers the function's parameter from
-`Box<i32> impl Value<i32>` and converts the argument to the required interface.
-An annotation such as `let view: Value<i32> = box` gives a variable an explicit
-interface type. Both references point to the same object.
-
-Inference follows the implementation's declared arguments, including reordered
-parameters and nested types. Conflicting deductions are errors. A class may
-implement several different interfaces, but only one specialization of each
-interface template; `impl Value<i32>, Value<bool>` is rejected. Existing exact
-function-signature rules also apply to generic function values and callbacks.
+[generic.bl](generic.bl) demonstrates generic contracts, class implementation
+inference, and shared field mutations. See the [generics guide](../generics/README.md)
+for syntax, inference, specialization, and interface constraints.
 
 Run `./compile -O2 examples/interfaces/generic.bl`, then `./new_output.o`.
 The expected exit code is `42`.

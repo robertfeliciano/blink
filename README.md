@@ -53,9 +53,7 @@ an executable named `new_output.o` in the current directory.
 Browse the [examples](examples/README.md) for more:
 [modules](examples/modules/README.md), [lambdas](examples/lambdas/README.md),
 [interfaces](examples/interfaces/README.md),
-[generic functions](examples/generic_functions.bl),
-[generic classes](examples/generic_classes.bl),
-[generic interfaces](examples/interfaces/generic.bl), and
+[generics and interface constraints](examples/generics/README.md), and
 [standard-library lists](runtime/stdlib/collections/README.md).
 
 For a container-based toolchain, run `docker compose build` followed by

@@ -745,6 +745,10 @@ let type_concrete_program (nominals : Nominal_generics.t)
   in
   let class_headers = create_class_header_ctxt generic_ctxt cns in
   let class_headers = validate_implementations class_headers cns in
+  Nominal_generics.check_constraints
+    ~convert_ty:(fun node -> validate_and_convert_ty node class_headers)
+    ~implements:(fun c i -> Tctxt.implements c i class_headers)
+    nominals;
   let pns = reconcile_external_prototypes class_headers pns in
   let pc = create_proto_ctxt class_headers pns in
   let fc = create_fn_ctxt pc fns in
@@ -787,16 +791,29 @@ let type_concrete_program (nominals : Nominal_generics.t)
         interfaces )
 
 let type_program ?(optimization_level = Util.Optimization_level.default) prog =
-  let _, classes, _, _ = Ast.partition_declarations prog in
+  let functions, classes, prototypes, _ = Ast.partition_declarations prog in
   let nominals =
     Nominal_generics.create classes (Ast.interface_declarations prog)
+  in
+  let validate_bounds () =
+    List.iter
+      (fun (fn : fdecl node) ->
+        Nominal_generics.validate_param_bounds nominals fn.elt.type_params)
+      functions;
+    List.iter
+      (fun (pn : proto node) ->
+        Nominal_generics.validate_param_bounds nominals pn.elt.type_params)
+      prototypes
   in
   let rec specialize () =
     let concrete = Nominal_generics.prepare nominals prog in
     try type_concrete_program nominals ~optimization_level concrete
     with Nominal_generics.New_instances -> specialize ()
   in
-  try specialize () with
+  try
+    validate_bounds ();
+    specialize ()
+  with
   | TypeError message ->
       raise (TypeError (Nominal_generics.display_names nominals message))
   | Nominal_generics.Error (loc, message)

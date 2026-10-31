@@ -17,8 +17,7 @@ let typed source =
 
 let positive name source = name >:: fun _ -> ignore (typed source)
 
-let negative name expected source =
-  name >:: fun _ ->
+let assert_negative expected source =
   match Typing.Type.type_prog (parse source) with
   | Ok _ -> assert_failure "Expected a type error"
   | Error e ->
@@ -33,6 +32,9 @@ let negative name expected source =
             (not (Core.String.is_substring message ~substring)))
         [ "Internal Typechecker Error"; "_BLI"; "_BLC" ]
 
+let negative name expected source =
+  name >:: fun _ -> assert_negative expected source
+
 let value = "interface Value<T> { const item: T; fun get() => T; }\n"
 
 let box =
@@ -40,9 +42,73 @@ let box =
 
 let read = "fun read<T>(x: Value<T>) => T { return x.get(); }\n"
 
+let constraints_fixture () =
+  Core.In_channel.read_all
+    (Filename.concat
+       (Filename.dirname Sys.executable_name)
+       "../../../test/fixtures/generic_constraints.bl")
+
 let suite =
   "generic interfaces"
   >::: [
+         ( "bounded specializations preserve types and reuse instances"
+         >:: fun _ ->
+           let program = typed (constraints_fixture ()) in
+           let (T.Prog (_, functions, _, _, _, _)) = program in
+           let identities =
+             List.filter
+               (fun (f : T.fdecl) ->
+                 Core.String.is_prefix f.fname ~prefix:"_BLG8identity_")
+               functions
+           in
+           assert_equal 2 (List.length identities);
+           List.iter
+             (fun (f : T.fdecl) ->
+               assert_equal (T.RetVal (fst (List.hd f.args))) f.frtyp)
+             identities;
+           match Desugaring.Desugar.desugar_prog program with
+           | Ok _ -> ()
+           | Error error -> assert_failure (Core.Error.to_string_hum error) );
+         positive "self bounds share nominal specialization identities"
+           "interface Self<T> { fun same() => T; } class C impl Self<C> { fun \
+            same() => C { return this; } } fun same<T impl Self<T>>(x: T) => T \
+            { return x.same(); } fun f(x: C) => C { return same(x); }";
+         negative "bounds require explicit implementation"
+           "does not satisfy interface constraint"
+           "interface I { fun get() => i32; } class C { fun get() => i32 { \
+            return 42; } } fun f<T impl I>(x: T) => T { return x; } fun g(x: \
+            C) => C { return f(x); }";
+         negative "bounds retain invariant interface arguments"
+           "does not satisfy interface constraint"
+           (value ^ box
+          ^ "fun f<T impl Value<i32>>(x: T) => T { return x; } fun g(x: \
+             Box<bool>) => Box<bool> { return f(x); }");
+         negative "function values check newly discovered bounds"
+           "does not satisfy interface constraint"
+           "interface I<U> {} fun f<T impl I<T>>(x: T) => T { return x; } fun \
+            g() { let callback: (i32) -> i32 = f; }";
+         ( "nominal bounds cover classes and interfaces" >:: fun _ ->
+           List.iter
+             (fun declaration ->
+               assert_negative "does not satisfy interface constraint"
+                 ("interface I {} " ^ declaration ^ " fun f(x: Holder<i32>) {}"))
+             [ "class Holder<T impl I> {}"; "interface Holder<T impl I> {}" ] );
+         ( "unused declarations validate bounds and prototype agreement"
+         >:: fun _ ->
+           List.iter
+             (fun (expected, source) -> assert_negative expected source)
+             [
+               ("must be an interface", "class C {} class Holder<T impl C> {}");
+               ("Unknown constraint type", "interface Holder<T impl Missing> {}");
+               ( "expects 1 type arguments",
+                 "interface I<T> {} fun f<T impl I>(x: T) {}" );
+               ( "does not satisfy interface constraint",
+                 "interface I {} interface B<T impl I> {} class Holder<T impl \
+                  B<i32>> {}" );
+               ( "prototype does not match",
+                 "interface I {} fun f<T impl I>(x: T) => T; fun f<U>(x: U) => \
+                  U { return x; }" );
+             ] );
          ( "parser binds parameters in fields, signatures, and implementations"
          >:: fun _ ->
            match parse (value ^ box) with
@@ -53,9 +119,11 @@ let suite =
                    { elt = { declaration = Ast.Class c; _ }; _ };
                  ] ) ->
                assert_equal [ "T" ]
-                 (List.map (fun (p : Ast.id Ast.node) -> p.elt) i.elt.iparams);
+                 (List.map
+                    (fun (p : Ast.type_param) -> p.pname.elt)
+                    i.elt.iparams);
                assert_bool "located parameter"
-                 ((List.hd i.elt.iparams).loc <> Util.Range.norange);
+                 ((List.hd i.elt.iparams).pname.loc <> Util.Range.norange);
                (match (List.hd i.elt.fields).elt.ftyp with
                | Ast.TParam p -> assert_equal "T" p.elt
                | _ -> assert_failure "unbound field type");

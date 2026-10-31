@@ -249,13 +249,19 @@ let test_generic_declarations _ =
   let fns, _, pns, _ =
     partition_declarations
       (parse_exn
-         "fun identity<T>(value: T) => T; inline fun identity<U>(value: U) => \
-          U { let copy: U = value; return copy; }")
+         "fun identity<T impl Value<i32>>(value: T) => T; inline fun \
+          identity<U impl Value<i32>>(value: U) => U { let copy: U = value; \
+          return copy; }")
   in
   match (fns, pns) with
   | [ fn ], [ pn ] -> (
-      assert_equal [ "U" ] (List.map (fun p -> p.elt) fn.elt.type_params);
-      assert_equal [ "T" ] (List.map (fun p -> p.elt) pn.elt.type_params);
+      assert_equal [ "U" ] (List.map (fun p -> p.pname.elt) fn.elt.type_params);
+      assert_equal [ "T" ] (List.map (fun p -> p.pname.elt) pn.elt.type_params);
+      (match (List.hd fn.elt.type_params).bound with
+      | Some { elt = TRef (RGeneric (name, [ TInt _ ])); loc } ->
+          assert_equal "Value" (show_qualified_name name);
+          assert_bool "bound range preserved" (loc <> Util.Range.norange)
+      | _ -> assert_failure "expected a located interface bound");
       match (fn.elt.args, fn.elt.body) with
       | [ (TParam p, _) ], { elt = Decl (_, Some (TParam local), _, _); _ } :: _
         ->
@@ -273,6 +279,7 @@ let test_generic_parser_boundaries _ =
       "class Box<> {}";
       "fun make<T>(value: T) => T { return new T {}; }";
       "class Box<T,> {}";
+      "fun f<T impl>(value: T) {}";
       "fun main() => i32 { return 8 > > 1; }";
       "fun main() => i32 { return 8 > /* gap */ > 1; }";
       "fun main() { identity<i32>(42); }";

@@ -164,22 +164,27 @@ let validate_params node params args ret annotations =
     (fun p ->
       if
         not
-          (List.exists (fun (ty, _) -> uses p.elt ty) args || uses_ret p.elt ret)
+          (List.exists (fun (ty, _) -> uses p.pname.elt ty) args
+          || uses_ret p.pname.elt ret)
       then
-        generic_error p
-          ("Type parameter " ^ p.elt ^ " must appear in the function signature."))
+        generic_error p.pname
+          ("Type parameter " ^ p.pname.elt
+         ^ " must appear in the function signature."))
     params
 
 let length_and_name = Generic_types.length_and_name
 let encode_ty = Generic_types.encode_ty
 
-let request ~convert_ty ~convert_ret_ty state (node : 'a Ast.node)
+let request ~convert_ty ~convert_ret_ty ~implements state (node : 'a Ast.node)
     (fn : fdecl node) bindings =
   let tys =
     List.map
-      (fun p -> convert_ty (subst_ty bindings (TParam p)))
+      (fun p -> convert_ty (subst_ty bindings (TParam p.pname)))
       fn.elt.type_params
   in
+  Generic_types.check_constraints ~fail:generic_error ~convert_ty ~implements
+    node fn.elt.type_params
+    (List.map Conversions.convert_source_ty tys);
   let fname =
     "_BLG"
     ^ length_and_name fn.elt.fname
@@ -217,7 +222,7 @@ let prototype_matches (pn : proto node) (fn : fdecl node) =
       | TParam p ->
           let rec index n = function
             | [] -> -1
-            | q :: qs -> if p.elt = q.elt then n else index (n + 1) qs
+            | q :: qs -> if p.elt = q.pname.elt then n else index (n + 1) qs
           in
           TParam (no_loc (string_of_int (index 0 params)))
       | TRef (RGeneric (name, args)) ->
@@ -239,3 +244,9 @@ let prototype_matches (pn : proto node) (fn : fdecl node) =
   && List.map (fun (ty, _) -> pty ty) pn.elt.args
      = List.map (fun (ty, _) -> fty ty) fn.elt.args
   && pret pn.elt.frtyp = fret fn.elt.frtyp
+  && List.map
+       (fun p -> Option.map (fun b -> pty b.elt) p.bound)
+       pn.elt.type_params
+     = List.map
+         (fun p -> Option.map (fun b -> fty b.elt) p.bound)
+         fn.elt.type_params
