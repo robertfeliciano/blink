@@ -1,19 +1,19 @@
-import std.cu.vector as cu;
-import std.io;
+import blink_cu_add_f64_4 from std.cu.vector;
+import println from std.io;
 
 fun main() => i32 {
     let left: [f64; 4] = [1.0, 2.0, 3.0, 4.0];
     let right: [f64; 4] = [10.0, 20.0, 30.0, 40.0];
     let result: [f64; 4] = [0.0, 0.0, 0.0, 0.0];
-    let status = cu.blink_cu_add_f64_4(left, right, result);
+    let status = blink_cu_add_f64_4(left, right, result);
     if status != 0 {
-        io.println("CUDA array addition failed");
+        println("CUDA array addition failed");
         return 1;
     }
     if result[0] != 11.0 or result[1] != 22.0 or result[2] != 33.0 or result[3] != 44.0 {
-        io.println("Unexpected CUDA array sum");
+        println("Unexpected CUDA array sum");
         return 2;
     }
-    io.println("CUDA array sum: [11, 22, 33, 44]");
+    println("CUDA array sum: [11, 22, 33, 44]");
     return 0;
 }

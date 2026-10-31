@@ -5,6 +5,9 @@ open Ast
 let helper = ([ "helper" ], "export fun answer() => i32 { return 42; }")
 let main body = ([ "main" ], "import helper; fun main() => i32 { " ^ body ^ " }")
 
+let named_main body =
+  ([ "main" ], "import answer from helper; fun main() => i32 { " ^ body ^ " }")
+
 let rejects name substring sources =
   name >:: fun _ -> assert_resolution_error ~substring sources
 
@@ -13,6 +16,143 @@ let types name sources = name >:: fun _ -> assert_types sources
 let suite =
   "module resolver"
   >::: [
+         types "named imports coexist with qualified imports"
+           [
+             helper;
+             ( [ "main" ],
+               "import answer from helper; import helper as h; fun main() => \
+                i32 { let f: () -> i32 = answer; return f() + h.answer(); }" );
+           ];
+         types "named nominal types and dependent generic bounds"
+           [
+             ( [ "contracts" ],
+               {|export interface Value<T> { let item: T; }
+export class Box<T> impl Value<T> { let item: T; }
+export fun read<T impl Value<U>, U>(value: T, fallback: U) => U { return value.item; }|}
+             );
+             ( [ "main" ],
+               {|import Value, Box, read, from contracts;
+class Local impl Value<i32> { let item: i32 = 42; }
+fun main() => i32 {
+  let box: Box<i32> = new Box<i32> { item = 42 };
+  let view: Value<i32> = box;
+  return read(view, 0);
+}|}
+             );
+           ];
+         types "named globals in constant and field initializers"
+           [
+             ([ "state" ], "export const seed = 42; export let count = 0;");
+             ( [ "main" ],
+               "import seed, count from state; const answer = seed; class Box \
+                { let value = seed; } fun main() => i32 { count = answer; \
+                return count; }" );
+           ];
+         types "locals parameters fields and lambdas shadow named imports"
+           [
+             helper;
+             ( [ "main" ],
+               {|import answer from helper;
+class Box { let answer: i32 = 42; fun get() => i32 { return answer; } }
+fun read(answer: i32) => i32 { return answer; }
+fun main() => i32 {
+  let result = answer();
+  let answer = result;
+  let f: (i32) -> i32 = fn[answer](value) { return answer + value; };
+  let g: (i32) -> i32 = fn[](answer) { return answer; };
+  for answer in [0] { let copy = answer; }
+  return read(f(g(0)));
+}|}
+             );
+           ];
+         rejects "named import does not bind the module" "Unknown name helper"
+           [ helper; named_main "return helper.answer();" ];
+         rejects "named import exposes only selected members"
+           "Unknown name other"
+           [
+             ( [ "helper" ],
+               "export fun answer() => i32 { return 42; } export fun other() \
+                => i32 { return 0; }" );
+             named_main "return other();";
+           ];
+         rejects "unused private named import" "is private"
+           [
+             ([ "helper" ], "fun answer() => i32 { return 42; }");
+             named_main "return 0;";
+           ];
+         rejects "unused missing named import" "has no member answer"
+           [ ([ "helper" ], ""); named_main "return 0;" ];
+         rejects "duplicate named import in list" "Duplicate named import"
+           [ helper; ([ "main" ], "import answer, answer from helper;") ];
+         rejects "duplicate named import across declarations"
+           "Duplicate named import"
+           [
+             helper;
+             ( [ "main" ],
+               "import answer from helper; import answer from helper;" );
+           ];
+         rejects "same named import from different modules"
+           "Duplicate named import"
+           [
+             helper;
+             ([ "other" ], "export fun answer() {}");
+             ([ "main" ], "import answer from helper; import answer from other;");
+           ];
+         rejects "named import conflicts with a declaration"
+           "conflicts with a declaration"
+           [
+             helper; ([ "main" ], "import answer from helper; let answer = 0;");
+           ];
+         rejects "named import conflicts with an alias"
+           "conflicts with an existing import alias"
+           [
+             helper;
+             ([ "main" ], "import helper as answer; import answer from helper;");
+           ];
+         rejects "alias conflicts with a named import"
+           "conflicts with an existing named import"
+           [
+             helper;
+             ([ "main" ], "import answer from helper; import helper as answer;");
+           ];
+         rejects "named imports are not reexported" "has no member answer"
+           [
+             helper;
+             ([ "middle" ], "import answer from helper;");
+             ([ "main" ], "import answer from middle;");
+           ];
+         rejects "named import class is not a value" "not a function or value"
+           [
+             ([ "helper" ], "export class Box {}");
+             ([ "main" ], "import Box from helper; fun main() { Box(); }");
+           ];
+         rejects "named import function is not a type"
+           "not the required class or interface type"
+           [ helper; named_main "let value: answer; return 0;" ];
+         ( "named import diagnostics point to the imported name" >:: fun _ ->
+           List.iter
+             (fun (declarations, imports, substring, expected_loc) ->
+               match
+                 resolve [ ([ "helper" ], declarations); ([ "main" ], imports) ]
+               with
+               | Ok _ -> assert_failure "expected invalid named import"
+               | Error diagnostic ->
+                   assert_contains ~substring diagnostic.message;
+                   assert_equal expected_loc diagnostic.loc)
+             [
+               ( "",
+                 "\nimport missing from helper;",
+                 "has no member missing",
+                 ("main.bl", (2, 8), (2, 15)) );
+               ( "let hidden = 0;",
+                 "\nimport hidden from helper;",
+                 "is private",
+                 ("main.bl", (2, 8), (2, 14)) );
+               ( "export const x = 0;",
+                 "\nimport x, x from helper;",
+                 "Duplicate named import",
+                 ("main.bl", (2, 11), (2, 12)) );
+             ] );
          types
            "constraints resolve at the definition site with dependent arguments"
            [

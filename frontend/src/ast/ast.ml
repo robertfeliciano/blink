@@ -195,7 +195,11 @@ type idecl = {
   fields : ifield node list;
 }
 
-type import = { path : qualified_name node; alias : id node option }
+type import_selection =
+  | Module_import of id node option
+  | Named_import of id node list
+
+type import = { path : qualified_name node; selection : import_selection }
 
 type top_level_decl =
   | Function of fdecl node
@@ -752,10 +756,20 @@ let show_cdecl ?(lvl = 0)
 
 let show_decl ?(lvl = 0) d = show_fdecl ~lvl d.elt
 
-let show_import { elt = { path; alias }; _ } =
+let show_import { elt = { path; selection }; _ } =
   let path = show_qualified_name path in
-  let alias = match alias with None -> "" | Some name -> " as " ^ name.elt in
-  "import " ^ path ^ alias ^ ";"
+  let body =
+    match selection with
+    | Module_import alias ->
+        let alias =
+          match alias with None -> "" | Some name -> " as " ^ name.elt
+        in
+        path ^ alias
+    | Named_import names ->
+        String.concat ", " (List.map (fun name -> name.elt) names)
+        ^ " from " ^ path
+  in
+  "import " ^ body ^ ";"
 
 let show_top_level { elt = { declaration; export_loc }; _ } =
   let prefix = match export_loc with None -> "" | Some _ -> "export " in

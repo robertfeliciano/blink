@@ -26,6 +26,18 @@ exact names. Error display
 decodes internal identities without global state. Compatible shared C prototypes
 are deduplicated by the existing type checker, after nominal names resolve.
 
+Imports select either a module namespace (`import helper as h;`) or a nonempty
+list of exported declarations (`import answer, Box, from helper;`). Named lists
+allow a trailing comma. The source AST keeps the located names and module path;
+the loader follows that same path for both forms. The resolver validates every
+named member eagerly, using the same export lookup as qualified projections.
+Import bindings share one namespace with module aliases and cannot conflict
+with top-level declarations. Locals may shadow named imports, as they do module
+declarations, while namespace aliases remain reserved within the file.
+Named imports reuse original declaration identities without re-exporting them
+or binding an implicit module alias. No import metadata reaches typing or the
+native bridge. `from` is reserved by the lexer.
+
 Top-level global variables use `gdecl` nodes and the same export filtering and
 symbol encoding as functions. A qualified read or assignment is rewritten to
 the defining module's identity, so every importer accesses one shared storage

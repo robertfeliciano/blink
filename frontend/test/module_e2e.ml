@@ -43,6 +43,107 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "named imports share global storage and function identities"
+             [
+               ( "state.bl",
+                 {|export let count = 40;
+export const step = 2;
+export fun read() => i32 { return count; }|}
+               );
+               ( "other.bl",
+                 {|import count, step from state;
+export fun bump() { count += step; }|}
+               );
+               ( "main.bl",
+                 {|import count, step, read, from state;
+import state as shared;
+import bump from other;
+const increment = step;
+fun main() => i32 {
+  bump();
+  if count != shared.count { return 1; }
+  count -= increment;
+  shared.count += increment;
+  let getter: () -> i32 = read;
+  let closure: () -> i32 = fn[]() { return count; };
+  if getter() != closure() { return 2; }
+  return getter();
+}|}
+               );
+             ];
+           native "named generic nominal imports and constrained inference"
+             [
+               ( "contracts.bl",
+                 {|export interface Value<T> { let item: T; fun get() => T; }
+export fun read<T impl Value<U>, U>(value: T, fallback: U) => U { return value.get(); }|}
+               );
+               ( "boxes.bl",
+                 {|import Value from contracts;
+fun secret() => i32 { return 40; }
+export class Box<T> impl Value<T> {
+  let item: T;
+  fun get() => T { return item; }
+  fun base() => i32 { return secret(); }
+}
+export fun wrap<T>(item: T) => Box<T> { return new Box<T> { item = item }; }|}
+               );
+               ( "main.bl",
+                 {|import Value, read from contracts;
+import Box, wrap, from boxes;
+import boxes as qualified;
+fun secret() => i32 { return 0; }
+fun main() => i32 {
+  let box: Box<i32> = wrap(2);
+  let same: qualified.Box<i32> = box;
+  let view: Value<i32> = same;
+  let other = new Box<i32> { item = 0 };
+  let result = box.base() + read(view, 0) + other.get();
+  free box, other;
+  return result;
+}|}
+               );
+             ];
+           native "named imports allow lexical shadowing and keep C symbols"
+             [
+               ( "helper.bl",
+                 {|export @C fun abs(value: i32) => i32;
+export fun answer() => i32 { return 42; }|}
+               );
+               ( "main.bl",
+                 {|import answer, abs from helper;
+class Box { let answer: i32 = 42; fun get() => i32 { return answer; } }
+fun read(answer: i32) => i32 { return abs(-answer); }
+fun main() => i32 {
+  let box = new Box {};
+  if box.get() != answer() { return 1; }
+  free box;
+  let answer = answer();
+  let f: (i32) -> i32 = fn[answer](value) { return answer + value; };
+  let g: (i32) -> i32 = fn[](answer) { return answer; };
+  for answer in [0] { if answer != 0 { return 2; } }
+  return read(f(g(0)));
+}|}
+               );
+             ];
+           [
+             negative "unused private named import reports its source"
+               [
+                 ("helper.bl", "const hidden = 42;");
+                 ( "main.bl",
+                   "\n\
+                    import hidden from helper; fun main() => i32 { return 0; }"
+                 );
+               ]
+               ~also:[ "main.bl[2.8-2.14]" ] "is private";
+             negative "named constant remains read only"
+               [
+                 ("helper.bl", "export const count = 42;");
+                 ( "main.bl",
+                   "import count from helper; fun main() => i32 { count += 1; \
+                    return count; }" );
+               ]
+               "constant";
+           ];
            native "generic interfaces share specializations across importers"
              [
                ( "contracts.bl",

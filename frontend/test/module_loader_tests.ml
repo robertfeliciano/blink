@@ -221,7 +221,9 @@ let test_syntax _ =
   (match program with
   | Prog ([ imp ], first :: rest) ->
       assert_equal "std.io" (show_qualified_name imp.elt.path);
-      assert_equal (Some "io") (Option.map (fun n -> n.elt) imp.elt.alias);
+      (match imp.elt.selection with
+      | Module_import (Some alias) -> assert_equal "io" alias.elt
+      | _ -> assert_failure "expected a module alias");
       assert_equal (Some ("input.bl", (2, 1), (2, 7))) first.elt.export_loc;
       (match first.elt.declaration with
       | Function fn -> (
@@ -250,6 +252,20 @@ let test_syntax _ =
       "import a.;";
       "import a";
       "import a as ;";
+      "import from helper;";
+      "import , from helper;";
+      "import a,, from helper;";
+      "import a b from helper;";
+      "import a, b;";
+      "import a from ;";
+      "import a from helper";
+      "import a from helper as h;";
+      "import a as b from helper;";
+      "import helper.a from helper;";
+      "fun f() {} import a from helper;";
+      "fun f() { import a from helper; }";
+      "export import a from helper;";
+      "fun from() {}";
       "fun f() {} import a;";
       "export import a;";
       "export";
@@ -391,6 +407,24 @@ let test_prepare_errors context =
        (Loader.prepare_entry config
           ~entry_filename:(Filename.concat project "missing.bl")))
 
+let test_named_dependencies context =
+  let project, stdlib, config = roots context in
+  let main = Filename.concat project "main.bl" in
+  write main
+    "import answer from helper; import helper as h; import print from std.io;";
+  write (Filename.concat project "helper.bl") "export fun answer() {}";
+  write (Filename.concat stdlib "io.bl") "export fun print() {}";
+  let graph = success (Loader.load config ~entry_filename:main) in
+  assert_equal
+    [ [ "helper" ]; [ "std"; "io" ]; [ "main" ] ]
+    (List.map (fun source -> source.Model.id) graph.dependency_order);
+  write
+    (Filename.concat project "helper.bl")
+    "import main; export fun answer() {}";
+  ignore (failure "Import cycle" (Loader.load config ~entry_filename:main));
+  write main "import answer from missing;";
+  ignore (failure "missing.bl" (Loader.load config ~entry_filename:main))
+
 let test_dfs_order context =
   let project, _, config = roots context in
   let main = Filename.concat project "main.bl" in
@@ -487,6 +521,7 @@ let () =
     ("Module loading"
     >::: [
            "DFS order and fresh state" >:: test_dfs_order;
+           "named import dependencies" >:: test_named_dependencies;
            "DFS cycles" >:: test_dfs_cycles;
            "DFS nested and stdlib" >:: test_dfs_nested_and_stdlib;
            "DFS diagnostics" >:: test_dfs_diagnostics;

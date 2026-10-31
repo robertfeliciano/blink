@@ -104,13 +104,15 @@ let test_located_import _ =
     located 1 0 25
       {
         path = located 1 7 13 { qualifiers = [ std ]; name = io };
-        alias = Some alias;
+        selection = Module_import (Some alias);
       }
   in
   assert_equal [ std; io ] (name_components import.elt.path);
-  assert_equal (Some alias) import.elt.alias;
+  assert_equal (Module_import (Some alias)) import.elt.selection;
   assert_equal "import std.io as console;" (show_import import);
-  let unaliased = { import with elt = { import.elt with alias = None } } in
+  let unaliased =
+    { import with elt = { import.elt with selection = Module_import None } }
+  in
   assert_equal "import std.io;" (show_import unaliased);
   let (Prog (_, declarations)) = parse declarations_source in
   let program = Prog ([ import ], declarations) in
@@ -125,6 +127,33 @@ let test_located_import _ =
         (Core.String.is_substring message ~substring:"Imports must be resolved");
       assert_bool "diagnostic must identify the importing source"
         (Core.String.is_substring message ~substring:"module.bl")
+
+let test_named_imports _ =
+  List.iter
+    (fun source ->
+      match parse source with
+      | Prog
+          ( [ ({ elt = { path; selection = Named_import names }; _ } as imp) ],
+            [] ) ->
+          assert_equal "app.helper" (show_qualified_name path);
+          assert_equal [ "abc"; "xyz" ] (List.map (fun name -> name.elt) names);
+          assert_equal ("module.bl", (1, 8), (1, 11)) (List.hd names).loc;
+          assert_equal ("module.bl", (1, 13), (1, 16)) (List.nth names 1).loc;
+          let printed = show_import imp in
+          assert_equal "import abc, xyz from app.helper;" printed;
+          assert_equal printed
+            (match parse printed with
+            | Prog ([ imp ], []) -> show_import imp
+            | _ -> assert_failure "printed named import did not parse")
+      | _ -> assert_failure "expected two located imported names")
+    [ "import abc, xyz from app.helper;"; "import abc, xyz, from app.helper;" ];
+  List.iter
+    (fun source ->
+      match parse source with
+      | Prog ([ { elt = { selection = Named_import [ name ]; _ }; _ } ], []) ->
+          assert_equal "abc" name.elt
+      | _ -> assert_failure "expected one imported name")
+    [ "import abc from helper;"; "import abc, from helper;" ]
 
 let test_exported_generic _ =
   let source =
@@ -145,4 +174,5 @@ let () =
            "exports and partition" >:: test_partition_and_export;
            "exported global locations" >:: test_exported_global_location;
            "located imports" >:: test_located_import;
+           "named imports and locations" >:: test_named_imports;
          ])

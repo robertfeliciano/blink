@@ -7,11 +7,12 @@ module Names = Set.Make (String)
 
 type kind = Function_kind | Class_kind | Interface_kind | Global_kind
 type symbol = { identity : string; kind : kind; public : bool }
+type import_binding = Module_alias of module_id | Imported_symbol of symbol
 
 type scope = {
   source : source;
   declarations : (string, symbol) Hashtbl.t;
-  aliases : (string, module_id) Hashtbl.t;
+  imports : (string, import_binding) Hashtbl.t;
 }
 
 exception Resolution_error of diagnostic
@@ -75,64 +76,99 @@ let make_scope entry source =
       in
       Hashtbl.replace declarations name { identity; kind; public })
     items;
-  let aliases = Hashtbl.create (List.length imports) in
+  { source; declarations; imports = Hashtbl.create (List.length imports) }
+
+let module_alias scope name =
+  match Hashtbl.find_opt scope.imports name with
+  | Some (Module_alias owner) -> Some owner
+  | _ -> None
+
+let exported_symbol by_id node owner qualifier name =
+  let target =
+    match Hashtbl.find_opt by_id owner with
+    | Some target -> target
+    | None -> fail node ("Module was not loaded: " ^ String.concat "." owner)
+  in
+  match Hashtbl.find_opt target.declarations name with
+  | None ->
+      fail node
+        ("Module " ^ String.concat "." owner ^ " has no member " ^ name ^ ".")
+  | Some symbol when not symbol.public ->
+      fail node
+        ("Member " ^ qualifier ^ "." ^ name
+       ^ " is private; add export to its declaration.")
+  | Some symbol -> symbol
+
+let register_imports by_id scope =
+  let add node binding =
+    let description = function
+      | Module_alias _ -> "import alias"
+      | Imported_symbol _ -> "named import"
+    in
+    if Hashtbl.mem scope.declarations node.elt then
+      fail node ("Import " ^ node.elt ^ " conflicts with a declaration.");
+    (match (Hashtbl.find_opt scope.imports node.elt, binding) with
+    | Some (Module_alias _), Module_alias _
+    | Some (Imported_symbol _), Imported_symbol _ ->
+        fail node ("Duplicate " ^ description binding ^ " " ^ node.elt ^ ".")
+    | Some previous, _ ->
+        fail node
+          ("Import " ^ node.elt ^ " conflicts with an existing "
+         ^ description previous ^ ".")
+    | None, _ -> ());
+    Hashtbl.add scope.imports node.elt binding
+  in
+  let (Prog (imports, _)) = scope.source.program in
   List.iter
     (fun import ->
-      let alias =
-        Option.value import.elt.alias ~default:import.elt.path.elt.name
-      in
-      if Hashtbl.mem aliases alias.elt then
-        fail alias ("Duplicate import alias " ^ alias.elt ^ ".");
-      if Hashtbl.mem declarations alias.elt then
-        fail alias
-          ("Import alias " ^ alias.elt ^ " conflicts with a declaration.");
       let owner =
         List.map (fun part -> part.elt) (name_components import.elt.path)
       in
-      Hashtbl.add aliases alias.elt owner)
-    imports;
-  { source; declarations; aliases }
+      match import.elt.selection with
+      | Module_import alias ->
+          add
+            (Option.value alias ~default:import.elt.path.elt.name)
+            (Module_alias owner)
+      | Named_import names ->
+          List.iter
+            (fun name ->
+              let symbol =
+                exported_symbol by_id name owner (String.concat "." owner)
+                  name.elt
+              in
+              add name (Imported_symbol symbol))
+            names)
+    imports
 
 let resolve graph : (program, diagnostic) result =
   try
     let scopes = List.map (make_scope graph.entry) graph.dependency_order in
     let by_id = Hashtbl.create (List.length scopes) in
     List.iter (fun scope -> Hashtbl.add by_id scope.source.id scope) scopes;
+    List.iter (register_imports by_id) scopes;
     let resolve_scope scope =
       let local_symbol node name =
         match Hashtbl.find_opt scope.declarations name with
         | Some symbol -> symbol
-        | None ->
-            fail node
-              ("Unknown name " ^ name ^ " in module "
-              ^ String.concat "." scope.source.id
-              ^ ".")
+        | None -> (
+            match Hashtbl.find_opt scope.imports name with
+            | Some (Imported_symbol symbol) -> symbol
+            | _ ->
+                fail node
+                  ("Unknown name " ^ name ^ " in module "
+                  ^ String.concat "." scope.source.id
+                  ^ "."))
       in
       let imported_symbol node alias name =
         let owner =
-          match Hashtbl.find_opt scope.aliases alias with
+          match module_alias scope alias with
           | Some owner -> owner
           | None -> fail node ("Unknown module alias " ^ alias ^ ".")
         in
-        let target =
-          match Hashtbl.find_opt by_id owner with
-          | Some target -> target
-          | None ->
-              fail node ("Module was not loaded: " ^ String.concat "." owner)
-        in
-        match Hashtbl.find_opt target.declarations name with
-        | None ->
-            fail node
-              ("Module " ^ String.concat "." owner ^ " has no member " ^ name
-             ^ ".")
-        | Some symbol when not symbol.public ->
-            fail node
-              ("Member " ^ alias ^ "." ^ name
-             ^ " is private; add export to its declaration.")
-        | Some symbol -> symbol
+        exported_symbol by_id node owner alias name
       in
       let bind node locals name =
-        if Hashtbl.mem scope.aliases name then
+        if Option.is_some (module_alias scope name) then
           fail node ("Binding " ^ name ^ " conflicts with an import alias.");
         Names.add name locals
       in
@@ -180,7 +216,7 @@ let resolve graph : (program, diagnostic) result =
         let elt =
           match node.elt with
           | Id name when Names.mem name locals -> Id name
-          | Id name when Hashtbl.mem scope.aliases name ->
+          | Id name when Option.is_some (module_alias scope name) ->
               fail node
                 ("Module alias " ^ name
                ^ " is not a value; select an exported member.")
@@ -193,7 +229,7 @@ let resolve graph : (program, diagnostic) result =
                     default initializer.");
               Id symbol.identity
           | Proj ({ elt = Id alias; _ }, member)
-            when Hashtbl.mem scope.aliases alias ->
+            when Option.is_some (module_alias scope alias) ->
               let symbol = imported_symbol node alias member in
               if symbol.kind <> Function_kind && symbol.kind <> Global_kind then
                 fail node

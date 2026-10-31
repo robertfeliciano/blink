@@ -7,7 +7,7 @@
 | [loops.bl](loops.bl) | While, ranges, steps, foreach, nesting, break, and continue | 42 |
 | [arrays.bl](arrays.bl) | Empty arrays, indexing, mutation, matrices, and nested arrays | 19 |
 | [annotations.bl](annotations.bl) | C interop and inline functions and methods | 20 |
-| [collections.bl](collections.bl) | Standard-library generic lists, circular linked storage, and interface inference | 42 |
+| [collections.bl](collections.bl) | Named imports, standard-library generic lists, circular linked storage, and interface inference | 42 |
 | [classes/main.bl](classes/main.bl) | Fields, defaults, mutation, and method calls | 52 |
 | [classes/arrays.bl](classes/arrays.bl) | Array fields and arrays of objects | 7 |
 | [classes/nested.bl](classes/nested.bl) | Nested objects and default field initializers | 44 |
@@ -18,7 +18,7 @@
   interface constraints.
 - [lambdas/](lambdas/README.md): basic calls, unnamed arguments, captures,
   returned closures, function values, and left folds.
-- [modules/](modules/README.md): imports, exports, shared globals, and `std.io`.
+- [modules/](modules/README.md): named and qualified imports, exports, shared globals, and `std.io`.
 - [interfaces/](interfaces/README.md): interface contracts and dynamic dispatch;
   [fields.bl](interfaces/fields.bl) demonstrates interface field access and
   [generic.bl](interfaces/generic.bl) demonstrates generic contracts and inference (exit `42`).
