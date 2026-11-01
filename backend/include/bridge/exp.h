@@ -148,8 +148,20 @@ struct EInterfaceProj {
     Ty                   ty;
 };
 
+struct ETuple {
+    std::vector<std::unique_ptr<Exp>> elements;
+    Ty                                ty;
+};
+
+struct ETupleProj {
+    std::unique_ptr<Exp> tuple;
+    unsigned             index;
+    Ty                   ty;
+};
+
 using ExpVariant = std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj,
-                                EObjInit, ENull, EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj>;
+                                EObjInit, ENull, EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj,
+                                ETuple, ETupleProj>;
 
 struct Exp {
     ExpVariant val;

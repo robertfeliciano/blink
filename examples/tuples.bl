@@ -1,0 +1,32 @@
+// Tuples contain two or three values. Types follow the whole binding pattern.
+type Position = (i32, i32);
+
+fun parseToken(text: string) => (string, i32) {
+    return (text, 2);
+}
+
+fun move(position: Position, amount: i32) => Position {
+    let (x, y) = position;
+    return (x + amount, y + amount);
+}
+
+fun main() => i32 {
+    const (_, position): (string, i32) = parseToken("token");
+    let point: Position = (18, 20);
+    let original = point;
+    point = move(point, position);
+
+    // Access uses a constant index. Tuple slots are read-only.
+    if original[0] != 18 or point[0] != 20 { return 1; }
+
+    const (x, y, (_, enabled)): (i32, i32, (i32, bool)) =
+        (point[0], point[1], (position, true));
+    let entries = [(x, 0), (y, 1)];
+    let total = 0;
+    for entry in entries {
+        let (value, _) = entry;
+        total += value;
+    }
+    if enabled { return total; }
+    return 2;
+}

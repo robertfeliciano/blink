@@ -30,6 +30,7 @@ let rec convert_ret_ty (rt : Ast.ret_ty) : Typed_ast.ret_ty =
 and convert_ty (t : Ast.ty) : Typed_ast.ty =
   match t with
   | Ast.TParam _ -> invalid_arg "Unresolved type parameter reached conversion"
+  | Ast.TTuple ts -> Typed_ast.TTuple (List.map convert_ty ts)
   | Ast.TBool -> Typed_ast.TBool
   | Ast.TInt it -> Typed_ast.TInt (convert_int_ty it)
   | Ast.TFloat ft -> Typed_ast.TFloat (convert_float_ty ft)
@@ -81,6 +82,7 @@ let rec convert_source_ret_ty (rt : Typed_ast.ret_ty) : Ast.ret_ty =
 
 and convert_source_ty (t : Typed_ast.ty) : Ast.ty =
   match t with
+  | Typed_ast.TTuple ts -> Ast.TTuple (List.map convert_source_ty ts)
   | Typed_ast.TBool -> Ast.TBool
   | Typed_ast.TInt it -> Ast.TInt (convert_source_int_ty it)
   | Typed_ast.TFloat ft -> Ast.TFloat (convert_source_float_ty ft)

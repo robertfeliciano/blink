@@ -310,7 +310,7 @@ let test_lambda_lifting _ =
 let rec exp_contains_lambda (exp : DA.exp) =
   match exp with
   | DA.Lambda _ -> true
-  | DA.Call (_, args, _) | DA.Array (args, _, _) ->
+  | DA.Call (_, args, _) | DA.Array (args, _, _) | DA.Tuple (args, _) ->
       List.exists exp_contains_lambda args
   | DA.ObjInit (_, fields) ->
       List.exists (fun (_, exp) -> exp_contains_lambda exp) fields
@@ -326,6 +326,7 @@ let rec exp_contains_lambda (exp : DA.exp) =
   | DA.Uop (_, exp, _)
   | DA.Cast (exp, _)
   | DA.Proj (exp, _, _)
+  | DA.TupleProj (exp, _, _)
   | DA.InterfaceProj (exp, _, _) ->
       exp_contains_lambda exp
   | DA.Index (collection, index, _) ->

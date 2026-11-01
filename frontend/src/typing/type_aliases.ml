@@ -34,6 +34,7 @@ let expand (Prog (imports, declarations)) =
     declarations;
   let complete = Hashtbl.create (Hashtbl.length aliases) in
   let rec ty stack = function
+    | TTuple ts -> TTuple (List.map (ty stack) ts)
     | TRef (RClass name) as t -> (
         match Hashtbl.find_opt aliases (show_qualified_name name) with
         | Some alias -> resolve stack name alias

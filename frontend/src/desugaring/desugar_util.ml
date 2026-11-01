@@ -26,6 +26,48 @@ let gensym sfx =
   incr counter;
   "%tmp_" ^ sfx ^ Int.to_string n
 
+let expression_ty = function
+  | D.Bool _ -> D.TBool
+  | Int (_, int_ty) -> D.TInt int_ty
+  | Float (_, float_ty) -> D.TFloat float_ty
+  | Str _ -> D.TRef RString
+  | ObjInit (name, _) -> D.TRef (RClass name)
+  | Lambda (_, args, ret, _) -> D.TRef (RFun (List.map snd args, ret))
+  | Id (_, ty)
+  | Call (_, _, ty)
+  | Bop (_, _, _, ty)
+  | Uop (_, _, ty)
+  | Tuple (_, ty)
+  | TupleProj (_, _, ty)
+  | Array (_, ty, _)
+  | Cast (_, ty)
+  | Proj (_, _, ty)
+  | Index (_, _, ty)
+  | Conditional (_, _, _, ty)
+  | InterfaceCall (_, _, _, ty)
+  | InterfaceProj (_, _, ty) ->
+      ty
+  | InterfaceCast (_, _, name) -> D.TRef (RInterface name)
+  | Null ty -> ty
+
+(* A later operand's setup must not run before an earlier operand's value.
+   Keep ordinary expression trees intact when no setup is hoisted. *)
+let sequence_expressions operands =
+  let _, setup, values =
+    List.fold_right
+      (fun (prefix, value) (later_setup, setup, values) ->
+        let prefix, value =
+          if later_setup then
+            let name = gensym "operand" in
+            let ty = expression_ty value in
+            (prefix @ [ D.Decl (name, ty, value, true) ], D.Id (name, ty))
+          else (prefix, value)
+        in
+        (later_setup || prefix <> [], prefix @ setup, value :: values))
+      operands (false, [], [])
+  in
+  (setup, values)
+
 let desugar_annotation ((i, el) : T.annotation) =
   match (i, el) with
   (* 
@@ -36,7 +78,9 @@ let desugar_annotation ((i, el) : T.annotation) =
   | id, None -> id
 
 let is_lvalue = function
-  | T.Index _ | T.Proj _ | T.InterfaceProj _ -> true
+  (* Tuple slots are read-only, but references projected from them must be
+     evaluated once when used as the receiver of a mutable field or index. *)
+  | T.Index _ | T.Proj _ | T.InterfaceProj _ | T.TupleProj _ -> true
   | _ -> false
 
 let get_zero (ty : D.ty) : D.exp =
@@ -64,6 +108,9 @@ let rec mangle_ty = function
   | D.TBool -> "b"
   | D.TInt i -> mangle_int i
   | D.TFloat f -> mangle_float f
+  | D.TTuple ts ->
+      "tuple"
+      ^ String.concat "" (List.map (fun ty -> len_and_name (show_ty ty)) ts)
   | D.TRef (RClass cname) -> len_and_name cname
   | D.TRef (RInterface name) -> "I" ^ len_and_name name
   | D.TRef RString -> "str"
@@ -131,6 +178,7 @@ let rec create_default_init t =
   | D.TBool -> D.Bool false
   | D.TInt it -> D.Int ("0", it)
   | D.TFloat ft -> D.Float (0.0, ft)
+  | D.TTuple ts -> D.Tuple (List.map create_default_init ts, t)
   | D.TRef RString -> D.Str ""
   | D.TRef (RClass _cname) ->
       (* let default_constructor = cname in *)

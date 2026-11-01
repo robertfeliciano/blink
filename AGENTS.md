@@ -206,6 +206,21 @@ Conversions preserve object identity and
 do not allocate a wrapper. Keep interface value types distinct from class and
 array types whose LLVM values are pointers.
 
+Tuples use `(value, position)` expressions and `(string, i32)` types, with two
+or three elements per tuple. `TTuple` is a value type distinct from `TRef` in
+each AST. Local `let` and `const` destructuring put the optional annotation
+after the whole pattern: `let (value, position): (string, i32) = result;`.
+Patterns nest and `_` discards a value. Typing checks the initializer before
+binding any names, rejects duplicate bindings, and lowering evaluates the
+initializer once. Tuple indices are compile-time integers; positions are
+read-only, while ordinary mutable tuple bindings can be reassigned. Tuples
+copy values and preserve reference-element identity and ownership. Defaults
+are constructed element by element. Tuples integrate with aliases, generic
+specialization, fields, arrays, interfaces, and closure conversion. Tuple
+equality, globals, C ABI signatures, destructuring assignment, and patterns in
+loop headers are unsupported. Function type argument lists retain their
+meaning: `((i32, i32)) -> i32` takes one tuple argument.
+
 ### Desugaring
 
 - `frontend/src/desugaring/desugared_ast.ml` defines the backend-facing AST.
@@ -237,6 +252,12 @@ Array expressions carry an `on_heap` boolean: `new [...]` sets it, while ordinar
 literals and default initializers clear it. The desugared `Array` fields are
 elements, array type, and `on_heap`, in that order; the bridge preserves the flag
 and codegen selects heap allocation or stack storage without changing array types.
+The appended tuple constructors are `TTuple of ty list`,
+`Tuple of exp list * ty`, and `TupleProj of exp * int * ty`. Their C++ bridge
+counterparts preserve the element order. LLVM represents tuples as inline
+struct values, constructs them in source evaluation order, and extracts tuple
+positions with aggregate operations. Class and array elements remain pointers;
+nested tuples and interface values remain aggregates.
 
 ### Utilities
 
@@ -292,6 +313,8 @@ The generated module targets the build host and uses position-independent code.
 - `frontend/test/test_typing.ml` contains typing unit tests.
 - `frontend/test/test_type_aliases.ml` covers alias syntax, source ranges,
   expansion, generic interactions, diagnostics, and transparent lowering.
+- `frontend/test/test_tuples.ml` covers tuple parsing, typing, destructuring,
+  source ranges, diagnostics, inference, and lowering.
 - `frontend/test/test_desugaring.ml` contains lowering unit tests.
 - `frontend/test/test_interfaces.ml` tests interface parsing, typing and lowering.
 - `frontend/test/test_generic_interfaces.ml` tests generic interface specialization,

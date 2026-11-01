@@ -44,6 +44,7 @@ and show_ret_ty = function
   | RetVal t -> Printf.sprintf "%s" (show_ty t)
 
 and show_ty = function
+  | TTuple ts -> "(" ^ String.concat ", " (List.map show_ty ts) ^ ")"
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "%s" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
@@ -77,6 +78,12 @@ let show_binop = function
 
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function
+  | Tuple (es, ty) ->
+      "Tuple("
+      ^ String.concat ", " (List.map (show_exp ~lvl) es)
+      ^ ": " ^ show_ty ty ^ ")"
+  | TupleProj (e, i, ty) ->
+      Printf.sprintf "TupleProj(%s, %d, %s)" (show_exp e) i (show_ty ty)
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) -> Printf.sprintf "Int(%s, %s)" i (show_int_ty ity)
   | Float (f, fty) -> Printf.sprintf "Float(%f, %s)" f (show_float_ty fty)

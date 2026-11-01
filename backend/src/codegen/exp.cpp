@@ -608,3 +608,27 @@ Value* ExpToLLVisitor::operator()(const EInterfaceProj& e) {
     Value* address = gen.lvalueCreator.getInterfaceFieldPtr(e);
     return gen.builder->CreateLoad(gen.typeGen.codegenValueTy(e.ty), address, "interface_field");
 }
+
+Value* ExpToLLVisitor::operator()(const ETuple& e) {
+    if (e.ty.tag != TyTag::TTuple || e.elements.size() != e.ty.elements.size())
+        throw std::runtime_error("Tuple literal does not match its declared tuple type");
+    auto*  type   = llvm::cast<llvm::StructType>(gen.typeGen.codegenValueTy(e.ty));
+    Value* result = llvm::UndefValue::get(type);
+    for (unsigned i = 0; i < e.elements.size(); ++i) {
+        Value* element = gen.codegenExp(*e.elements[i]);
+        if (!element || element->getType() != type->getElementType(i))
+            throw std::runtime_error("Tuple element does not match its declared type");
+        result = gen.builder->CreateInsertValue(result, element, {i}, "tuple_value");
+    }
+    return result;
+}
+
+Value* ExpToLLVisitor::operator()(const ETupleProj& e) {
+    const Ty& tupleTy = gen.getExpTy(*e.tuple);
+    if (tupleTy.tag != TyTag::TTuple || e.index >= tupleTy.elements.size())
+        throw std::runtime_error("Tuple projection index is out of range");
+    if (gen.typeGen.codegenValueTy(e.ty) != gen.typeGen.codegenValueTy(tupleTy.elements[e.index]))
+        throw std::runtime_error("Tuple projection type does not match its element type");
+    Value* tuple = gen.codegenExp(*e.tuple);
+    return gen.builder->CreateExtractValue(tuple, {e.index}, "tuple_element");
+}

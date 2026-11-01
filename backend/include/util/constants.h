@@ -11,7 +11,7 @@ namespace Constants {
 
     enum RefTyVariant { REFTY_Array = 0, REFTY_Class = 1, REFTY_Fun = 2, REFTY_Ptr = 3, REFTY_Interface = 4 };
 
-    enum TyVariant { TY_TInt = 0, TY_TFloat = 1, TY_TRef = 2 };
+    enum TyVariant { TY_TInt = 0, TY_TFloat = 1, TY_TRef = 2, TY_TTuple = 3 };
 
     enum ExpVariant {
         EXP_Bool          = 0,
@@ -32,7 +32,9 @@ namespace Constants {
         EXP_Conditional   = 15,
         EXP_InterfaceCast = 16,
         EXP_InterfaceCall = 17,
-        EXP_InterfaceProj = 18
+        EXP_InterfaceProj = 18,
+        EXP_Tuple         = 19,
+        EXP_TupleProj     = 20
     };
 
     enum UnOpTag { UNOP_Neg = 0, UNOP_Not = 1, UNOP_BNeg = 2 };

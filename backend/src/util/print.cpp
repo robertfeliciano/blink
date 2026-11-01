@@ -131,6 +131,15 @@ std::string tyToString(const Ty& ty) {
             }
             break;
         }
+        case TyTag::TTuple: {
+            std::string out = "(";
+            for (size_t i = 0; i < ty.elements.size(); ++i) {
+                if (i)
+                    out += ", ";
+                out += tyToString(ty.elements[i]);
+            }
+            return out + ")";
+        }
     }
     return "<unknown>";
 }
@@ -264,6 +273,18 @@ struct ExpToStringVisitor {
     }
     std::string operator()(const EInterfaceProj& e) const {
         return expToString(*e.receiver) + ".field" + std::to_string(e.slot);
+    }
+    std::string operator()(const ETuple& e) const {
+        std::string out = "(";
+        for (size_t i = 0; i < e.elements.size(); ++i) {
+            if (i)
+                out += ", ";
+            out += expToString(*e.elements[i]);
+        }
+        return out + ")";
+    }
+    std::string operator()(const ETupleProj& e) const {
+        return expToString(*e.tuple) + "[" + std::to_string(e.index) + "]";
     }
     std::string operator()(const EConditional& e) const {
         auto branchToString = [](const std::vector<std::shared_ptr<Stmt>>& prelude, const Exp& value) {

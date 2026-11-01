@@ -117,6 +117,9 @@ let rec typecheck_ty (l : 'a Ast.node) (tc : Tctxt.t) (t : Ast.ty) : unit =
   match t with
   | TParam name ->
       type_error name ("Unresolved type parameter " ^ name.elt ^ ".")
+  | TTuple ts ->
+      Ast.validate_tuple_arity type_error l ts;
+      List.iter (typecheck_ty l tc) ts
   | TInt _ | TFloat _ | TBool -> ()
   | TRef r -> typecheck_rty l tc r
 
@@ -140,6 +143,8 @@ and typecheck_ret_ty (l : 'a Ast.node) (tc : Tctxt.t) (rt : Ast.ret_ty) : unit =
   match rt with RetVoid -> () | RetVal t -> typecheck_ty l tc t
 
 let rec resolve_interface_ty tc = function
+  | Typed_ast.TTuple ts ->
+      Typed_ast.TTuple (List.map (resolve_interface_ty tc) ts)
   | Typed_ast.TRef (RClass name)
     when Option.is_some (Tctxt.lookup_interface_option name tc) ->
       Typed_ast.TRef (RInterface name)
@@ -284,6 +289,7 @@ let is_integer (t : Typed_ast.ty) : bool =
 
 let rec equal_ty (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   match (t1, t2) with
+  | TTuple ts, TTuple us -> lists_equal_exact equal_ty ts us
   | TBool, TBool -> true
   | TInt k1, TInt k2 -> k1 = k2
   | TFloat f1, TFloat f2 -> f1 = f2
@@ -313,6 +319,7 @@ let rec subtype (tc : Tctxt.t) (t1 : Typed_ast.ty) (t2 : Typed_ast.ty) : bool =
   | TInt _, TFloat _
   | TFloat _, TInt _ ->
       true
+  | TTuple ts, TTuple us -> lists_equal_exact equal_ty ts us
   | TRef t1', TRef t2' -> subtype_ref tc t1' t2'
   | _ -> false
 
@@ -466,7 +473,7 @@ let default_step t enode =
 
 let is_const en =
   match en.elt with
-  | Bool _ | Int _ | Float _ | Str _ | Array _ | TypedLambda _ -> true
+  | Bool _ | Int _ | Float _ | Str _ | Array _ | Tuple _ | TypedLambda _ -> true
   | Id _ | Call _ | Bop _ | Uop _ | Index _ | Cast _ | Proj _ | ObjInit _ | Null
   | Lambda _ | Conditional _ ->
       false

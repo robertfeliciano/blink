@@ -47,15 +47,25 @@ let check_array_length node sz actual =
   if not (Z.equal sz actual) then
     generic_error node "Array length mismatch during generic inference."
 
-let check_function_arity node args actual =
+let check_arity node kind args actual =
   if List.length args <> List.length actual then
-    generic_error node "Function arity mismatch during generic inference."
+    generic_error node (kind ^ " arity mismatch during generic inference.")
+
+let check_function_arity node args actual =
+  check_arity node "Function" args actual
+
+let check_tuple_arity node args actual = check_arity node "Tuple" args actual
 
 (* Only generic positions constrain inference. Ordinary positions still use the
    existing argument conversion rules after the signature is concrete. *)
 let rec match_ty ~convert_ty ~nominals ~implementations ?(fill = false) node
     bindings ty actual =
   match (ty, actual) with
+  | TTuple ts, T.TTuple actual ->
+      check_tuple_arity node ts actual;
+      List.iter2
+        (match_ty ~convert_ty ~nominals ~implementations ~fill node bindings)
+        ts actual
   | TParam p, actual -> (
       match List.assoc_opt p.elt !bindings with
       | None -> bindings := (p.elt, actual) :: !bindings
@@ -129,6 +139,9 @@ let match_patterns ~nominals ~implementations ~convert_ty node bindings ty
         (convert_ty (subst_ty !callback_bindings callback_ty))
     else
       match (ty, callback_ty) with
+      | TTuple ts, TTuple us ->
+          check_tuple_arity node ts us;
+          List.iter2 match_pair ts us
       | TRef (RGeneric (name, args)), TRef (RGeneric (other, other_args))
         when Ast.show_qualified_name name = Ast.show_qualified_name other ->
           List.iter2 match_pair args other_args
@@ -219,6 +232,7 @@ let request ~convert_ty ~convert_ret_ty ~implements state (node : 'a Ast.node)
 let prototype_matches (pn : proto node) (fn : fdecl node) =
   let canonical params =
     let rec ty = function
+      | TTuple ts -> TTuple (List.map ty ts)
       | TParam p ->
           let rec index n = function
             | [] -> -1

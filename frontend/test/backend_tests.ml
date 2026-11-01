@@ -17,6 +17,8 @@ let fixtures =
     { name = "literal-values"; expected_exit = 42 };
     { name = "interface-dispatch"; expected_exit = 42 };
     { name = "interface-fields"; expected_exit = 42 };
+    { name = "tuple-values"; expected_exit = 42 };
+    { name = "tuple-aggregate-calls"; expected_exit = 42 };
   ]
 
 let test_fixture ?(optimization = "-O0") fixture test_context =
@@ -54,6 +56,8 @@ let suite =
                fixture.name = "array-call"
                || fixture.name = "array-callback"
                || fixture.name = "interface-fields"
+               || fixture.name = "tuple-values"
+               || fixture.name = "tuple-aggregate-calls"
              then [ "-O0"; "-O2" ]
              else [ "-O0" ]
            in

@@ -50,13 +50,14 @@ struct RefTy {
     std::unique_ptr<Ty> pointedTy;
 };
 
-enum class TyTag { TBool, TInt, TFloat, TRef };
+enum class TyTag { TBool, TInt, TFloat, TRef, TTuple };
 
 struct Ty {
     TyTag                    tag;
     std::unique_ptr<IntTy>   int_ty;
     std::unique_ptr<FloatTy> float_ty;
     std::unique_ptr<RefTy>   ref_ty;
+    std::vector<Ty>          elements; // for TTuple
 };
 
 IntTy convert_int_ty(value v);

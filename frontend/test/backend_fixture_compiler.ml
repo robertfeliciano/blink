@@ -395,6 +395,96 @@ let interface_fields () =
   DA.Prog
     (optimization_level, [ main ], [ first; second ], [], [], [ interface ])
 
+let tuple_values () =
+  let pair = DA.TTuple [ i32; i32 ] in
+  let triple = DA.TTuple [ DA.TBool; pair; DA.TFloat DA.Tf64 ] in
+  let tuple =
+    DA.Tuple
+      ( [
+          DA.Bool true;
+          DA.Tuple ([ int 20; int 22 ], pair);
+          DA.Float (42.0, DA.Tf64);
+        ],
+        triple )
+  in
+  let value = DA.Id ("value", triple) in
+  let inner = DA.TupleProj (value, 1, pair) in
+  let body =
+    [
+      DA.Decl ("value", triple, tuple, false);
+      DA.If
+        ( DA.Uop (DA.Not, DA.TupleProj (value, 0, DA.TBool), DA.TBool),
+          [ DA.Ret (Some (int 1)) ],
+          [] );
+      DA.If
+        ( DA.Bop
+            ( DA.Neq,
+              DA.TupleProj (value, 2, DA.TFloat DA.Tf64),
+              DA.Float (42.0, DA.Tf64),
+              DA.TBool ),
+          [ DA.Ret (Some (int 2)) ],
+          [] );
+      DA.Ret
+        (Some
+           (DA.Bop
+              ( DA.Add,
+                DA.TupleProj (inner, 0, i32),
+                DA.TupleProj (inner, 1, i32),
+                i32 )));
+    ]
+  in
+  DA.Prog (optimization_level, [ function_ "main" body ], [], [], [], [])
+
+let tuple_aggregate_calls () =
+  let pair = DA.TTuple [ i32; i32 ] in
+  let pointer_ty =
+    DA.TRef (DA.RPtr (DA.TRef (DA.RFun ([ pair ], DA.RetVal pair))))
+  in
+  let apply =
+    function_
+      ~args:[ (pointer_ty, "f"); (pair, "value") ]
+      ~frtyp:(DA.RetVal pair) "apply_tuple"
+      [ DA.Ret (Some (DA.Call ("f", [ DA.Id ("value", pair) ], pair))) ]
+  in
+  let body =
+    [
+      DA.Decl ("value", pair, DA.Tuple ([ int 1; int 2 ], pair), false);
+      DA.Decl ("copy", pair, DA.Id ("value", pair), true);
+      DA.Assn
+        ( DA.Id ("value", pair),
+          DA.Call
+            ( "apply_tuple",
+              [
+                DA.Id ("tuple_identity", pointer_ty);
+                DA.Tuple ([ int 20; int 22 ], pair);
+              ],
+              pair ),
+          pair );
+      DA.If
+        ( DA.Bop
+            ( DA.Neq,
+              DA.TupleProj (DA.Id ("copy", pair), 0, i32),
+              int 1,
+              DA.TBool ),
+          [ DA.Ret (Some (int 1)) ],
+          [] );
+      DA.Ret
+        (Some
+           (DA.Bop
+              ( DA.Add,
+                DA.TupleProj (DA.Id ("value", pair), 0, i32),
+                DA.TupleProj (DA.Id ("value", pair), 1, i32),
+                i32 )));
+    ]
+  in
+  DA.Prog
+    ( optimization_level,
+      [ identity pair "tuple_identity"; apply; function_ "main" body ],
+      [],
+      [],
+      [],
+      [] )
+
 let global ?(constant = false) name ty initial =
   DA.{ gname = name; gtyp = ty; ginit = initial; gconst = constant }
 
@@ -555,6 +645,8 @@ let fixtures =
     ("literal-values", literal_values);
     ("interface-dispatch", interface_dispatch);
     ("interface-fields", interface_fields);
+    ("tuple-values", tuple_values);
+    ("tuple-aggregate-calls", tuple_aggregate_calls);
   ]
 
 let () =

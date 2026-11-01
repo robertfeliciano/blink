@@ -1,29 +1,61 @@
 open Desugared_ast
 open Desugar_util
 
-(** Replace a function value with its closure-struct representation. The caller
-    is responsible for adding the returned declaration to the program. *)
-let transform_ty (t : ty) (cs : cdecl list) : ty * cdecl option =
-  (* TODO make this recursively check nested types *)
+let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
+  if List.exists (fun c -> c.cname = cd.cname) cs then cs else cd :: cs
+
+let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
+  List.fold_left (fun acc cd -> add_cdecl cd acc) old_cs new_cs
+
+(** Convert function values wherever they occur in runtime aggregates. Raw
+    function pointers keep their pointer representation, with converted value
+    types in their signatures. Return every required closure declaration. *)
+let rec transform_ty (t : ty) (cs : cdecl list) : ty * cdecl list =
   match t with
   | TRef (RFun (arg_tys, rty) as r) ->
-      let lname = mangle_lambda r in
-      let lstruct_name = lambda_struct_name lname in
-      (* just return cdecl corresponding to this lstruct instead of whole list *)
+      let lstruct_name = lambda_struct_name (mangle_lambda r) in
+      let args, arg_cs = transform_tys arg_tys cs in
+      let ret, ret_cs = transform_ret_ty rty (add_cdecls arg_cs cs) in
       let cd =
         match List.find_opt (fun c -> c.cname = lstruct_name) cs with
-        | Some lcdecl -> lcdecl
-        | None -> create_lambda_struct lstruct_name arg_tys rty
+        | Some cd -> cd
+        | None -> create_lambda_struct lstruct_name args ret
       in
-      (TRef (RClass lstruct_name), Some cd)
-  | _ -> (t, None)
+      (TRef (RClass lstruct_name), add_cdecl cd (add_cdecls ret_cs arg_cs))
+  | TTuple elements ->
+      let elements, declarations = transform_tys elements cs in
+      (TTuple elements, declarations)
+  | TRef (RArray (element, size)) ->
+      let element, declarations = transform_ty element cs in
+      (TRef (RArray (element, size)), declarations)
+  | TRef (RPtr (TRef (RFun (args, ret)))) ->
+      let args, arg_cs = transform_tys args cs in
+      let ret, ret_cs = transform_ret_ty ret (add_cdecls arg_cs cs) in
+      (TRef (RPtr (TRef (RFun (args, ret)))), add_cdecls ret_cs arg_cs)
+  | TRef (RPtr inner) ->
+      let inner, declarations = transform_ty inner cs in
+      (TRef (RPtr inner), declarations)
+  | _ -> (t, [])
 
-let transform_ret_ty (rt : ret_ty) (cs : cdecl list) : ret_ty * cdecl option =
+and transform_tys types cs =
+  let declarations, types =
+    List.fold_left_map
+      (fun declarations ty ->
+        let ty, more = transform_ty ty (add_cdecls declarations cs) in
+        (add_cdecls more declarations, ty))
+      [] types
+  in
+  (types, declarations)
+
+and transform_ret_ty (rt : ret_ty) (cs : cdecl list) : ret_ty * cdecl list =
   match rt with
   | RetVal t ->
-      let t', cd_opt = transform_ty t cs in
-      (RetVal t', cd_opt)
-  | RetVoid -> (RetVoid, None)
+      let t, declarations = transform_ty t cs in
+      (RetVal t, declarations)
+  | RetVoid -> (RetVoid, [])
+
+let closure_pointer_ty cs args ret =
+  fst (transform_ty (create_ptr_to (TRef (RFun (args, ret)))) cs)
 
 type lifted_lambda = {
   structs : cdecl list;
@@ -66,24 +98,16 @@ let project_lambda_converter converter =
   in
   ([ function_pointer_decl; environment_decl ], function_pointer, environment)
 
-let add_cdecl (cd : cdecl) (cs : cdecl list) : cdecl list =
-  if List.exists (fun c -> c.cname = cd.cname) cs then cs else cd :: cs
-
-let add_cdecls (new_cs : cdecl list) (old_cs : cdecl list) : cdecl list =
-  List.fold_left (fun acc cd -> add_cdecl cd acc) old_cs new_cs
-
 let lower_call_result cs fs stmts ty make_call =
   match ty with
   | TRef (RFun (arg_tys, rty)) ->
       let struct_ty, declaration = transform_ty ty cs in
-      let cs =
-        match declaration with Some cd -> add_cdecl cd cs | None -> cs
-      in
+      let cs = add_cdecls declaration cs in
       let value = gensym "returned_closure" in
       let function_pointer = gensym "returned_fptr" in
       let environment = gensym "returned_env" in
       let i8_ptr = create_ptr_to (TInt (TSigned Ti8)) in
-      let function_pointer_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
+      let function_pointer_ty = closure_pointer_ty cs arg_tys rty in
       let setup =
         [
           Decl (value, struct_ty, make_call struct_ty, true);
@@ -106,7 +130,9 @@ let lower_call_result cs fs stmts ty make_call =
         Some function_pointer,
         Id (value, struct_ty),
         Some environment )
-  | _ -> (cs, fs, stmts, None, None, make_call ty, None)
+  | _ ->
+      let ty, declarations = transform_ty ty cs in
+      (add_cdecls declarations cs, fs, stmts, None, None, make_call ty, None)
 
 (** Closure conversion produces:
     - an environment struct containing captured values;
@@ -121,9 +147,7 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
     List.fold_left_map
       (fun cs (name, capture_ty) ->
         let field_ty, declaration = transform_ty capture_ty cs in
-        let cs =
-          match declaration with Some cd -> add_cdecl cd cs | None -> cs
-        in
+        let cs = add_cdecls declaration cs in
         ( cs,
           {
             prelude = [];
@@ -136,12 +160,12 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
   let r = RFun (List.map snd args, rty) in
   let lty = TRef r in
   (* get the lambda struct we are desugaring down to *)
-  let lstruct_ty, lstruct_cdecl_opt = transform_ty lty cs in
+  let lstruct_ty, lstruct_declarations = transform_ty lty cs in
   let lstruct_cdecl =
-    match lstruct_cdecl_opt with
-    | Some l -> l
-    | None ->
-        desugar_error "impossible state - type is guaranteed to be a function"
+    match lstruct_ty with
+    | TRef (RClass name) ->
+        List.find (fun cd -> cd.cname = name) lstruct_declarations
+    | _ -> desugar_error "Expected a converted closure type."
   in
   (* our base lambda name - need to make it unique with syms *)
   let lname = mangle_lambda r in
@@ -203,7 +227,7 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
     }
   in
   (* set the fields of the lambda struct *)
-  let lambda_ptr_ty = create_ptr_to lty in
+  let lambda_ptr_ty = fst (transform_ty (create_ptr_to lty) cs) in
   let set_lambda_struct_fields =
     [
       ("envptr", Id (vname_env, i8_ptr));
@@ -221,7 +245,7 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
     ]
   in
   {
-    structs = [ lambda_env; lstruct_cdecl ];
+    structs = add_cdecl lambda_env (add_cdecls lstruct_declarations cs);
     function_decl = lifted_fn;
     setup;
     value = (vname, lstruct_ty);
@@ -229,12 +253,18 @@ let rec lift_lambda ?captured_values (cs : cdecl list) (vname_opt : id option)
     environment = vname_env;
   }
 
-and lift_lambdas_from_list (lctxt : (id * lambda_converter) list)
-    (vname_opt : id option) (cs_acc, fs_acc, stmts_acc) (e : exp) =
-  let ncs, nfs, ns, _lambda_opt, _fptr_opt, ne, _env =
-    lift_lambdas_from_exps cs_acc lctxt vname_opt e
+and lift_ordered_exps cs lctxt vname_opt expressions =
+  let (cs, fs), operands =
+    List.fold_left_map
+      (fun (cs, fs) expression ->
+        let cs, more_fs, setup, _, _, value, _ =
+          lift_lambdas_from_exps cs lctxt vname_opt expression
+        in
+        ((cs, fs @ more_fs), (setup, value)))
+      (cs, []) expressions
   in
-  ((ncs, nfs @ fs_acc, stmts_acc @ ns), ne)
+  let setup, values = sequence_expressions operands in
+  ((cs, fs, setup), values)
 
 and lift_lambdas_from_exps (cs : cdecl list)
     (lctxt : (id * lambda_converter) list) (vname_opt : id option) = function
@@ -274,22 +304,18 @@ and lift_lambdas_from_exps (cs : cdecl list)
       in
       (ncs, nfs, ns, None, None, InterfaceCast (receiver, cname, iname), None)
   | InterfaceCall (receiver, slot, args, ty) ->
-      let ncs, nfs, ns, _, _, receiver, _ =
-        lift_lambdas_from_exps cs lctxt None receiver
+      let (ncs, nfs, ns), values =
+        lift_ordered_exps cs lctxt None (receiver :: args)
       in
-      let (ncs, nfs, ns), args =
-        List.fold_left_map
-          (lift_lambdas_from_list lctxt None)
-          (ncs, nfs, ns) args
+      let receiver, args =
+        match values with
+        | receiver :: args -> (receiver, args)
+        | [] -> assert false
       in
       lower_call_result ncs nfs ns ty (fun ty ->
           InterfaceCall (receiver, slot, args, ty))
   | Call (callee, es, ty) -> (
-      let (ncs, nfs, nstmts), es' =
-        List.fold_left_map
-          (lift_lambdas_from_list lctxt vname_opt)
-          (cs, [], []) es
-      in
+      let (ncs, nfs, nstmts), es' = lift_ordered_exps cs lctxt vname_opt es in
       match List.assoc_opt callee lctxt with
       | Some cnv ->
           (* local lambda in lctxt *)
@@ -297,36 +323,24 @@ and lift_lambdas_from_exps (cs : cdecl list)
           let projection_stmts, function_pointer, environment =
             project_lambda_converter cnv
           in
-          let transformed_call =
-            Call (function_pointer, Id (environment, i8_ptr) :: es', ty)
-          in
-          ( ncs,
-            nfs,
-            nstmts @ projection_stmts,
-            None,
-            Some function_pointer,
-            transformed_call,
-            Some environment )
+          lower_call_result ncs nfs (projection_stmts @ nstmts) ty (fun ty ->
+              Call (function_pointer, Id (environment, i8_ptr) :: es', ty))
       | None ->
           lower_call_result ncs nfs nstmts ty (fun ty -> Call (callee, es', ty))
       )
-  | Id (i, ty) as e -> (
+  | Id (i, ty) -> (
       match List.assoc_opt i lctxt with
       | Some _ ->
           (* known lambda variable/parameter with converters in lctxt *)
           let ty', ncs_opt = transform_ty ty cs in
-          let cs' =
-            match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
-          in
+          let cs' = add_cdecls ncs_opt cs in
           (cs', [], [], None, None, Id (i, ty'), None)
       | None -> (
           match ty with
           | TRef (RFun (arg_tys, rty)) ->
               (*  global function being used as an rvalue *)
               let ty', ncs_opt = transform_ty ty cs in
-              let cs' =
-                match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
-              in
+              let cs' = add_cdecls ncs_opt cs in
               let struct_name =
                 match ty' with TRef (RClass cn) -> cn | _ -> ""
               in
@@ -339,21 +353,24 @@ and lift_lambdas_from_exps (cs : cdecl list)
               let arg_names =
                 List.mapi (fun idx _ -> "a" ^ string_of_int idx) arg_tys
               in
+              let runtime_args, _ = transform_tys arg_tys cs' in
+              let runtime_ret, _ = transform_ret_ty rty cs' in
               let thunk_args =
-                (i8_ptr, gensym "unused_env") :: List.combine arg_tys arg_names
+                (i8_ptr, gensym "unused_env")
+                :: List.combine runtime_args arg_names
               in
 
               let call_exp =
                 Call
                   ( i,
-                    List.map2 (fun t n -> Id (n, t)) arg_tys arg_names,
-                    match rty with RetVal t -> t | RetVoid -> TBool )
+                    List.map2 (fun t n -> Id (n, t)) runtime_args arg_names,
+                    match runtime_ret with RetVal t -> t | RetVoid -> TBool )
               in
 
               let thunk_fdecl =
                 {
                   annotations = [];
-                  frtyp = rty;
+                  frtyp = runtime_ret;
                   fname = thunk_name;
                   args = List.map (fun (t, n) -> (t, n)) thunk_args;
                   body =
@@ -362,8 +379,9 @@ and lift_lambdas_from_exps (cs : cdecl list)
                       | RetVoid ->
                           SCall
                             ( i,
-                              List.map2 (fun t n -> Id (n, t)) arg_tys arg_names
-                            )
+                              List.map2
+                                (fun t n -> Id (n, t))
+                                runtime_args arg_names )
                       | _ -> Ret (Some call_exp));
                     ];
                   inline = true;
@@ -372,7 +390,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
 
               let tmp_v = gensym (i ^ "_val") in
               let env_v = gensym (i ^ "_env") in
-              let l_ptr_ty = create_ptr_to ty in
+              let l_ptr_ty = fst (transform_ty (create_ptr_to ty) cs') in
 
               let stmts =
                 [
@@ -398,19 +416,18 @@ and lift_lambdas_from_exps (cs : cdecl list)
                 Some thunk_name,
                 Id (tmp_v, ty'),
                 Some env_v )
-          | _ -> (cs, [], [], None, None, e, None)))
+          | _ ->
+              let ty, declarations = transform_ty ty cs in
+              (add_cdecls declarations cs, [], [], None, None, Id (i, ty), None)
+          ))
   | Bop (b, e1, e2, ty) ->
-      (* bop is never between lambdas, no need to transform_ty *)
-      let cs1, fs1, ss1, _, _, e1', _ =
-        lift_lambdas_from_exps cs lctxt None e1
+      let (cs, fs, setup), values =
+        lift_ordered_exps cs lctxt None [ e1; e2 ]
       in
-      let cs2, fs2, ss2, _, _, e2', _ =
-        lift_lambdas_from_exps cs lctxt None e2
+      let e1, e2 =
+        match values with [ e1; e2 ] -> (e1, e2) | _ -> assert false
       in
-      let cs' = add_cdecls cs2 (add_cdecls cs1 cs) in
-      let fs' = fs1 @ fs2 in
-      let ss = ss1 @ ss2 in
-      (cs', fs', ss, None, None, Bop (b, e1', e2', ty), None)
+      (cs, fs, setup, None, None, Bop (b, e1, e2, ty), None)
   | Conditional (cond, (true_block, when_true), (false_block, when_false), ty)
     ->
       let cond_cs, cond_fs, cond_stmts, _, _, cond', _ =
@@ -438,11 +455,7 @@ and lift_lambdas_from_exps (cs : cdecl list)
         lift_branch true_cs false_block when_false
       in
       let result_ty, result_cdecl = transform_ty ty false_cs in
-      let final_cs =
-        match result_cdecl with
-        | Some declaration -> add_cdecl declaration false_cs
-        | None -> false_cs
-      in
+      let final_cs = add_cdecls result_cdecl false_cs in
       ( final_cs,
         cond_fs @ true_fs @ false_fs,
         cond_stmts,
@@ -455,54 +468,69 @@ and lift_lambdas_from_exps (cs : cdecl list)
       let ncs, nfs, ss, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
       (add_cdecls ncs cs, nfs, ss, None, None, Uop (u, e', ty), None)
   | Index (coll, idx, ty) ->
-      let ty', ncs_opt = transform_ty ty cs in
-      let coll_cs, coll_fs, coll_ss, _, _, coll', _ =
-        lift_lambdas_from_exps cs lctxt None coll
+      let (cs, fs, setup), values =
+        lift_ordered_exps cs lctxt None [ coll; idx ]
       in
-      let idx_cs, idx_fs, idx_ss, _, _, idx', _ =
-        lift_lambdas_from_exps cs lctxt None idx
+      let coll, idx =
+        match values with [ coll; idx ] -> (coll, idx) | _ -> assert false
       in
-      let tcs =
-        match ncs_opt with Some ncs -> add_cdecl ncs cs | None -> cs
-      in
-      let cs' = add_cdecls idx_cs (add_cdecls coll_cs tcs) in
-      ( cs',
-        coll_fs @ idx_fs,
-        coll_ss @ idx_ss,
+      let ty, declarations = transform_ty ty cs in
+      ( add_cdecls declarations cs,
+        fs,
+        setup,
         None,
         None,
-        Index (coll', idx', ty'),
+        Index (coll, idx, ty),
         None )
   | Array (es, ty, on_heap) ->
       let ty', nc_opt = transform_ty ty cs in
-      let (ecs, efs, ess), es' =
-        List.fold_left_map
-          (lift_lambdas_from_list lctxt vname_opt)
-          (cs, [], []) es
-      in
-      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let (ecs, efs, ess), es' = lift_ordered_exps cs lctxt vname_opt es in
+      let ncs = add_cdecls nc_opt cs in
       let cs' = add_cdecls ecs ncs in
       (cs', efs, ess, None, None, Array (es', ty', on_heap), None)
-  | Cast _ as ce ->
-      (* cannot cast lambdas *)
-      (cs, [], [], None, None, ce, None)
+  | Tuple (elements, ty) ->
+      let ty, declarations = transform_ty ty cs in
+      let (cs, fs, setup), elements =
+        lift_ordered_exps (add_cdecls declarations cs) lctxt None elements
+      in
+      (cs, fs, setup, None, None, Tuple (elements, ty), None)
+  | TupleProj (tuple, index, ty) ->
+      let cs, fs, setup, _, _, tuple, _ =
+        lift_lambdas_from_exps cs lctxt None tuple
+      in
+      lower_call_result cs fs setup ty (fun ty -> TupleProj (tuple, index, ty))
+  | Cast (value, ty) ->
+      let cs, fs, setup, _, _, value, _ =
+        lift_lambdas_from_exps cs lctxt None value
+      in
+      let ty, declarations = transform_ty ty cs in
+      (add_cdecls declarations cs, fs, setup, None, None, Cast (value, ty), None)
   | InterfaceProj (e, slot, ty) ->
       let ty', nc_opt = transform_ty ty cs in
       let ecs, efs, ess, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
-      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let ncs = add_cdecls nc_opt cs in
       let cs' = add_cdecls ecs ncs in
       (cs', efs, ess, None, None, InterfaceProj (e', slot, ty'), None)
   | Proj (e, i, ty) ->
       let ty', nc_opt = transform_ty ty cs in
       let ecs, efs, ess, _, _, e', _ = lift_lambdas_from_exps cs lctxt None e in
-      let ncs = match nc_opt with Some nc -> add_cdecl nc cs | None -> cs in
+      let ncs = add_cdecls nc_opt cs in
       let cs' = add_cdecls ecs ncs in
       (cs', efs, ess, None, None, Proj (e', i, ty'), None)
-  | ObjInit _ as oe ->
-      (* no lambdas allowed as class fields *)
-      (cs, [], [], None, None, oe, None)
-  | (Bool _ | Int _ | Float _ | Str _ | Null _) as e ->
-      (cs, [], [], None, None, e, None)
+  | ObjInit (name, fields) ->
+      let names, values = List.split fields in
+      let (cs, fs, setup), values = lift_ordered_exps cs lctxt None values in
+      ( cs,
+        fs,
+        setup,
+        None,
+        None,
+        ObjInit (name, List.combine names values),
+        None )
+  | Null ty ->
+      let ty, declarations = transform_ty ty cs in
+      (add_cdecls declarations cs, [], [], None, None, Null ty, None)
+  | (Bool _ | Int _ | Float _ | Str _) as e -> (cs, [], [], None, None, e, None)
 
 and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
     (lctxt : (id * lambda_converter) list) = function
@@ -527,19 +555,21 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
           {
             closure_var = vname;
             closure_ty = ty';
-            function_pointer_ty = create_ptr_to (TRef (RFun (args, rty)));
+            function_pointer_ty = closure_pointer_ty ncs args rty;
           } )
         :: lctxt
       in
-      let cs' =
-        match dnc_opt with Some dnc -> add_cdecl dnc dcs | None -> cs
-      in
+      let cs' = add_cdecls dnc_opt dcs in
       (cs', nfs @ fs, nlctxt, ns_with_decl)
   | Decl (vname, ty, e, const) ->
       let cs', nfs, ns, _l, _fptr_opt, ne, _env_opt =
         lift_lambdas_from_exps cs lctxt (Some vname) e
       in
-      (cs', nfs @ fs, lctxt, ns @ [ Decl (vname, ty, ne, const) ])
+      let ty, declarations = transform_ty ty cs' in
+      ( add_cdecls declarations cs',
+        nfs @ fs,
+        lctxt,
+        ns @ [ Decl (vname, ty, ne, const) ] )
   | Ret rval -> (
       match rval with
       | Some e ->
@@ -549,23 +579,19 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
           (cs', nfs @ fs, lctxt, ns @ [ Ret (Some e') ])
       | None -> (cs, fs, lctxt, [ Ret rval ]))
   | InterfaceSCall (receiver, slot, args, ret) ->
-      let ncs, nfs, ns, _, _, receiver, _ =
-        lift_lambdas_from_exps cs lctxt None receiver
+      let (ncs, nfs, ns), values =
+        lift_ordered_exps cs lctxt None (receiver :: args)
       in
-      let (ncs, nfs, ns), args =
-        List.fold_left_map
-          (lift_lambdas_from_list lctxt None)
-          (ncs, nfs, ns) args
+      let receiver, args =
+        match values with
+        | receiver :: args -> (receiver, args)
+        | [] -> assert false
       in
       let ret, declaration = transform_ret_ty ret ncs in
-      let ncs =
-        match declaration with Some cd -> add_cdecl cd ncs | None -> ncs
-      in
+      let ncs = add_cdecls declaration ncs in
       (ncs, nfs @ fs, lctxt, ns @ [ InterfaceSCall (receiver, slot, args, ret) ])
   | SCall (i, es) ->
-      let (ecs, efs, ess), es' =
-        List.fold_left_map (lift_lambdas_from_list lctxt None) (cs, [], []) es
-      in
+      let (ecs, efs, ess), es' = lift_ordered_exps cs lctxt None es in
       let call_name, call_args, projection_stmts =
         match List.assoc_opt i lctxt with
         | Some converter ->
@@ -579,7 +605,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
       ( ecs,
         efs @ fs,
         lctxt,
-        ess @ projection_stmts @ [ SCall (call_name, call_args) ] )
+        projection_stmts @ ess @ [ SCall (call_name, call_args) ] )
   | If (e, tb, eb) ->
       let ecs, efs, ess, _l, _fptr_opt, e', _env =
         lift_lambdas_from_exps cs lctxt None e
@@ -636,7 +662,7 @@ and lift_lambdas_from_stmt (cs : cdecl list) (fs : fdecl list)
 
       let ty', tc_opt = transform_ty ty cs in
       let cs' = add_cdecls rcs (add_cdecls lcs cs) in
-      let cs' = match tc_opt with Some tc -> add_cdecl tc cs' | None -> cs' in
+      let cs' = add_cdecls tc_opt cs' in
 
       (cs', lfs @ rfs @ fs, lctxt, lss @ rss @ [ Assn (l', r', ty') ])
   | (Break | Continue) as s -> (cs, fs, lctxt, [ s ])
@@ -663,13 +689,9 @@ and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
         | TRef (RFun (arg_tys, rty)) ->
             (* convert lambda type to struct *)
             let t', cd_opt = transform_ty t cs_acc in
-            let cs' =
-              match cd_opt with
-              | Some cd -> add_cdecl cd cs_acc
-              | None -> cs_acc
-            in
+            let cs' = add_cdecls cd_opt cs_acc in
 
-            let lambda_ptr_ty = create_ptr_to (TRef (RFun (arg_tys, rty))) in
+            let lambda_ptr_ty = closure_pointer_ty cs' arg_tys rty in
             ( ( i,
                 {
                   closure_var = i;
@@ -679,15 +701,15 @@ and lift_lambda_from_fdecl (cs : cdecl list) (f : fdecl) :
               :: lctxt_acc,
               (t', i) :: args_acc,
               cs' )
-        | _ -> (lctxt_acc, (t, i) :: args_acc, cs_acc))
+        | _ ->
+            let t, declarations = transform_ty t cs_acc in
+            (lctxt_acc, (t, i) :: args_acc, add_cdecls declarations cs_acc))
       f.args ([], [], cs)
   in
 
   (* return type transformation *)
   let frtyp', cd_ret_opt = transform_ret_ty f.frtyp cs_args in
-  let cs_ret =
-    match cd_ret_opt with Some cd -> add_cdecl cd cs_args | None -> cs_args
-  in
+  let cs_ret = add_cdecls cd_ret_opt cs_args in
 
   let final_cs, lifted_fs, transformed_body =
     lift_lambda_from_block cs_ret lctxt_initial f.body

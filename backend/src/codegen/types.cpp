@@ -52,6 +52,13 @@ llvm::Type* TypeToLLGenerator::codegenTy(const Ty& ty) {
             }
         case TyTag::TRef:
             return codegenRefTy(*ty.ref_ty);
+        case TyTag::TTuple: {
+            std::vector<llvm::Type*> elements;
+            elements.reserve(ty.elements.size());
+            for (const auto& element : ty.elements)
+                elements.push_back(codegenValueTy(element));
+            return llvm::StructType::get(*gen.ctxt, elements);
+        }
         default:
             throw std::runtime_error("Other type not supported yet");
     }

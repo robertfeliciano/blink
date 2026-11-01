@@ -34,6 +34,7 @@
   test_typing
   test_parsing
   test_type_aliases
+  test_tuples
   test_desugaring
   test_interfaces
   test_generic_classes
