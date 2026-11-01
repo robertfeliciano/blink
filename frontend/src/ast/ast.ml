@@ -34,6 +34,7 @@ type ty =
   | TFloat of float_ty
   | TRef of ref_ty
   | TParam of id node
+  | TTuple of ty list
 (* | TOpt of ty *)
 
 and ref_ty =
@@ -89,7 +90,20 @@ type aop =
   | BOrEq
 [@@deriving show]
 
+let validate_tuple_arity fail node values =
+  if List.length values < 2 || List.length values > 3 then
+    fail node "Tuples must contain two or three elements."
+
+type pattern = PBind of id | PTuple of pattern node list
+
+let rec pattern_bindings pattern =
+  match pattern.elt with
+  | PBind "_" -> []
+  | PBind name -> [ { pattern with elt = name } ]
+  | PTuple patterns -> List.concat_map pattern_bindings patterns
+
 type exp =
+  | Tuple of exp node list
   | Bool of bool
   | Int of Z.t
   | Float of float
@@ -118,6 +132,7 @@ type exp =
 and vdecl = id * ty option * exp node option * bool
 
 and stmt =
+  | Destructure of pattern node * ty option * exp node * bool
   | Assn of exp node * aop * exp node
   | Decl of vdecl (* includes whether it was declared as constant or not *)
   | Ret of exp node option
@@ -235,6 +250,7 @@ let type_mappers ty =
   let rec exp en =
     let elt =
       match en.elt with
+      | Tuple es -> Tuple (List.map exp es)
       | Call (f, es) -> Call (exp f, List.map exp es)
       | Proj (e, i) -> Proj (exp e, i)
       | Bop (op, e1, e2) -> Bop (op, exp e1, exp e2)
@@ -266,6 +282,8 @@ let type_mappers ty =
   and stmt sn =
     let elt =
       match sn.elt with
+      | Destructure (p, t, e, const) ->
+          Destructure (p, Option.map ty t, exp e, const)
       | Decl (i, t, e, const) ->
           Decl (i, Option.map ty t, Option.map exp e, const)
       | Assn (e1, op, e2) -> Assn (exp e1, op, exp e2)
@@ -329,6 +347,7 @@ let map_cdecl_types ty (cn : cdecl node) =
   }
 
 let rec exists_type_param predicate = function
+  | TTuple ts -> List.exists (exists_type_param predicate) ts
   | TParam p -> predicate p
   | TRef (RArray (ty, _)) -> exists_type_param predicate ty
   | TRef (RGeneric (_, args)) -> List.exists (exists_type_param predicate) args
@@ -341,6 +360,7 @@ let rec exists_type_param predicate = function
   | _ -> false
 
 let rec substitute_type_params lookup = function
+  | TTuple ts -> TTuple (List.map (substitute_type_params lookup) ts)
   | TParam p -> lookup p
   | TRef (RGeneric (name, args)) ->
       TRef (RGeneric (name, List.map (substitute_type_params lookup) args))
@@ -356,6 +376,7 @@ let rec substitute_type_params lookup = function
   | ty -> ty
 
 let rec bind_type_params params = function
+  | TTuple ts -> TTuple (List.map (bind_type_params params) ts)
   | TRef (RClass cn) as t -> (
       match unqualified_id cn with
       | Some i when List.exists (fun p -> p.pname.elt = i) params ->
@@ -475,6 +496,7 @@ and show_ret_ty ?(lvl = 0) = function
   | RetVal t -> Printf.sprintf "RetVal(%s)" (show_ty ~lvl:(lvl + 1) t)
 
 and show_ty ?(lvl = 0) = function
+  | TTuple ts -> "(" ^ String.concat ", " (List.map (show_ty ~lvl) ts) ^ ")"
   | TParam name -> "TParam(" ^ name.elt ^ ")"
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "TInt(%s)" (show_int_ty it)
@@ -483,6 +505,8 @@ and show_ty ?(lvl = 0) = function
 (* | TOpt t -> Printf.sprintf "TOpt(%s)" (show_ty t) *)
 
 let rec show_exp ?(lvl = 0) = function
+  | Tuple es ->
+      "Tuple(" ^ String.concat ", " (List.map (show_node show_exp) es) ^ ")"
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int i -> Printf.sprintf "Int(%s)" (Z.to_string i)
   | Float f -> Printf.sprintf "Float(%f)" f
@@ -600,6 +624,13 @@ and show_stmt ?(lvl = 0) = function
         (show_aop op)
         (indent (lvl + 1))
         (show_node show_exp rhs)
+  | Destructure (p, t, e, const) ->
+      let rec pattern p =
+        match p.elt with
+        | PBind name -> name
+        | PTuple ps -> "(" ^ String.concat ", " (List.map pattern ps) ^ ")"
+      in
+      show_vdecl ~lvl (pattern p, t, Some e, const)
   | Decl v -> show_vdecl ~lvl v
   | Ret exp_opt ->
       let e_s =

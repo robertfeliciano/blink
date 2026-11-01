@@ -53,6 +53,9 @@ let validate_param_bounds state params =
         is_interface
   in
   let rec validate node = function
+    | TTuple ts ->
+        Ast.validate_tuple_arity fail node ts;
+        List.iter (validate node) ts
     | TRef (RClass name) -> ignore (nominal name [])
     | TRef (RGeneric (name, args)) ->
         ignore (nominal name args);
@@ -178,6 +181,7 @@ let template state name args =
       template
 
 let rec normalize ?(chain = []) state = function
+  | TTuple ts -> TTuple (List.map (normalize ~chain state) ts)
   | TRef (RGeneric (name, args)) ->
       let owner = template state name args in
       List.iter (Generic_types.validate_array_lengths fail name) args;

@@ -5,6 +5,7 @@
 | [basics.bl](basics.bl) | Types, inference, casts, operators, conditionals, and ternaries | 42 |
 | [functions.bl](functions.bl) | Parameters, nested calls, and recursion | 42 |
 | [type_aliases.bl](type_aliases.bl) | Transparent aliases for scalars, callbacks, arrays, and generic classes | 42 |
+| [tuples.bl](tuples.bl) | Pairs, triples, tuple types, nested destructuring, copying, and iteration | 42 |
 | [loops.bl](loops.bl) | While, ranges, steps, foreach, nesting, break, and continue | 42 |
 | [arrays.bl](arrays.bl) | Empty arrays, indexing, mutation, matrices, and nested arrays | 19 |
 | [annotations.bl](annotations.bl) | C interop and inline functions and methods | 20 |
@@ -48,3 +49,12 @@ echo $?
 
 See the [collections API](../runtime/stdlib/collections/README.md) for indexed
 operations and ownership rules.
+
+Tuple annotations follow the complete pattern: `let (value, position):
+(string, i32) = parseToken(text);`. Omit the annotation to infer both types.
+Each tuple contains two or three elements; patterns can nest and `_` discards
+an element. `const` makes every named binding constant. Tuple values copy their
+elements, with references retaining their normal ownership rules. Read elements
+with constant indices such as `pair[0]`; reassign a mutable tuple as a whole.
+Function types keep their existing parameter-list syntax: `(i32, i32) -> i32`
+takes two arguments, while `((i32, i32)) -> i32` takes one tuple argument.

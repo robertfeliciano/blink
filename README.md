@@ -16,6 +16,39 @@ Alias cycles are rejected, including unused declarations. Aliases do not have
 their own type parameters; they can name concrete generic applications.
 `type` is a reserved keyword. See [the runnable example](examples/type_aliases.bl).
 
+Pairs and triples return several values without a class:
+
+```blink
+fun coordinates() => (i32, i32) {
+    return (20, 22);
+}
+
+fun main() => i32 {
+    let point: (i32, i32) = coordinates();
+    const (x, y): (i32, i32) = point;
+    return x + y;
+}
+```
+
+Tuple annotations follow the whole binding or destructuring pattern. They can
+be omitted when inferred. Patterns can nest, and `_` discards an element:
+`let ((x, y), _) = ((20, 22), true);`. Read positions with a compile-time integer
+index, such as `point[0]`. Tuple elements are read-only; mutable bindings can be
+reassigned as a whole. Each tuple has two or three elements, and tuples can nest.
+`(x)` remains a grouped expression.
+
+Tuples are values copied on assignment, argument passing, and return. Copying a
+tuple preserves the identity of reference elements; it does not copy or free
+their objects. A tuple itself needs no `free`. Tuples compose with arrays,
+classes, interfaces, generics, aliases, and closures. Existing loops over arrays
+of tuples can destructure their current element inside the body. Function types
+retain their argument-list syntax: `(i32, i32) -> i32` takes two arguments, while
+`((i32, i32)) -> i32` takes one tuple argument.
+
+Tuple equality and ordering, tuple globals, tuples in C ABI signatures,
+destructuring assignment, and destructuring directly in a loop header are not
+supported. See [the tuple example](examples/tuples.bl).
+
 ```blink
 import println from std.io;
 
@@ -110,3 +143,18 @@ sudo ninja install
 Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`. The compiler accepts `-O0`, `-O1`, `-O2`, and `-O3`; when omitted, `-O0` is used.
 
 To build the frontend, you can simply run `dune build` in `frontend/`. 
+
+### Formatting and commit hooks
+
+Run `make fmt` from the repository root to run `dune fmt` in `frontend/`
+and `clang-format -i -style=file` on all `.cpp`, `.h`, `.hpp`, and `.cc`
+files under `backend/`. Both `dune` (with its formatter dependencies) and
+`clang-format` must be available on your PATH.
+
+Run `make install-hooks` once per clone to enable the versioned pre-commit
+hook in `.githooks/`. This sets the clone's `core.hooksPath`, replacing any
+previous hook-directory setting. The hook runs `make fmt` before each commit
+and stops on formatter failures or any remaining unstaged changes under
+`frontend/` or `backend/`, including changes that existed before formatting.
+Review and stage the desired changes, then retry the commit. The hook never
+stages files automatically.

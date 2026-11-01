@@ -299,6 +299,8 @@ ty:
   | tf=float_ty  { TFloat tf }
   | TBOOL   { TBool }
   | LPAREN t=ty RPAREN { t }
+  | LPAREN first=ty COMMA rest=separated_nonempty_list(COMMA, ty) RPAREN
+      { TTuple (first :: rest) }
   | LPAREN RPAREN THIN_ARROW rty=ret_ty
     { TRef (RFun ([], rty)) }
   | LPAREN arg_ty=ty RPAREN THIN_ARROW rty=ret_ty
@@ -428,6 +430,8 @@ primary:
   | NEW LBRACKET elems=separated_list(COMMA, exp) RBRACKET
       { loc $startpos $endpos @@ Array (elems, true) }
   | LPAREN e=exp RPAREN             { e }
+  | LPAREN first=exp COMMA rest=separated_nonempty_list(COMMA, exp) RPAREN
+      { loc $startpos $endpos (Tuple (first :: rest)) }
   | NEW cid=class_type LBRACE fields=separated_list(COMMA, field_init) RBRACE
       { 
         loc $startpos $endpos @@ ObjInit (cid, fields)
@@ -555,7 +559,19 @@ by_step:
    Statements
    ----------------------- *)
 
+binding_pattern:
+  | name=IDENT { loc $startpos $endpos (PBind name) }
+  | p=tuple_pattern { p }
+
+tuple_pattern:
+  | LPAREN first=binding_pattern COMMA rest=separated_nonempty_list(COMMA, binding_pattern) RPAREN
+      { loc $startpos $endpos (PTuple (first :: rest)) }
+
 stmt:
+  | LET p=tuple_pattern t=ty_spec? EQUAL init=exp SEMI
+      { loc $startpos $endpos (Destructure (p, t, init, false)) }
+  | CONST p=tuple_pattern t=ty_spec? EQUAL init=exp SEMI
+      { loc $startpos $endpos (Destructure (p, t, init, true)) }
   | d=vdecl SEMI
       { loc $startpos $endpos @@ Decl(d) }
   | p=lhs a=aop e=exp SEMI

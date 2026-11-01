@@ -1,6 +1,15 @@
-.PHONY: all clean backend frontend test test-unit test-e2e test-backend
+.PHONY: all clean backend frontend test test-unit test-e2e test-backend fmt install-hooks
 
 all: backend frontend
+
+fmt:
+	@command -v dune >/dev/null || { echo "dune is required for make fmt" >&2; exit 1; }
+	@command -v clang-format >/dev/null || { echo "clang-format is required for make fmt" >&2; exit 1; }
+	cd frontend && dune fmt
+	cd backend && find . -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.hpp" -o -name "*.cc" \) -exec clang-format -i -style=file {} +
+
+install-hooks:
+	git config --local core.hooksPath .githooks
 
 backend: 
 	cmake -S backend -B backend/build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++

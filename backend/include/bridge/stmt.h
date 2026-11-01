@@ -34,10 +34,10 @@ struct SCall {
 };
 
 struct InterfaceSCall {
-    std::unique_ptr<Exp>               receiver;
-    unsigned                           slot;
+    std::unique_ptr<Exp>              receiver;
+    unsigned                          slot;
     std::vector<std::unique_ptr<Exp>> args;
-    RetTy                              ret;
+    RetTy                             ret;
 };
 
 struct If {

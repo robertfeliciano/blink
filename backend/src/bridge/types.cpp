@@ -77,7 +77,7 @@ RefTy convert_ref_ty(value v) {
                 break;
             }
             case Constants::REFTY_Interface: {
-                ref.tag = RefTyTag::RInterface;
+                ref.tag   = RefTyTag::RInterface;
                 ref.cname = String_val(Field(v, 0));
                 break;
             }
@@ -122,6 +122,12 @@ Ty convert_ty(value v) {
             case Constants::TY_TRef:
                 ty.tag    = TyTag::TRef;
                 ty.ref_ty = std::make_unique<RefTy>(convert_ref_ty(Field(v, 0)));
+                break;
+
+            case Constants::TY_TTuple:
+                ty.tag = TyTag::TTuple;
+                for (value xs = Field(v, 0); xs != Val_emptylist; xs = Field(xs, 1))
+                    ty.elements.push_back(convert_ty(Field(xs, 0)));
                 break;
         }
     } else {

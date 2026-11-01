@@ -329,6 +329,19 @@ Exp convert_exp(value v) {
             result.val        = EInterfaceProj{std::move(receiver), slot, convert_ty(Field(v, 2))};
             break;
         }
+        case Constants::EXP_Tuple: { // Tuple of exp list * ty
+            std::vector<std::unique_ptr<Exp>> elements;
+            for (value xs = Field(v, 0); xs != Val_emptylist; xs = Field(xs, 1))
+                elements.push_back(std::make_unique<Exp>(convert_exp(Field(xs, 0))));
+            result.val = ETuple{std::move(elements), convert_ty(Field(v, 1))};
+            break;
+        }
+        case Constants::EXP_TupleProj: { // TupleProj of exp * int * ty
+            auto     tuple = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+            unsigned index = Int_val(Field(v, 1));
+            result.val     = ETupleProj{std::move(tuple), index, convert_ty(Field(v, 2))};
+            break;
+        }
         default: {
             throw std::runtime_error("Unsupported exp variant in bridge conversion");
         }

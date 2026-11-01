@@ -22,6 +22,23 @@ let type_annotations (tc : Tctxt.t) =
       in
       (i.elt, e'))
 
+let validate_c_signature node annotations typed_args typed_ret =
+  let rec contains_tuple = function
+    | Typed_ast.TTuple _ -> true
+    | TRef (RArray (ty, _)) -> contains_tuple ty
+    | TRef (RFun (args, ret)) ->
+        List.exists contains_tuple args || contains_ret ret
+    | _ -> false
+  and contains_ret = function
+    | RetVoid -> false
+    | RetVal ty -> contains_tuple ty
+  in
+  if
+    has_annotation "C" annotations
+    && (List.exists (fun (ty, _) -> contains_tuple ty) typed_args
+       || contains_ret typed_ret)
+  then type_error node "Tuples are not supported in @C signatures."
+
 let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     Typed_ast.fdecl =
   let {
@@ -31,6 +48,7 @@ let type_fn ?(enclosing_class : id option) (tc : Tctxt.t) (fn : fdecl node) :
     fn
   in
   let args', frtyp' = validate_and_convert_signature fn tc args frtyp in
+  validate_c_signature fn annotations args' frtyp';
   let tc' =
     List.fold_left (fun acc (ty, id) -> add_local acc id (ty, false)) tc args'
   in
@@ -54,6 +72,7 @@ let type_proto (tc : Tctxt.t) (pn : proto node) : Typed_ast.proto =
     pn
   in
   let typed_args, frtyp' = validate_and_convert_signature pn tc args frtyp in
+  validate_c_signature pn annotations typed_args frtyp';
   let args' = List.map fst typed_args in
   let annotations' = type_annotations tc annotations in
   { annotations = annotations'; frtyp = frtyp'; fname; args = args' }
@@ -75,11 +94,13 @@ let type_field (tc : Tctxt.t) (cname : id) (fn : vdecl node) : Typed_ast.field =
       let ftyp = validate_and_convert_ty stmt_n tc ty in
       (* A field without a source initializer is mandatory at every new-expression.
          Its stored fallback is unreachable; do not require or invoke a constructor. *)
-      let init =
-        match ftyp with
+      let rec fallback = function
         | Typed_ast.TRef ref_ty -> Typed_ast.Null ref_ty
-        | _ -> create_default_init stmt_n tc ftyp
+        | Typed_ast.TTuple types as ty ->
+            Typed_ast.Tuple (List.map fallback types, ty)
+        | ty -> create_default_init stmt_n tc ty
       in
+      let init = fallback ftyp in
       { fieldName; ftyp; init }
   | _ ->
       let init, ftyp =
@@ -627,6 +648,9 @@ let type_globals tc declarations =
 let create_generic_ctxt nominals tc fns pns =
   let seen = Hashtbl.create (List.length fns) in
   let rec validate_ty node = function
+    | TTuple ts ->
+        Ast.validate_tuple_arity type_error node ts;
+        List.iter (validate_ty node) ts
     | TParam _ -> ()
     | TRef (RGeneric (name, args)) ->
         ignore (Nominal_generics.template nominals name args);

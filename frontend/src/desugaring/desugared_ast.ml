@@ -4,7 +4,12 @@ type uint = Tu8 | Tu16 | Tu32 | Tu64 | Tu128 [@@deriving show]
 type float_ty = Tf32 | Tf64 [@@deriving show]
 type int_ty = TSigned of sint | TUnsigned of uint [@@deriving show]
 
-type ty = TBool | TInt of int_ty | TFloat of float_ty | TRef of ref_ty
+type ty =
+  | TBool
+  | TInt of int_ty
+  | TFloat of float_ty
+  | TRef of ref_ty
+  | TTuple of ty list
 
 and ref_ty =
   | RString
@@ -63,6 +68,8 @@ type exp =
   | InterfaceCast of exp * id * id
   | InterfaceCall of exp * int * exp list * ty
   | InterfaceProj of exp * int * ty
+  | Tuple of exp list * ty
+  | TupleProj of exp * int * ty
 
 and vdecl = id * ty * exp * bool
 

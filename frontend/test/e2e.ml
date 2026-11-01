@@ -1429,6 +1429,333 @@ fun main() => i32 {
     };
   ]
 
+let tuple_fixtures =
+  [
+    {
+      name = "tuple-preludes-preserve-surrounding-expression-order";
+      source =
+        {|let trace = 0;
+fun mark(digit: i32) => i32 { trace = trace * 10 + digit; return digit; }
+fun consume(first: i32, pair: (i32, i32)) => i32 {
+  return first + pair[0] + pair[1];
+}
+class Box {
+  let value: i32 = 0;
+  fun take(pair: (i32, i32)) => i32 { return pair[0] + pair[1]; }
+}
+fun receiver(box: Box) => Box { let ignored = mark(1); return box; }
+fun arrayReceiver(values: [i32; 2]) => [i32; 2] {
+  let ignored = mark(1);
+  return values;
+}
+fun reference(box: Box, digit: i32) => Box {
+  let ignored = mark(digit);
+  return box;
+}
+fun consumeCallback(first: i32, pair: ((i32) -> i32, i32)) => i32 {
+  let (callback, value) = pair;
+  let result: i64 = callback(value);
+  free callback;
+  return first + (result as i32);
+}
+fun main() => i32 {
+  let call = consume(mark(1), (mark(2), mark(3)));
+  if trace != 123 or call != 6 { return 1; }
+  trace = 0;
+  let sum = mark(1) + (mark(2), mark(3))[0];
+  if trace != 123 or sum != 3 { return 2; }
+  trace = 0;
+  let values = [mark(1), (mark(2), mark(3))[0]];
+  if trace != 123 or values[0] != 1 or values[1] != 2 { return 3; }
+  trace = 0;
+  let box = new Box {};
+  let method = receiver(box).take((mark(2), mark(3)));
+  if trace != 123 or method != 5 { return 4; }
+  trace = 0;
+  receiver(box).value = (mark(2), mark(3))[0];
+  if trace != 123 or box.value != 2 { return 5; }
+  trace = 0;
+  arrayReceiver(values)[mark(2) - 2] = (mark(3), mark(4))[0];
+  if trace != 1234 or values[0] != 3 or values[1] != 2 { return 6; }
+  trace = 0;
+  let selected = arrayReceiver(values)[(mark(2), mark(3))[0] - 2];
+  if trace != 123 or selected != 3 { return 7; }
+  trace = 0;
+  let firstObject = new Box {};
+  let secondObject = new Box {};
+  let thirdObject = new Box {};
+  free receiver(firstObject), (reference(secondObject, 2), reference(thirdObject, 3))[0];
+  if trace != 123 { return 8; }
+  free thirdObject;
+  trace = 0;
+  let iterations = 0;
+  for value in mark(1)..(mark(2), mark(3))[0] { iterations += 1; }
+  if trace != 123 or iterations != 1 { return 9; }
+  trace = 0;
+  let closure = consumeCallback(mark(1),
+    (fn[](value: i32) -> i32 { return value; }, mark(2)));
+  if trace != 12 or closure != 3 { return 10; }
+  free box;
+  return 42;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-projected-reference-compound-assignment-evaluates-once";
+      source =
+        {|class Box { let value: i32 = 40; }
+interface Holder { let pair: (Box, [i32; 2]); }
+class Storage impl Holder { let pair: (Box, [i32; 2]); }
+let calls = 0;
+let holder_calls = 0;
+let indices = 0;
+let order = 0;
+fun make(box: Box, values: [i32; 2], digit: i32) => (Box, [i32; 2]) {
+  calls += 1;
+  order = order * 10 + digit;
+  return (box, values);
+}
+fun index() => i32 { indices += 1; order = order * 10 + 4; return 0; }
+fun rhs(digit: i32) => i32 { order = order * 10 + digit; return 1; }
+fun mutate(box: Box) => i32 { box.value = 100; order = order * 10 + 7; return 2; }
+fun getHolder(holder: Holder, digit: i32) => Holder {
+  holder_calls += 1;
+  order = order * 10 + digit;
+  return holder;
+}
+fun main() => i32 {
+  let box = new Box {};
+  let values = [20, 21];
+  make(box, values, 1)[0].value += rhs(2);
+  if calls != 1 or order != 12 or box.value != 41 { return 1; }
+  make(box, values, 3)[1][index()] += rhs(5);
+  if calls != 2 or indices != 1 or order != 12345 { return 2; }
+  box.value = 40;
+  order = 0;
+  make(box, values, 6)[0].value += (mutate(box), 0)[0];
+  if calls != 3 or order != 67 or box.value != 42 { return 3; }
+  let storage = new Storage { pair = (box, values) };
+  let holder: Holder = storage;
+  order = 0;
+  getHolder(holder, 8).pair[0].value += rhs(9);
+  if holder_calls != 1 or order != 89 or box.value != 43 { return 4; }
+  order = 0;
+  getHolder(holder, 1).pair[1][index()] += rhs(5);
+  if holder_calls != 2 or indices != 2 or order != 145 { return 5; }
+  let result = values[0] + values[1] - 1;
+  free storage, box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-index-folding-bitwise-expression";
+      source =
+        {|fun main() => i32 {
+  let pair = (20, 22);
+  return pair[(~0) & 1] + pair[0];
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-closure-class-default-interface-field-and-return";
+      source =
+        {|type Bundle = ((i32) -> i32, i32);
+interface Supplies { let bundle: Bundle; fun get() => Bundle; }
+class Holder impl Supplies {
+  let bundle: Bundle = (fn[](value: i32) -> i32 { return value + 40; }, 2);
+  fun get() => Bundle { return bundle; }
+}
+fun main() => i32 {
+  let box = new Holder {};
+  let view: Supplies = box;
+  let pair = view.get();
+  let direct = view.bundle;
+  let callback = pair[0];
+  let field_callback = direct[0];
+  if field_callback(direct[1]) != 42 { return 1; }
+  let result = callback(pair[1]);
+  free callback, box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-array-string-and-class-reference-elements";
+      source =
+        {|@C fun strcmp(left: string, right: string) => i32;
+class Box { let value: i32; }
+fun make() => (string, [i32; 2], Box) {
+  return ("tuple", new [20, 22], new Box { value = 40 });
+}
+fun main() => i32 {
+  let empty: (string, [i32; 2], bool);
+  if strcmp(empty[0], "") != 0 or empty[1][0] != 0 or empty[2] { return 1; }
+  let tuple = make();
+  let copy = tuple;
+  let (text, values, box) = tuple;
+  if strcmp(text, "tuple") != 0 or values != copy[1] or box != copy[2] { return 2; }
+  box.value += 2;
+  if copy[2].value != 42 { return 3; }
+  let result = values[0] + values[1];
+  free values, box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-return-patterns-and-aggregate-copy";
+      source =
+        {|fun make() => (i32, (i32, bool)) { return (20, (22, true)); }
+fun identity(value: (i32, (i32, bool))) => (i32, (i32, bool)) { return value; }
+fun main() => i32 {
+  let tuple = identity(make());
+  let original = tuple;
+  tuple = (1, (2, false));
+  const (left, (right, enabled)): (i32, (i32, bool)) = original;
+  if tuple[0] != 1 or not enabled { return 1; }
+  let (mutable, _) = (left, right);
+  mutable += right;
+  return mutable;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-evaluation-order-and-single-initializer";
+      source =
+        {|let count = 0;
+fun next() => i32 { count += 1; return count; }
+fun make() => (i32, (i32, i32)) { return (next(), (next(), next())); }
+fun main() => i32 {
+  let (first, (_, third)) = make();
+  if count != 3 or first != 1 or third != 3 { return 1; }
+  const (_, _) = (next(), next());
+  if count != 5 { return 2; }
+  let pair = (next(), next());
+  if pair[0] != 6 or pair[1] != 7 or count != 7 { return 3; }
+  let outer = 40;
+  if true { let (value, extra) = (outer, 2); return value + extra; }
+  return 4;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-arrays-fields-defaults-and-iteration";
+      source =
+        {|class Box { let point: (i32, (bool, f64)) = (0, (false, 0.0)); }
+fun main() => i32 {
+  let initial: (i32, (bool, f64));
+  let box = new Box {};
+  if initial[0] != 0 or initial[1][0] or initial[1][1] != 0.0 { return 1; }
+  if box.point[0] != 0 or box.point[1][0] { return 2; }
+  box.point = (20, (true, 2.0));
+  let entries = [(20, 1), (20, 1)];
+  entries[1] = (21, 0);
+  let total = 0;
+  for entry in entries { let (value, index) = entry; total += value + index; }
+  if box.point[0] != 20 or not box.point[1][0] { return 3; }
+  free box;
+  return total;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-generics-aliases-and-nominal-arguments";
+      source =
+        {|type Pair = (i32, i32);
+class Box<T> { let value: T; }
+fun identity<T>(value: T) => T { return value; }
+fun first<T,U>(value: (T,U)) => T { return value[0]; }
+fun main() => i32 {
+  let box = new Box<Pair> { value = identity((40, 2)) };
+  let f: (Pair) -> Pair = identity;
+  let pair = f(box.value);
+  let result = first(pair) + pair[1];
+  free f, box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-interface-elements-and-reference-identity";
+      source =
+        {|interface Value { let count: i32; fun read() => i32; }
+class Box impl Value { let count: i32 = 40; fun read() => i32 { return count; } }
+fun wrap(box: Box) => (Value, i32) { return (box, 2); }
+fun read(pair: (Value, i32)) => i32 { return pair[0].read() + pair[1]; }
+fun main() => i32 {
+  let box = new Box {};
+  let pair: (Value, i32) = (box, 2);
+  let copy = pair;
+  copy[0].count = 40;
+  let (view, extra) = wrap(box);
+  if view != pair[0] or box.count != 40 { return 1; }
+  let result = read((box, extra));
+  free box;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-function-type-ambiguity-and-callback-abi";
+      source =
+        {|fun sum(pair: (i32, i32)) => i32 { return pair[0] + pair[1]; }
+fun binary(left: i32, right: i32) => i32 { return left + right; }
+fun apply(f: ((i32, i32)) -> i32, pair: (i32, i32)) => i32 { return f(pair); }
+fun main() => i32 {
+  let unary: ((i32, i32)) -> i32 = sum;
+  let two: (i32, i32) -> i32 = binary;
+  let result = apply(unary, (20, 22));
+  if two(20, 22) != result { return 1; }
+  free unary, two;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-closures-inside-returned-and-captured-tuples";
+      source =
+        {|type Callback = (i32) -> i32;
+type Bundle = (Callback, (i32, bool));
+fun make(offset: i32) => Bundle {
+  return (fn[offset](value) { return offset + value; }, (2, true));
+}
+fun identity<T>(value: T) => T { return value; }
+fun main() => i32 {
+  let bundle = identity(make(40));
+  let read: () -> i32 = fn[bundle]() {
+    let (callback, (value, enabled)) = bundle;
+    if enabled { return callback(value); }
+    return 1;
+  };
+  let result = read();
+  let (callback, _) = bundle;
+  free callback, read;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+    {
+      name = "tuple-closure-return-abi-through-function-values";
+      source =
+        {|type Bundle = ((i32) -> i32, i32);
+fun make(base: i32) => Bundle { return (fn[base](x) { return base + x; }, 2); }
+fun main() => i32 {
+  let factory: (i32) -> Bundle = make;
+  let tuple = factory(40);
+  let alias = tuple;
+  tuple = factory(20);
+  let callback = alias[0];
+  let replacement = tuple[0];
+  if replacement(tuple[1]) != 22 { return 1; }
+  let result = callback(alias[1]);
+  free callback, replacement, factory;
+  return result;
+}|};
+      expected_exit = 42;
+    };
+  ]
+
 let optimization_source =
   "fun main() => i32 {\n\
   \  let value = 0;\n\
@@ -1552,6 +1879,15 @@ let suite =
                       >:: test_fixture ~optimization fixture)
                     [ "-O0"; "-O2" ])
                 generic_fixtures;
+         "tuple native execution"
+         >::: List.concat_map
+                (fun fixture ->
+                  List.map
+                    (fun optimization ->
+                      fixture.name ^ optimization
+                      >:: test_fixture ~optimization fixture)
+                    [ "-O0"; "-O2" ])
+                tuple_fixtures;
          "native execution" >::: executable_tests;
        ]
 

@@ -140,6 +140,7 @@ rule read = parse
   | "//" { read_single_line_comment lexbuf }
   | "/*" { read_multi_line_comment lexbuf } 
   (* | "?" { OPT_TYPE } *)
+  | "_" { IDENT "_" }
   | id { IDENT (Lexing.lexeme lexbuf) }
   | int { INT (Z.of_string (normalize_number (Lexing.lexeme lexbuf))) }
   | decimal { FLOAT (float_of_string (normalize_number (Lexing.lexeme lexbuf))) }

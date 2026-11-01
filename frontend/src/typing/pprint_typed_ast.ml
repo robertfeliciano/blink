@@ -43,6 +43,7 @@ and show_ret_ty = function
   | RetVal t -> Printf.sprintf "%s" (show_ty t)
 
 and show_ty = function
+  | TTuple ts -> "(" ^ String.concat ", " (List.map show_ty ts) ^ ")"
   | TBool -> "TBool"
   | TInt it -> Printf.sprintf "%s" (show_int_ty it)
   | TFloat ft -> Printf.sprintf "%s" (show_float_ty ft)
@@ -93,6 +94,12 @@ let show_aop = function
 
 (* Expressions *)
 let rec show_exp ?(lvl = 0) = function
+  | Tuple (es, ty) ->
+      "Tuple("
+      ^ String.concat ", " (List.map (show_exp ~lvl) es)
+      ^ ": " ^ show_ty ty ^ ")"
+  | TupleProj (e, i, ty) ->
+      Printf.sprintf "TupleProj(%s, %d, %s)" (show_exp e) i (show_ty ty)
   | Bool b -> Printf.sprintf "Bool(%b)" b
   | Int (i, ity) ->
       Printf.sprintf "Int(%s, %s)" (Z.to_string i) (show_int_ty ity)
@@ -198,6 +205,7 @@ and show_stmt ?(lvl = 0) = function
         (show_exp ~lvl:(lvl + 1) rhs)
         (indent (lvl + 1))
         (show_ty t)
+  | Destructure vs -> String.concat "; " (List.map (show_vdecl ~lvl) vs)
   | Decl v -> show_vdecl ~lvl v
   | Ret eo ->
       let e_s =

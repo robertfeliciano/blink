@@ -28,6 +28,7 @@ let rec convert_ret_ty = function
   | RetVal t -> D.RetVal (convert_ty t)
 
 and convert_ty = function
+  | TTuple ts -> D.TTuple (List.map convert_ty ts)
   | TBool -> D.TBool
   | TInt it -> D.TInt (convert_int_ty it)
   | TFloat ft -> D.TFloat (convert_float_ty ft)

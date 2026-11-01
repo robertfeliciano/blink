@@ -210,6 +210,7 @@ let resolve graph : (program, diagnostic) result =
         }
       in
       let rec ty = function
+        | TTuple ts -> TTuple (List.map ty ts)
         | TRef (RClass name) -> TRef (RClass (nominal_name name))
         | TRef (RArray (element, size)) -> TRef (RArray (ty element, size))
         | TRef (RFun (args, ret)) -> TRef (RFun (List.map ty args, ret_ty ret))
@@ -251,6 +252,7 @@ let resolve graph : (program, diagnostic) result =
           | Bop (op, left, right) -> Bop (op, recurse left, recurse right)
           | Uop (op, value) -> Uop (op, recurse value)
           | Index (base, index) -> Index (recurse base, recurse index)
+          | Tuple values -> Tuple (List.map recurse values)
           | Array (values, on_heap) -> Array (List.map recurse values, on_heap)
           | Cast (value, target) -> Cast (recurse value, ty target)
           | ObjInit (name, fields) ->
@@ -312,6 +314,12 @@ let resolve graph : (program, diagnostic) result =
             let recurse = exp implicit locals in
             let elt, next =
               match node.elt with
+              | Destructure (p, annotation, init, const) ->
+                  ( Destructure
+                      (p, Option.map ty annotation, recurse init, const),
+                    List.fold_left
+                      (fun locals name -> bind name locals name.elt)
+                      locals (pattern_bindings p) )
               | Decl ((name, _, _, _) as declaration) ->
                   ( Decl (vdecl implicit locals declaration),
                     bind node locals name )

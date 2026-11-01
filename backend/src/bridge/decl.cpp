@@ -123,7 +123,7 @@ CDecl convert_cdecl(value v) { // record cdecl = { cname; fields; annotations; i
     }
 
     for (value xs = Field(v, 3); xs != Val_emptylist; xs = Field(xs, 1)) {
-        value decl = Field(xs, 0); // record impl = { iname; methods }
+        value         decl = Field(xs, 0); // record impl = { iname; methods }
         InterfaceImpl impl;
         impl.iname = String_val(Field(decl, 0));
         for (value methods = Field(decl, 1); methods != Val_emptylist; methods = Field(methods, 1))

@@ -22,30 +22,10 @@ let base_op = function
   | Typed.BOrEq -> D.BOr
   | Typed.Eq -> desugar_error "unreachable state"
 
-let expression_ty = function
-  | D.Bool _ -> D.TBool
-  | Int (_, int_ty) -> D.TInt int_ty
-  | Float (_, float_ty) -> D.TFloat float_ty
-  | Str _ -> D.TRef RString
-  | ObjInit (name, _) -> D.TRef (RClass name)
-  | Lambda (_, args, ret, _) -> D.TRef (RFun (List.map snd args, ret))
-  | Id (_, ty)
-  | Call (_, _, ty)
-  | Bop (_, _, _, ty)
-  | Uop (_, _, ty)
-  | Array (_, ty, _)
-  | Cast (_, ty)
-  | Proj (_, _, ty)
-  | Index (_, _, ty)
-  | Conditional (_, _, _, ty)
-  | InterfaceCall (_, _, _, ty)
-  | InterfaceProj (_, _, ty) ->
-      ty
-  | InterfaceCast (_, _, name) -> D.TRef (RInterface name)
-  | Null ty -> ty
-
 let rec has_interface_field = function
   | Typed.InterfaceProj _ -> true
+  | Typed.TupleProj (receiver, _, _) -> has_interface_field receiver
+  | Typed.Tuple (elements, _) -> List.exists has_interface_field elements
   | Typed.Proj (receiver, _, _, _) -> has_interface_field receiver
   | Typed.Index (receiver, index, _, _) ->
       has_interface_field receiver || has_interface_field index
@@ -61,13 +41,15 @@ let rec has_interface_field = function
 
 let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   match stmt with
+  | Destructure declarations ->
+      List.concat_map (fun d -> desugar_stmt (Typed.Decl d)) declarations
   | Assn (lhs, op, rhs, t) when op <> Eq ->
       let op' = base_op op in
-      let lhs_stmts, lhs' = desugar_exp lhs in
+      let lhs_stmts, lhs' = desugar_exp ~lvalue:true lhs in
       let rhs_stmts, rhs' = desugar_exp ~rhs_assn:true rhs in
       let t' = convert_ty t in
       let value_stmts, previous =
-        if has_interface_field lhs then
+        if has_interface_field lhs || rhs_stmts <> [] then
           let name = gensym "field_value" in
           ([ D.Decl (name, t', lhs', true) ], D.Id (name, t'))
         else ([], lhs')
@@ -75,7 +57,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let bop = D.Bop (op', previous, rhs', t') in
       lhs_stmts @ value_stmts @ rhs_stmts @ [ Assn (lhs', bop, t') ]
   | Assn (lhs, _eq, rhs, t) ->
-      let lhs_stmts, lhs' = desugar_exp lhs in
+      let lhs_stmts, lhs' = desugar_exp ~lvalue:true lhs in
       let rhs_stmts, rhs' = desugar_exp rhs in
       let t' = convert_ty t in
       lhs_stmts @ rhs_stmts @ [ Assn (lhs', rhs', t') ]
@@ -88,7 +70,15 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
       let s_stmts, start' = desugar_exp start in
       let f_stmts, fin' = desugar_exp fin in
       let st_stmts, step' = desugar_exp step in
-      let prelude = s_stmts @ f_stmts @ st_stmts in
+      let prelude, bounds =
+        sequence_expressions
+          [ (s_stmts, start'); (f_stmts, fin'); (st_stmts, step') ]
+      in
+      let start', fin', step' =
+        match bounds with
+        | [ start; finish; step ] -> (start, finish, step)
+        | _ -> desugar_error "Range expression lost a bound."
+      in
       let step_name = "%step" in
       let ty = convert_ty ty in
       let step_ = D.Id (step_name, ty) in
@@ -190,7 +180,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | SCall (fn, args, tys, _ret) -> (
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
-      let sa, args' = List.map desugar_exp args |> flatten in
+      let sa, args' = List.map desugar_exp args |> sequence_expressions in
       match fn' with
       | D.Id (fname, _fn_ty) -> sf @ sa @ [ D.SCall (fname, args') ]
       | _ ->
@@ -210,7 +200,7 @@ let rec desugar_stmt (stmt : Typed.stmt) : D.stmt list =
   | Break -> [ Break ]
   | Continue -> [ Continue ]
   | Free es ->
-      let sa, des = List.map desugar_exp es |> flatten in
+      let sa, des = List.map desugar_exp es |> sequence_expressions in
       sa @ [ Free des ]
 
 and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
@@ -218,7 +208,8 @@ and desugar_vdecl (id, ty, e, is_const) : D.stmt list * D.vdecl =
   let estmts, e' = desugar_exp ~rhs_assn:true e in
   (estmts, (id, convert_ty ty, e', is_const))
 
-and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
+and desugar_exp ?(rhs_assn = false) ?(lvalue = false) (e : Typed.exp) :
+    D.stmt list * D.exp =
   match e with
   | Bool b -> ([], D.Bool b)
   | Int (i, ity) -> ([], D.Int (Z.to_string i, convert_int_ty ity))
@@ -226,17 +217,24 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
   | Null t -> ([], D.Null (TRef (convert_ref_ty t)))
   | Str s -> ([], D.Str s)
   | Id (id, t) -> ([], D.Id (id, convert_ty t))
-  | Bop (op, e1, e2, ty) ->
-      let s1, e1' = desugar_exp e1 in
-      let s2, e2' = desugar_exp e2 in
-      (s1 @ s2, D.Bop (convert_binop op, e1', e2', convert_ty ty))
+  | Bop (op, e1, e2, ty) -> (
+      let setup, operands =
+        sequence_expressions [ desugar_exp e1; desugar_exp e2 ]
+      in
+      match operands with
+      | [ left; right ] ->
+          (setup, D.Bop (convert_binop op, left, right, convert_ty ty))
+      | _ -> desugar_error "Binary expression lost an operand.")
   | Uop (op, e, ty) ->
       let s, e' = desugar_exp e in
       (s, D.Uop (convert_unop op, e', convert_ty ty))
-  | Index (arr, idx, ty, iter_ty) ->
+  | Index (arr, idx, ty, iter_ty) -> (
+      let freeze =
+        lvalue || is_lvalue arr || has_interface_field arr
+        || has_interface_field idx
+      in
       let sa, arr' =
-        if is_lvalue arr || has_interface_field arr || has_interface_field idx
-        then
+        if freeze then
           let stmts_arr, d_arr = desugar_exp arr in
           let lvalue_typ = convert_ty iter_ty in
           let tmp_id = gensym "lval" in
@@ -245,14 +243,34 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
         else desugar_exp arr
       in
       let si, idx' = desugar_exp idx in
-      if has_interface_field arr || has_interface_field idx then
+      if freeze then
         let name = gensym "field_index" in
         let idx_ty = expression_ty idx' in
         ( sa @ si @ [ D.Decl (name, idx_ty, idx', true) ],
           D.Index (arr', D.Id (name, idx_ty), convert_ty ty) )
-      else (sa @ si, D.Index (arr', idx', convert_ty ty))
+      else
+        let setup, operands = sequence_expressions [ (sa, arr'); (si, idx') ] in
+        match operands with
+        | [ receiver; index ] ->
+            (setup, D.Index (receiver, index, convert_ty ty))
+        | _ -> desugar_error "Index expression lost an operand.")
+  | Tuple (elems, ty) ->
+      let setup, elems =
+        List.split
+          (List.map
+             (fun element ->
+               let setup, value = desugar_exp element in
+               let ty = expression_ty value in
+               let name = gensym "tuple_element" in
+               (setup @ [ D.Decl (name, ty, value, true) ], D.Id (name, ty)))
+             elems)
+      in
+      (List.concat setup, D.Tuple (elems, convert_ty ty))
+  | TupleProj (value, index, ty) ->
+      let ss, value = desugar_exp value in
+      (ss, D.TupleProj (value, index, convert_ty ty))
   | Array (elems, ty, on_heap) ->
-      let ss, elems' = List.map desugar_exp elems |> flatten in
+      let ss, elems' = List.map desugar_exp elems |> sequence_expressions in
       (ss, D.Array (elems', convert_ty ty, on_heap))
   | InterfaceCast (receiver, cname, iname) ->
       let ss, receiver = desugar_exp receiver in
@@ -274,7 +292,7 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       (s, D.Cast (e', convert_ty ty))
   | Proj (inst, field, cname, t) ->
       let s, inst' =
-        if is_lvalue inst || has_interface_field inst then
+        if lvalue || is_lvalue inst || has_interface_field inst then
           let stmts_inst, d_inst = desugar_exp inst in
           let lvalue_typ = D.TRef (RClass cname) in
           let tmp_id = gensym "lval" in
@@ -309,7 +327,7 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
       let ty' = convert_ty ty in
       let tys' = List.map convert_ty tys in
       let sf, fn' = desugar_exp fn in
-      let sa, args' = List.map desugar_exp args |> flatten in
+      let sa, args' = List.map desugar_exp args |> sequence_expressions in
       match fn' with
       | D.Id (name, D.TRef (RClass class_name)) when name = class_name ->
           (* Typing synthesizes this callee for a typed default initializer.
@@ -385,14 +403,15 @@ and desugar_exp ?(rhs_assn = false) (e : Typed.exp) : D.stmt list * D.exp =
             convert_ty ty ) )
 
 and desugar_method_application receiver name cname args types ret =
-  let receiver_setup, receiver = desugar_exp receiver in
-  let argument_setup, args = List.map desugar_exp args |> flatten in
+  let setup, args =
+    sequence_expressions (desugar_exp receiver :: List.map desugar_exp args)
+  in
   let name =
     mangle_name ~enclosing_class:cname name
       (D.TRef (RClass cname) :: List.map convert_ty types)
       (convert_ret_ty ret)
   in
-  (receiver_setup @ argument_setup, name, receiver :: args)
+  (setup, name, args)
 
 and desugar_interface_application receiver args types =
   (* Freeze each value before closure conversion can hoist a later argument's

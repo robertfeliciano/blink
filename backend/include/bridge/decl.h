@@ -38,9 +38,9 @@ struct InterfaceImpl {
 
 struct CDecl {
     std::string                cname;
-    std::vector<Field>          fields;
-    std::vector<std::string>    annotations;
-    std::vector<InterfaceImpl>  impls;
+    std::vector<Field>         fields;
+    std::vector<std::string>   annotations;
+    std::vector<InterfaceImpl> impls;
 };
 
 struct Proto {

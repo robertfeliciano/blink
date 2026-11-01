@@ -43,6 +43,48 @@ let suite =
   "module native integration"
   >::: List.concat
          [
+           native "tuple aliases generic inference and module-owned elements"
+             [
+               ( "model.bl",
+                 {|export interface Value { let value: i32; }
+export class Box impl Value { let value: i32; }
+export type Entry = (Box, i32);
+export fun make() => Entry { return (new Box { value = 40 }, 2); }
+export fun first<T,U>(entry: (T,U)) => T { return entry[0]; }
+export fun read(entry: (Value, i32)) => i32 { return entry[0].value + entry[1]; }
+|}
+               );
+               ( "main.bl",
+                 {|import Entry, make, first, read, from model;
+import model as m;
+fun main() => i32 {
+  let entry: Entry = make();
+  let (box, extra): (m.Box, i32) = entry;
+  if first(entry) != box { return 1; }
+  let result = read((box, extra));
+  free box;
+  return result;
+}|}
+               );
+             ];
+           native "tuple closure elements cross module boundary"
+             [
+               ( "helper.bl",
+                 {|export type Bundle = ((i32) -> i32, i32);
+export fun make(base: i32) => Bundle {
+  return (fn[base](value) { return base + value; }, 2);
+}|}
+               );
+               ( "main.bl",
+                 {|import helper;
+fun main() => i32 {
+  let (callback, value): helper.Bundle = helper.make(40);
+  let result = callback(value);
+  free callback;
+  return result;
+}|}
+               );
+             ];
            native
              "scalar and callable aliases preserve defaults and heap arrays"
              [

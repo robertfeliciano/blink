@@ -5,6 +5,11 @@ let length_and_name name = string_of_int (String.length name) ^ name
 
 let rec encode_ty ty =
   match ty with
+  | T.TTuple ts ->
+      "t"
+      ^ string_of_int (List.length ts)
+      ^ "_"
+      ^ String.concat "" (List.map (fun t -> length_and_name (encode_ty t)) ts)
   | T.TBool -> "b"
   | T.TInt _ | T.TFloat _ -> Printer.show_ty ty
   | T.TRef T.RString -> "s"
@@ -40,6 +45,9 @@ let validate_array_length fail node size =
     fail node "array length is too large for this target"
 
 let rec validate_array_lengths fail node = function
+  | Ast.TTuple ts ->
+      Ast.validate_tuple_arity fail node ts;
+      List.iter (validate_array_lengths fail node) ts
   | Ast.TRef (RArray (ty, size)) ->
       validate_array_length fail node size;
       validate_array_lengths fail node ty

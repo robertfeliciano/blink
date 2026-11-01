@@ -56,11 +56,51 @@ let validate_assignment_operator stmt_n op lhs_ty =
       require_integer ()
   | AtEq -> type_error stmt_n "Assignment operator AtEq is not supported."
 
+let destructuring_id = ref 0
+
+let fresh_destructuring_id () =
+  incr destructuring_id;
+  "%tuple_" ^ string_of_int !destructuring_id
+
 let rec type_stmt (enclosing_class : id option) (tc : Tctxt.t)
     (frtyp : Typed_ast.ret_ty) (stmt_n : stmt node) (in_loop : bool) :
     Tctxt.t * Typed_ast.stmt * bool =
   let { elt = stmt; loc = _ } = stmt_n in
   match stmt with
+  | Destructure (pattern, annotation, init, const) ->
+      let te, ty =
+        type_variable_initializer stmt_n tc annotation (Some init)
+          enclosing_class
+      in
+      let temporary = fresh_destructuring_id () in
+      let rec bind tc pattern value ty =
+        match (pattern.elt, ty) with
+        | PBind "_", _ -> (tc, [])
+        | PBind name, _ ->
+            var_exists pattern name tc;
+            (Tctxt.add_local tc name (ty, const), [ (name, ty, value, const) ])
+        | PTuple patterns, Typed_ast.TTuple types ->
+            Ast.validate_tuple_arity type_error pattern patterns;
+            if List.length patterns <> List.length types then
+              type_error pattern "Tuple destructuring arity mismatch.";
+            List.fold_left2
+              (fun (tc, declarations) (index, pattern) ty ->
+                let tc, more =
+                  bind tc pattern (Typed_ast.TupleProj (value, index, ty)) ty
+                in
+                (tc, declarations @ more))
+              (tc, [])
+              (List.mapi (fun i p -> (i, p)) patterns)
+              types
+        | PTuple _, _ ->
+            type_error pattern "Tuple destructuring requires a tuple value."
+      in
+      let tc', declarations =
+        bind tc pattern (Typed_ast.Id (temporary, ty)) ty
+      in
+      ( tc',
+        Typed_ast.Destructure ((temporary, ty, te, true) :: declarations),
+        false )
   | Decl (i, annotation, init, const) ->
       var_exists stmt_n i tc;
       let te, ty =
@@ -199,14 +239,37 @@ and type_lvalue (tc : Tctxt.t) (lhs : Ast.exp node)
         type_error lhs ("Attempting to assign to constant field " ^ field ^ ".")
       else (projection.exp, projection.ty)
   | Index _ ->
-      (* Const references are shallow: their elements remain mutable. *)
-      type_exp tc lhs enclosing_class
+      let value, ty = type_exp tc lhs enclosing_class in
+      (match value with
+      | Typed_ast.TupleProj _ -> type_error lhs "Tuple elements are read-only."
+      | _ -> ());
+      (value, ty)
   | _ -> type_error lhs "cannot assign to this expression"
 
 and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
     (enclosing_class : id option) : Typed_ast.exp * Typed_ast.ty =
   let { elt = e'; loc = _ } = e in
   match e' with
+  | Tuple elements ->
+      Ast.validate_tuple_arity type_error e elements;
+      let values, types =
+        match expected with
+        | Some (Typed_ast.TTuple types) ->
+            if List.length types <> List.length elements then
+              type_error e "Tuple arity mismatch.";
+            List.split
+              (List.map2
+                 (fun ty element -> type_exp_as ty tc element enclosing_class)
+                 types elements)
+        | Some ty -> unexpected_ty ty e "tuple"
+        | None ->
+            List.split
+              (List.map
+                 (fun element -> type_exp tc element enclosing_class)
+                 elements)
+      in
+      let ty = Typed_ast.TTuple types in
+      (Typed_ast.Tuple (values, ty), ty)
   | Bool b ->
       check_expected_ty expected TBool e;
       (Typed_ast.Bool b, Typed_ast.TBool)
@@ -336,6 +399,9 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         | (Eqeq | Neq) when is_number lty && is_number rty ->
             let te1', te2', operand_ty = promote_numbers () in
             (te1', te2', operand_ty, Typed_ast.TBool)
+        | (Eqeq | Neq)
+          when match lty with Typed_ast.TTuple _ -> true | _ -> false ->
+            type_error e "Tuple equality is not supported."
         | Eqeq | Neq ->
             if equal_ty lty rty then (te1, te2, lty, Typed_ast.TBool)
             else
@@ -448,23 +514,30 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
       in
       ( Typed_ast.Conditional (typed_cond, typed_true, typed_false, result_ty),
         result_ty )
-  | Index (e_iter, e_idx) ->
+  | Index (e_iter, e_idx) -> (
       let t_iter, iter_ty = type_exp tc e_iter enclosing_class in
-      let ty_of_array =
-        match iter_ty with
-        | Typed_ast.(TRef (RArray (arr_ty', _sz))) -> arr_ty'
-        | t ->
-            type_error e
-              ("cannot index non-array type, recieved " ^ Printer.show_ty t)
-      in
-      check_expected_ty expected ty_of_array e;
       let t_idx, idx_ty = type_exp tc e_idx enclosing_class in
-      let _ =
-        match idx_ty with
-        | Typed_ast.TInt _ -> ()
-        | _ -> type_error e "index must be integer type"
-      in
-      (Typed_ast.Index (t_iter, t_idx, ty_of_array, iter_ty), ty_of_array)
+      if not (is_integer idx_ty) then
+        type_error e_idx "Index must be integer type.";
+      match iter_ty with
+      | Typed_ast.TTuple types ->
+          let value =
+            match t_idx with
+            | Typed_ast.Int (value, _) -> value
+            | _ ->
+                type_error e_idx
+                  "Tuple index must be a compile-time integer expression."
+          in
+          if Z.sign value < 0 || Z.geq value (Z.of_int (List.length types)) then
+            type_error e_idx "Tuple index is out of bounds.";
+          let index = Z.to_int value in
+          let ty = List.nth types index in
+          check_expected_ty expected ty e;
+          (Typed_ast.TupleProj (t_iter, index, ty), ty)
+      | Typed_ast.TRef (RArray (ty, _)) ->
+          check_expected_ty expected ty e;
+          (Typed_ast.Index (t_iter, t_idx, ty, iter_ty), ty)
+      | ty -> type_error e ("Cannot index type " ^ Printer.show_ty ty))
   | Array _ -> type_array enclosing_class expected tc e
   | Cast (ec, t) ->
       let te, e_ty = type_exp tc ec enclosing_class in
@@ -477,7 +550,7 @@ and type_exp ?(expected : Typed_ast.ty option) (tc : Tctxt.t) (e : Ast.exp node)
         (* Classes are nominal; an accepted class cast is an identity cast.
            Erase it here so field projection retains its ordinary lvalue. *)
         match tty with
-        | TRef (RClass _) -> (te, tty)
+        | TTuple _ | TRef (RClass _) -> (te, tty)
         | TRef (RInterface iname) -> (
             match e_ty with
             | TRef (RClass cname) ->
@@ -679,7 +752,7 @@ and type_exp_as (expected : Typed_ast.ty) (tc : Tctxt.t) (e : Ast.exp node)
           )
   | (Bop _ | Uop _), Typed_ast.TInt _ when Option.is_some (eval_const_exp e) ->
       type_exp ~expected tc e enclosing_class
-  | ( ( Int _ | Float _ | Null | Array _ | Lambda _ | TypedLambda _
+  | ( ( Int _ | Float _ | Null | Array _ | Tuple _ | Lambda _ | TypedLambda _
       | Conditional _
       | Uop (Neg, { elt = Float _; _ }) ),
       _ ) ->
@@ -727,7 +800,7 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
     | Int _ | Float _ | Null | Lambda _ -> true
     | (Bop _ | Uop _) when Option.is_some (eval_const_exp en) -> true
     | Id i -> Option.is_some (Tctxt.lookup_generic_option i tc)
-    | Array (es, _) -> List.for_all needs_context es
+    | Array (es, _) | Tuple es -> List.for_all needs_context es
     | Conditional (_, yes, no) -> needs_context yes && needs_context no
     | Call ({ elt = Id i; _ }, es)
       when Option.is_some (Tctxt.lookup_generic_option i tc) ->
@@ -747,6 +820,8 @@ and type_generic_app expected tc node (fn : Ast.fdecl Ast.node) args from_exp
   in
   let rec infer default ty en =
     match (ty, en.elt) with
+    | TTuple tys, Tuple es when List.length tys = List.length es ->
+        List.iter2 (infer default) tys es
     | TRef (RArray (elt_ty, _)), Array (es, _) ->
         List.iter (infer default elt_ty) es
     | _, Conditional (_, yes, no) ->
@@ -933,6 +1008,8 @@ and type_array (enclosing_class : id option) (expected : Typed_ast.ty option)
   | _ -> type_error en "Somehow reached unreachable state."
 
 and create_default_init (stmt_n : stmt node) (tc : Tctxt.t) = function
+  | Typed_ast.TTuple ts as ty ->
+      Typed_ast.Tuple (List.map (create_default_init stmt_n tc) ts, ty)
   | Typed_ast.TBool -> Typed_ast.Bool false
   | Typed_ast.TInt it -> Typed_ast.Int (Z.of_int 0, it)
   | Typed_ast.TFloat ft -> Typed_ast.Float (0.0, ft)
