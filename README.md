@@ -143,3 +143,18 @@ sudo ninja install
 Running `make` in the root directory of this project builds the entire compiler. This produces the `blink` executable. Running this on a `.bl` file will produce an LLVM-IR file called `new_output.ll`. The compiler accepts `-O0`, `-O1`, `-O2`, and `-O3`; when omitted, `-O0` is used.
 
 To build the frontend, you can simply run `dune build` in `frontend/`. 
+
+### Formatting and commit hooks
+
+Run `make fmt` from the repository root to run `dune fmt` in `frontend/`
+and `clang-format -i -style=file` on all `.cpp`, `.h`, `.hpp`, and `.cc`
+files under `backend/`. Both `dune` (with its formatter dependencies) and
+`clang-format` must be available on your PATH.
+
+Run `make install-hooks` once per clone to enable the versioned pre-commit
+hook in `.githooks/`. This sets the clone's `core.hooksPath`, replacing any
+previous hook-directory setting. The hook runs `make fmt` before each commit
+and stops on formatter failures or any remaining unstaged changes under
+`frontend/` or `backend/`, including changes that existed before formatting.
+Review and stage the desired changes, then retry the commit. The hook never
+stages files automatically.

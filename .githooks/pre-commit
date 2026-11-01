@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+cd "$(git rev-parse --show-toplevel)"
+make fmt
+
+if ! git diff --quiet -- frontend backend; then
+    echo "Unstaged changes remain in frontend/ or backend/ after formatting." >&2
+    echo "Review and stage the changes you want to commit, then commit again." >&2
+    exit 1
+fi
