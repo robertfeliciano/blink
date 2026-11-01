@@ -77,7 +77,7 @@ RefTy convert_ref_ty(value v) {
                 break;
             }
             case Constants::REFTY_Interface: {
-                ref.tag = RefTyTag::RInterface;
+                ref.tag   = RefTyTag::RInterface;
                 ref.cname = String_val(Field(v, 0));
                 break;
             }

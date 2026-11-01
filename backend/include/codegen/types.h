@@ -14,11 +14,11 @@ class TypeToLLGenerator {
 
     llvm::Type* codegenTy(const Ty& ty);
     // Runtime values for classes and arrays are pointers; interfaces and tuples remain aggregates.
-    llvm::Type* codegenValueTy(const Ty& ty);
-    llvm::Type* codegenValueRetTy(const RetTy& ty);
+    llvm::Type*       codegenValueTy(const Ty& ty);
+    llvm::Type*       codegenValueRetTy(const RetTy& ty);
     llvm::StructType* getInterfaceType();
-    llvm::Type* codegenRetTy(const RetTy& ty);
-    llvm::Type* codegenRefTy(const RefTy& rt);
+    llvm::Type*       codegenRetTy(const RetTy& ty);
+    llvm::Type*       codegenRefTy(const RefTy& rt);
 
   private:
     llvm::Type* createSignedInt(const Sint si);

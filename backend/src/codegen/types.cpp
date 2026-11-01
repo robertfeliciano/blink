@@ -119,8 +119,8 @@ llvm::Type* TypeToLLGenerator::getStaticArrayType(const RefTy& rt) {
 
     // Nested arrays use contiguous inline storage; class references use pointers.
     llvm::Type* elemTy = rt.inner->tag == TyTag::TRef && rt.inner->ref_ty->tag == RefTyTag::RArray
-                            ? codegenTy(*rt.inner)
-                            : codegenValueTy(*rt.inner);
+                             ? codegenTy(*rt.inner)
+                             : codegenValueTy(*rt.inner);
 
     if (rt.size < 0)
         throw std::runtime_error("Static array size must be non-negative");

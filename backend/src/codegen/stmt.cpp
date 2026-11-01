@@ -57,16 +57,16 @@ Value* StmtToLLVisitor::operator()(const SCall& s) {
 
     auto it = gen.varEnv.find(s.callee);
     if (it != gen.varEnv.end()) {
-        llvm::Value* calleePtr = gen.builder->CreateLoad(
-            llvm::Type::getInt8PtrTy(*gen.ctxt), it->second, s.callee + "_load");
+        llvm::Value* calleePtr =
+            gen.builder->CreateLoad(llvm::Type::getInt8PtrTy(*gen.ctxt), it->second, s.callee + "_load");
 
         std::vector<llvm::Type*> argTypes;
         argTypes.reserve(args.size());
         for (llvm::Value* arg : args)
             argTypes.push_back(arg->getType());
 
-        llvm::FunctionType* fnType = llvm::FunctionType::get(
-            llvm::Type::getVoidTy(*gen.ctxt), argTypes, /*isVarArg=*/false);
+        llvm::FunctionType* fnType =
+            llvm::FunctionType::get(llvm::Type::getVoidTy(*gen.ctxt), argTypes, /*isVarArg=*/false);
         return gen.builder->CreateCall(fnType, calleePtr, args);
     }
 
@@ -182,8 +182,8 @@ Value* StmtToLLVisitor::operator()(const While& s) {
 Value* StmtToLLVisitor::operator()(const Free& s) {
     llvm::Function* freeFun = gen.mod->getFunction("free");
     for (const auto& e : s.exps) {
-        Value* toBeFreed = gen.codegenExp(*e);
-        const Ty& ty = gen.getExpTy(*e);
+        Value*    toBeFreed = gen.codegenExp(*e);
+        const Ty& ty        = gen.getExpTy(*e);
         if (ty.tag == TyTag::TRef && ty.ref_ty->tag == RefTyTag::RInterface)
             toBeFreed = gen.interfaceObject(toBeFreed);
         gen.builder->CreateCall(freeFun, {toBeFreed});

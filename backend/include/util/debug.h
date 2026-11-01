@@ -7,5 +7,5 @@
         llvm::outs() << "type of " << #var << ": ";                                                                    \
         (var)->print(llvm::outs());                                                                                    \
         llvm::outs() << "\n";                                                                                          \
-        llvm::outs().flush(); /* write immediately */ \
+        llvm::outs().flush(); /* write immediately */                                                                  \
     } while (0)

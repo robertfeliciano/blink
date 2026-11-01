@@ -64,8 +64,8 @@ Stmt convert_stmt(value v) {
                 break;
             }
             case Constants::STMT_InterfaceSCall: {
-                auto receiver = std::make_unique<Exp>(convert_exp(Field(v, 0)));
-                unsigned slot = Int_val(Field(v, 1));
+                auto                              receiver = std::make_unique<Exp>(convert_exp(Field(v, 0)));
+                unsigned                          slot     = Int_val(Field(v, 1));
                 std::vector<std::unique_ptr<Exp>> args;
                 for (value xs = Field(v, 2); xs != Val_emptylist; xs = Field(xs, 1))
                     args.push_back(std::make_unique<Exp>(convert_exp(Field(xs, 0))));

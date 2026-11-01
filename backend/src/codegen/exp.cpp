@@ -493,7 +493,7 @@ Value* ExpToLLVisitor::operator()(const EObjInit& e) {
     }
 
     llvm::StructType* structTy = it->second;
-    Value*           objPtr   = allocateHeap(structTy);
+    Value*            objPtr   = allocateHeap(structTy);
 
     std::unordered_map<std::string, Value*> userInitMap;
 

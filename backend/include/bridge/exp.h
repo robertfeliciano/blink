@@ -159,9 +159,9 @@ struct ETupleProj {
     Ty                   ty;
 };
 
-using ExpVariant = std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj,
-                                EObjInit, ENull, EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj,
-                                ETuple, ETupleProj>;
+using ExpVariant =
+    std::variant<EBool, EInt, EFloat, EStr, EId, ECall, EBop, EUop, EIndex, EArray, ECast, EProj, EObjInit, ENull,
+                 EConditional, EInterfaceCast, EInterfaceCall, EInterfaceProj, ETuple, ETupleProj>;
 
 struct Exp {
     ExpVariant val;
